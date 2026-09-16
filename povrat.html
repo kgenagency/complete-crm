@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>HARIZMA · Povrat, zamena i reklamacija</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231B2620'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='%23E8E4D9' font-family='Georgia'>H</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&display=swap" rel="stylesheet">
+<style>
+:root{--green:#1B2620;--bone:#E8E4D9;--sage:#7E8C74;--paper:#f6f3ec;--ink:#1a221d;--muted:#7d8479;--line:#ddd7c8;--err:#a32c2c;--ease:cubic-bezier(.2,.8,.2,1)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit;font-size:15px;color:inherit}
+.hero{background:radial-gradient(800px 400px at 50% 0%,#2b3b31,var(--green) 70%);color:var(--bone);text-align:center;padding:48px 20px 70px}
+.hero svg{width:62px;height:62px}
+.hero .d{fill:none;stroke:var(--bone);stroke-width:1.6;stroke-dasharray:400;stroke-dashoffset:400;animation:draw 1.1s var(--ease) forwards}
+.hero .d2{animation-delay:.15s}
+.hero text{font-family:'Cormorant Garamond',serif;font-size:46px;font-weight:600;fill:var(--bone);opacity:0;animation:fade .6s .6s forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes fade{to{opacity:1}}
+@keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.brand{font-family:'Cormorant Garamond',serif;letter-spacing:.5em;padding-left:.5em;font-size:22px;margin-top:14px}
+.hero h1{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:34px;margin-top:18px;animation:up .6s .2s var(--ease) both}
+.hero p{max-width:520px;margin:8px auto 0;color:#c7ccc0;animation:up .6s .3s var(--ease) both}
+.wrap{max-width:640px;margin:-40px auto 60px;padding:0 16px}
+.card{background:#fffdf8;border:1px solid var(--line);border-radius:18px;box-shadow:0 20px 50px -20px rgba(27,38,32,.3);padding:28px 26px;animation:up .6s .35s var(--ease) both}
+.steps{display:flex;gap:6px;margin-bottom:22px}
+.steps span{flex:1;height:4px;border-radius:4px;background:#e5e0d3;transition:background .4s}
+.steps span.on{background:var(--green)}
+.step{display:none}.step.active{display:block;animation:up .45s var(--ease)}
+h2{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;margin-bottom:4px}
+.sub{color:var(--muted);font-size:14px;margin-bottom:18px}
+.types{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.type{border:1.5px solid var(--line);border-radius:14px;padding:16px;text-align:left;background:#fff;cursor:pointer;transition:all .2s var(--ease)}
+.type:hover{border-color:var(--sage);transform:translateY(-2px)}
+.type.sel{border-color:var(--green);background:#eef0ea;box-shadow:0 0 0 3px rgba(27,38,32,.08)}
+.type b{display:block;font-size:16px}
+.type small{color:var(--muted);font-size:12.5px}
+.type .ic{font-size:20px;display:block;margin-bottom:6px}
+.field{margin-bottom:14px}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#3d463f}
+label .opt{font-weight:400;color:var(--muted)}
+input,select,textarea{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:11px;background:#fdfcf8;transition:border-color .2s,box-shadow .2s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(27,38,32,.1)}
+textarea{min-height:130px;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.counter{font-size:12px;color:var(--muted);text-align:right;margin-top:4px}
+.counter.ok{color:#2f6b3f}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:99px;padding:7px 14px;background:#fff;cursor:pointer;font-size:13.5px;transition:all .2s}
+.chip.sel{background:var(--green);color:var(--bone);border-color:var(--green)}
+.drop{border:1.5px dashed var(--line);border-radius:14px;padding:18px;text-align:center;color:var(--muted);cursor:pointer;transition:all .2s}
+.drop:hover{border-color:var(--sage);background:#f7f6f0}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.thumbs div{position:relative;animation:up .3s var(--ease)}
+.thumbs img{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+.thumbs button{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:none;background:var(--green);color:#fff;font-size:12px;cursor:pointer}
+.stars{display:flex;gap:6px}
+.stars button{border:none;background:none;font-size:30px;color:#d6d0bf;cursor:pointer;transition:transform .15s,color .15s}
+.stars button.on{color:#c9a227}
+.stars button:hover{transform:scale(1.15)}
+.info{background:#eef0ea;border-radius:12px;padding:12px 14px;font-size:13px;color:#3d463f;margin-bottom:16px}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;margin:10px 0}
+.check input{width:18px;height:18px;margin-top:2px;flex:none;accent-color:var(--green)}
+.nav{display:flex;justify-content:space-between;gap:10px;margin-top:22px}
+.btn{border:none;border-radius:12px;padding:13px 22px;font-weight:600;cursor:pointer;transition:transform .15s,box-shadow .2s,opacity .2s}
+.btn.pri{background:var(--green);color:var(--bone);margin-left:auto}
+.btn.pri:hover{transform:translateY(-1px);box-shadow:0 10px 20px -10px rgba(27,38,32,.6)}
+.btn.sec{background:transparent;border:1px solid var(--line)}
+.btn:disabled{opacity:.5;cursor:default;transform:none}
+.err{display:none;background:#fbe9e7;color:var(--err);border-radius:10px;padding:10px 14px;font-size:13.5px;margin-top:14px}
+.hp{position:absolute;left:-9999px}
+.done{text-align:center;padding:20px 0}
+.done .ok{width:74px;height:74px;border-radius:50%;background:var(--green);color:var(--bone);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:34px;animation:pop .5s var(--ease)}
+@keyframes pop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+.case{font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:700;letter-spacing:.06em}
+.foot{text-align:center;color:var(--muted);font-size:12.5px;margin-top:18px}
+.hidden{display:none}
+@media (max-width:560px){.types,.row{grid-template-columns:1fr}.card{padding:22px 18px}.hero h1{font-size:28px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.hero .d{stroke-dashoffset:0}.hero text{opacity:1}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <svg viewBox="0 0 120 120" aria-hidden="true"><path class="d" d="M60 6 L114 60 L60 114 L6 60 Z"/><path class="d d2" d="M60 16 L104 60 L60 104 L16 60 Z"/><text x="60" y="76" text-anchor="middle">H</text></svg>
+  <div class="brand">HARIZMA</div>
+  <h1>Povrat, zamena i reklamacija</h1>
+  <p>Popuni formu i javljamo ti se u najkraćem roku. Što više detalja napišeš, brže rešavamo.</p>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <div class="steps" id="steps"><span class="on"></span><span></span><span></span><span></span></div>
+    <form id="f" novalidate>
+      <input class="hp" name="website" id="website" tabindex="-1" autocomplete="off">
+
+      <!-- 1 -->
+      <div class="step active" data-step="1">
+        <h2>Šta želiš?</h2>
+        <div class="sub">Izaberi jednu opciju.</div>
+        <div class="types" id="types">
+          <button type="button" class="type" data-type="return"><span class="ic">↩</span><b>Povrat</b><small>Vraćam komad i želim novac nazad</small></button>
+          <button type="button" class="type" data-type="exchange"><span class="ic">⇄</span><b>Zamena</b><small>Druga veličina ili drugi model</small></button>
+          <button type="button" class="type" data-type="complaint"><span class="ic">!</span><b>Reklamacija</b><small>Komad je oštećen, pogrešan ili ima grešku</small></button>
+          <button type="button" class="type" data-type="feedback"><span class="ic">✦</span><b>Utisak i predlog</b><small>Pohvala, zamerka ili ideja šta da popravimo</small></button>
+        </div>
+      </div>
+
+      <!-- 2 -->
+      <div class="step" data-step="2">
+        <h2>Tvoji podaci</h2>
+        <div class="sub">Da bismo pronašli porudžbinu i javili ti se.</div>
+        <div class="field"><label>Ime i prezime *</label><input id="customer_name" autocomplete="name"></div>
+        <div class="row">
+          <div class="field"><label>Telefon *</label><input id="phone" type="tel" autocomplete="tel" placeholder="06x xxx xxxx"></div>
+          <div class="field"><label>Email <span class="opt">(opciono)</span></label><input id="email" type="email" autocomplete="email"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Broj porudžbine <span class="opt" id="orderOpt">(ako ga imaš)</span></label><input id="order_no" placeholder="#1001 ili IG-001"></div>
+          <div class="field"><label>Instagram <span class="opt">(opciono)</span></label><input id="instagram" placeholder="@"></div>
+        </div>
+        <div class="field only-item"><label>Kada ti je paket stigao?</label><input id="delivered_on" type="date"></div>
+      </div>
+
+      <!-- 3 -->
+      <div class="step" data-step="3">
+        <h2 id="s3title">Detalji</h2>
+        <div class="sub" id="s3sub">Opiši nam šta se desilo.</div>
+        <div class="info only-return">Imaš pravo da odustaneš od kupovine u roku od 14 dana od prijema paketa, bez navođenja razloga. Komad treba da bude neoštećen, sa etiketom. Troškove slanja nazad snosi kupac.</div>
+        <div class="info only-complaint">Ako komad ima grešku ili nije ono što si poručila, troškove vraćanja snosimo mi. Na prijavu odgovaramo u roku od 8 dana.</div>
+        <div class="row only-item">
+          <div class="field"><label>Koji komad? *</label><input id="item" placeholder="npr. VERONA haljina"></div>
+          <div class="field"><label>Veličina</label><input id="size" placeholder="S / M / L"></div>
+        </div>
+        <div class="field only-item"><label>Razlog *</label><div class="chips" id="reasons"></div></div>
+        <div class="field only-feedback"><label>Kako bi ocenila iskustvo sa nama?</label><div class="stars" id="stars">
+          <button type="button" data-r="1">★</button><button type="button" data-r="2">★</button><button type="button" data-r="3">★</button><button type="button" data-r="4">★</button><button type="button" data-r="5">★</button></div></div>
+        <div class="field"><label id="descLabel">Detaljan opis *</label>
+          <textarea id="description" maxlength="4000" placeholder=""></textarea>
+          <div class="counter" id="counter">0 / najmanje 30 karaktera</div></div>
+        <div class="field only-feedback"><label>Šta bismo mogle da uradimo bolje? <span class="opt">(opciono)</span></label><textarea id="improve" style="min-height:80px"></textarea></div>
+        <div class="field"><label id="photoLabel">Fotografije <span class="opt">(do 6)</span></label>
+          <div class="drop" id="drop">📷 Klikni da dodaš fotografije<br><small>Slikaj etiketu, ceo komad i detalj problema</small></div>
+          <input type="file" id="files" accept="image/*" multiple hidden>
+          <div class="thumbs" id="thumbs"></div></div>
+      </div>
+
+      <!-- 4 -->
+      <div class="step" data-step="4">
+        <h2>Kako da rešimo?</h2>
+        <div class="sub">Izaberi šta ti najviše odgovara.</div>
+        <div class="field only-item"><div class="chips" id="resolutions"></div></div>
+        <div class="field hidden" id="exWrap"><label>Šta želiš umesto toga? *</label><input id="exchange_details" placeholder="npr. ista haljina u veličini S"></div>
+        <div class="field hidden" id="bankWrap"><label>Broj tekućeg računa za povrat novca *</label><input id="bank_account" inputmode="numeric" placeholder="xxx-xxxxxxxxxxxxx-xx"><div class="counter">Potreban je jer je porudžbina plaćena pouzećem.</div></div>
+        <div class="info">Posle slanja dobijaš broj prijave. Sačuvaj ga, trebaće ti ako nam se javljaš.</div>
+        <label class="check"><input type="checkbox" id="consent"> Saglasna sam da HARIZMA koristi ove podatke samo za rešavanje ove prijave.</label>
+      </div>
+
+      <div class="err" id="err"></div>
+      <div class="nav" id="nav">
+        <button type="button" class="btn sec hidden" id="back">Nazad</button>
+        <button type="button" class="btn pri" id="next">Dalje</button>
+      </div>
+    </form>
+
+    <div class="done hidden" id="done">
+      <div class="ok">✓</div>
+      <h2>Hvala, primile smo prijavu</h2>
+      <div class="sub">Broj tvoje prijave je</div>
+      <div class="case" id="caseNo"></div>
+      <div class="sub" style="margin-top:12px" id="doneText">Javljamo ti se u najkraćem roku.</div>
+    </div>
+  </div>
+  <div class="foot">HARIZMA · Beograd</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="config.js?v=202609161323"></script>
+<script>
+const sb = window.supabase.createClient(window.CRM_SUPABASE_URL, window.CRM_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+const $ = (id) => document.getElementById(id);
+const REASONS = {
+  return: ['Ne odgovara veličina', 'Ne stoji kako sam očekivala', 'Boja drugačija nego na slici', 'Materijal mi se ne sviđa', 'Predomislila sam se', 'Drugo'],
+  exchange: ['Premala', 'Prevelika', 'Želim drugu boju', 'Želim drugi model', 'Drugo'],
+  complaint: ['Oštećen komad', 'Greška u šivenju', 'Pogrešan komad ili veličina', 'Nedostaje nešto iz paketa', 'Oštećen paket', 'Drugo'],
+};
+const RES = {
+  return: [['refund', 'Povrat novca'], ['credit', 'Vaučer za kupovinu']],
+  exchange: [['exchange_size', 'Druga veličina'], ['exchange_model', 'Drugi model']],
+  complaint: [['replace', 'Isti komad, ispravan'], ['refund', 'Povrat novca'], ['discount', 'Popust, zadržavam komad'], ['exchange_model', 'Drugi model']],
+};
+const S = { step: 1, type: null, reason: null, res: null, rating: null, files: [] };
+
+function show(sel, on) { document.querySelectorAll(sel).forEach(e => e.classList.toggle('hidden', !on)); }
+function chips(el, list, key, labels) {
+  el.innerHTML = list.map(x => { const [v, l] = Array.isArray(x) ? x : [x, x]; return `<button type="button" class="chip" data-v="${v}">${l}</button>`; }).join('');
+  el.onclick = (e) => { const b = e.target.closest('.chip'); if (!b) return; S[key] = b.dataset.v; el.querySelectorAll('.chip').forEach(c => c.classList.toggle('sel', c === b)); applyRes(); };
+}
+function applyType() {
+  const t = S.type, fb = t === 'feedback';
+  show('.only-item', !fb); show('.only-feedback', fb);
+  show('.only-return', t === 'return'); show('.only-complaint', t === 'complaint');
+  if (!fb) { chips($('reasons'), REASONS[t], 'reason'); chips($('resolutions'), RES[t], 'res'); }
+  S.reason = null; S.res = null; applyRes();
+  $('s3title').textContent = fb ? 'Tvoj utisak' : t === 'complaint' ? 'Šta nije u redu?' : 'Detalji';
+  $('descLabel').innerHTML = fb ? 'Napiši nam šta misliš *' : 'Detaljan opis *';
+  $('description').placeholder = fb ? 'Šta ti se svidelo, šta nije, šta bi volela da vidiš kod nas…'
+    : t === 'complaint' ? 'Opiši tačno gde je problem, kako izgleda i kada si ga primetila…'
+    : 'Opiši šta tačno ne odgovara: gde je tesno ili široko, koliko si visoka, koju veličinu inače nosiš…';
+  $('photoLabel').innerHTML = t === 'complaint' ? 'Fotografije * <span class="opt">(bar jedna, do 6)</span>' : 'Fotografije <span class="opt">(opciono, do 6)</span>';
+  $('orderOpt').textContent = fb ? '(opciono)' : '(ako ga imaš)';
+  document.querySelector('[data-step="4"] h2').textContent = fb ? 'Još samo saglasnost' : 'Kako da rešimo?';
+  document.querySelector('[data-step="4"] .sub').textContent = fb ? 'Hvala što pomažeš da budemo bolje.' : 'Izaberi šta ti najviše odgovara.';
+  counter();
+}
+function applyRes() {
+  $('exWrap').classList.toggle('hidden', !['exchange_size', 'exchange_model'].includes(S.res));
+  $('bankWrap').classList.toggle('hidden', S.res !== 'refund');
+}
+function counter() {
+  const n = $('description').value.trim().length, min = S.type === 'feedback' ? 1 : 30;
+  $('counter').textContent = S.type === 'feedback' ? `${n} karaktera` : (n >= min ? `${n} karaktera ✓` : `${n} / najmanje ${min} karaktera`);
+  $('counter').classList.toggle('ok', n >= min);
+}
+function err(m) { const e = $('err'); e.textContent = m; e.style.display = m ? 'block' : 'none'; if (m) e.animate([{ transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'none' }], { duration: 250 }); }
+function validate(step) {
+  const v = (id) => $(id).value.trim();
+  if (step === 1 && !S.type) return 'Izaberi šta želiš.';
+  if (step === 2) {
+    if (v('customer_name').length < 2) return 'Upiši ime i prezime.';
+    if (!v('phone') && !v('email')) return 'Upiši telefon ili email.';
+    if (v('email') && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('email'))) return 'Email nije ispravan.';
+  }
+  if (step === 3) {
+    if (S.type !== 'feedback') {
+      if (!v('item')) return 'Upiši koji komad vraćaš.';
+      if (!S.reason) return 'Izaberi razlog.';
+      if (v('description').length < 30) return 'Opis mora imati bar 30 karaktera. Što detaljnije, to brže rešavamo.';
+      if (S.type === 'complaint' && !S.files.length) return 'Za reklamaciju dodaj bar jednu fotografiju.';
+    } else if (!v('description')) return 'Napiši nam bar par reči.';
+  }
+  if (step === 4) {
+    if (S.type !== 'feedback' && !S.res) return 'Izaberi kako da rešimo.';
+    if (!$('exWrap').classList.contains('hidden') && !v('exchange_details')) return 'Napiši šta želiš umesto toga.';
+    if (!$('bankWrap').classList.contains('hidden') && v('bank_account').replace(/\D/g, '').length < 10) return 'Upiši ispravan broj tekućeg računa.';
+    if (!$('consent').checked) return 'Potrebna je saglasnost.';
+  }
+  return '';
+}
+function go(n) {
+  S.step = n;
+  document.querySelectorAll('.step').forEach(s => s.classList.toggle('active', +s.dataset.step === n));
+  document.querySelectorAll('#steps span').forEach((s, i) => s.classList.toggle('on', i < n));
+  $('back').classList.toggle('hidden', n === 1);
+  $('next').textContent = n === 4 ? 'Pošalji prijavu' : 'Dalje';
+  err(''); window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+$('types').onclick = (e) => {
+  const b = e.target.closest('.type'); if (!b) return;
+  S.type = b.dataset.type;
+  document.querySelectorAll('.type').forEach(t => t.classList.toggle('sel', t === b));
+  applyType(); setTimeout(() => go(2), 250);
+};
+$('stars').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; S.rating = +b.dataset.r; document.querySelectorAll('#stars button').forEach(x => x.classList.toggle('on', +x.dataset.r <= S.rating)); };
+$('description').oninput = () => { counter(); err(''); };
+document.addEventListener('input', () => err(''));
+$('drop').onclick = () => $('files').click();
+$('files').onchange = (e) => {
+  for (const f of e.target.files) { if (S.files.length >= 6) break; if (f.size > 8 * 1024 * 1024) { err('Slika je veća od 8 MB.'); continue; } S.files.push(f); }
+  e.target.value = ''; thumbs(); if (S.files.length) err('');
+};
+function thumbs() {
+  $('thumbs').innerHTML = S.files.map((f, i) => `<div><img src="${URL.createObjectURL(f)}" alt=""><button type="button" data-i="${i}">✕</button></div>`).join('');
+}
+$('thumbs').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; S.files.splice(+b.dataset.i, 1); thumbs(); };
+$('back').onclick = () => go(S.step - 1);
+$('next').onclick = async () => {
+  const m = validate(S.step); if (m) return err(m);
+  if (S.step < 4) return go(S.step + 1);
+  const btn = $('next'); btn.disabled = true; btn.textContent = 'Šaljem…';
+  try {
+    const photos = [];
+    for (const f of S.files) {
+      const ext = (f.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const path = `uploads/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await sb.storage.from('returns').upload(path, f, { contentType: f.type || 'image/jpeg' });
+      if (error) throw new Error('Slika nije otpremljena. Pokušaj sa manjom slikom.');
+      photos.push(path);
+    }
+    const v = (id) => $(id).value.trim();
+    const p = {
+      type: S.type, website: v('website'), customer_name: v('customer_name'), phone: v('phone'), email: v('email'),
+      order_no: v('order_no'), instagram: v('instagram'), delivered_on: v('delivered_on'), item: v('item'), size: v('size'),
+      reason: S.reason, description: v('description'), improve: v('improve'), rating: S.rating, photos,
+      resolution_wanted: S.res, exchange_details: v('exchange_details'), bank_account: v('bank_account'), consent: $('consent').checked,
+    };
+    const { data, error } = await sb.rpc('submit_return', { p });
+    if (error) throw new Error(error.message);
+    $('f').classList.add('hidden'); $('steps').classList.add('hidden');
+    $('caseNo').textContent = data;
+    $('doneText').textContent = S.type === 'feedback' ? 'Hvala ti što si odvojila vreme. Čitamo svaku poruku.' : 'Javljamo ti se najkasnije u roku od 8 dana, a obično mnogo brže.';
+    $('done').classList.remove('hidden');
+  } catch (e) { err(e.message || 'Nešto nije u redu. Pokušaj ponovo.'); btn.disabled = false; btn.textContent = 'Pošalji prijavu'; }
+};
+const pre = new URLSearchParams(location.search);
+if (pre.get('order')) $('order_no').value = pre.get('order');
+if (pre.get('tip') && document.querySelector(`[data-type="${pre.get('tip')}"]`)) document.querySelector(`[data-type="${pre.get('tip')}"]`).click();
+</script>
+</body>
+</html>

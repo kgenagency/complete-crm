@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609161305';
+const APP_BUILD = '202609161323';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -48,7 +48,8 @@ const LS = {
 let state = {
   user: null,
   products: [], variants: [], orders: [], items: [], ads: [], acts: [],
-  posts: [], ideas: [], story: [], notes: [], pack: [],
+  posts: [], ideas: [], story: [], notes: [], pack: [], rets: [],
+  retView: LS.get('crm_rview', 'board'), retType: 'all', editRetId: null,
   postView: LS.get('crm_pview', 'board'), postFmt: 'all', siteCat: 'all', who: 'all',
   calMonth: (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(),
   writer: null, editPostId: null, editIdeaId: null, ideaArea: 'site', editPackId: null,
@@ -108,7 +109,7 @@ function userFrom(u) { const un = u.email.split('@')[0]; return { username: un, 
 
 /* ---------------- data ---------------- */
 async function loadData() {
-  const [products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack] = await Promise.all([
+  const [products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets] = await Promise.all([
     q(sb.from('h_products').select('*').order('created_at', { ascending: false })),
     q(sb.from('h_variants').select('*')),
     q(sb.from('h_orders').select('*').order('created_at', { ascending: false })),
@@ -120,8 +121,9 @@ async function loadData() {
     q(sb.from('h_story_sections').select('*').order('position')),
     q(sb.from('h_notes').select('*').order('created_at', { ascending: true })),
     q(sb.from('h_packaging').select('*').order('created_at')),
+    q(sb.from('h_returns').select('*').order('created_at', { ascending: false })),
   ]);
-  Object.assign(state, { products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack });
+  Object.assign(state, { products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets });
 }
 
 async function log(fields) {
@@ -272,7 +274,7 @@ function renderOrders() {
 
 /* drag & drop (preuzeto iz KGEN CRM, uopšteno za sve table i kalendar) */
 let drag = null, justDragged = false;
-const DRAGGABLE = '.kb-card[data-id], .post-card, .idea-card, .cal-chip';
+const DRAGGABLE = '.kb-card[data-id], .post-card, .idea-card, .cal-chip, .ret-card';
 function kbPointerDown(e) {
   if (e.button && e.button !== 0) return;
   const card = e.target.closest(DRAGGABLE); if (!card) return;
@@ -317,6 +319,7 @@ function kbPointerUp() {
   if (d.kind === 'order') { const o = order(d.id); if (o) setOrderStatus(o, z.dataset.status); }
   else if (d.kind === 'post') movePost(d.id, z);
   else if (d.kind === 'idea') moveIdea(d.id, z.dataset.status);
+  else if (d.kind === 'ret') moveRet(d.id, z.dataset.status);
 }
 function kbCleanup() {
   window.removeEventListener('pointermove', kbPointerMove);
@@ -672,6 +675,7 @@ async function addComment(input) {
   const body = input.value.trim(); if (!body) return;
   try { await log({ [input.dataset.cfield]: input.dataset.cid, type: 'comment', body }); input.value = '';
     if (input.dataset.cfield === 'post_id') $('poComments').innerHTML = commentsBlock('post_id', state.editPostId);
+    else if (input.dataset.cfield === 'return_id') $('rtComments').innerHTML = commentsBlock('return_id', state.editRetId);
     else $('siComments').innerHTML = commentsBlock('site_id', state.editIdeaId);
   } catch (e) { fail(e); }
 }
@@ -1066,13 +1070,217 @@ function countUp(root) {
   });
 }
 
+/* ---------- POVRATI ---------- */
+const RET_ST = [
+  { key: 'new', label: 'Nova' }, { key: 'in_review', label: 'U obradi' }, { key: 'waiting_package', label: 'Čeka paket' },
+  { key: 'received', label: 'Paket stigao' }, { key: 'resolved', label: 'Rešeno' }, { key: 'rejected', label: 'Odbijeno' },
+];
+Object.assign(ST, { in_review: 'U obradi', waiting_package: 'Čeka paket', received: 'Paket stigao', resolved: 'Rešeno' });
+const RT = { return: 'Povrat', exchange: 'Zamena', complaint: 'Reklamacija', feedback: 'Utisak' };
+const RES_W = { refund: 'Povrat novca', credit: 'Vaučer', exchange_size: 'Druga veličina', exchange_model: 'Drugi model', replace: 'Isti komad, ispravan', discount: 'Popust' };
+const FORM_URL = () => location.origin + location.pathname.replace(/[^/]*$/, '') + 'povrat.html';
+const retClosed = (r) => ['resolved', 'rejected'].includes(r.status);
+const addDays = (iso, d) => { const x = new Date(iso); x.setDate(x.getDate() + d); return x; };
+function retDue(r) {
+  if (r.type === 'feedback' || retClosed(r)) return null;
+  let date, label;
+  if (r.type === 'complaint') {
+    if (r.status === 'new') { date = addDays(r.created_at, 8); label = 'odgovor kupcu'; }
+    else { date = addDays(r.created_at, 15); label = 'rešenje reklamacije'; }
+  } else if (r.resolution_wanted === 'refund' || r.type === 'return') {
+    date = addDays(r.created_at, 14); label = 'povrat novca';
+  } else { date = addDays(r.created_at, 14); label = 'zamena'; }
+  const days = Math.ceil((date - new Date()) / 864e5);
+  return { date, label, days, level: days < 0 ? 'late' : days <= 3 ? 'soon' : '' };
+}
+function dueText(d) { if (!d) return ''; return d.days < 0 ? `kasni ${-d.days} d · ${d.label}` : d.days === 0 ? `danas · ${d.label}` : `još ${d.days} d · ${d.label}`; }
+function filteredRets() {
+  const qq = state.q.toLowerCase();
+  return state.rets.filter(r => (state.retType === 'all' || r.type === state.retType) &&
+    (!qq || [r.case_no, r.customer_name, r.phone, r.email, r.order_no, r.item, r.description].join(' ').toLowerCase().includes(qq)));
+}
+function retCard(r) {
+  const d = retDue(r);
+  return `<div class="ret-card ${d?.level || ''}" data-kind="ret" data-id="${r.id}" data-ret="${r.id}">
+    <div class="kb-card-head"><div class="kb-name">${esc(r.customer_name)}</div><span class="rt-type ${r.type}">${RT[r.type]}</span></div>
+    <div class="kb-social">${esc(r.case_no)}${r.item ? ' · ' + esc(r.item) : ''}${r.size ? ' ' + esc(r.size) : ''}</div>
+    ${r.reason ? `<div class="kb-social">${esc(r.reason)}</div>` : ''}
+    <div class="kb-meta">${d ? `<span class="due ${d.level}">⏱ ${dueText(d)}</span>` : r.rating ? `<span class="due">${'★'.repeat(r.rating)}</span>` : ''}${r.photos?.length ? `<span class="cat">📷 ${r.photos.length}</span>` : ''}${r.assignee ? `<span class="cat">${esc(r.assignee)}</span>` : ''}</div>
+  </div>`;
+}
+function renderReturns() {
+  const all = state.rets, open = all.filter(r => !retClosed(r) && r.type !== 'feedback');
+  const late = open.filter(r => retDue(r)?.level === 'late'), soon = open.filter(r => retDue(r)?.level === 'soon');
+  const fresh = all.filter(r => r.status === 'new').length;
+  const b = $('retBadge'); b.style.display = (late.length + fresh) ? '' : 'none'; b.textContent = late.length + fresh;
+  const orders = state.orders.filter(o => o.status !== 'cancelled').length;
+  const retCount = all.filter(r => r.type === 'return' || r.type === 'exchange').length;
+  const refunded = all.reduce((a, r) => a + n(r.refund_amount), 0), shipCost = all.reduce((a, r) => a + n(r.return_shipping_cost), 0);
+  const rated = all.filter(r => r.rating);
+  $('kpiRet').innerHTML = stat('Otvorene prijave', open.length, `<b>${fresh}</b> novih · <b class="${late.length ? 'neg' : ''}">${late.length}</b> kasni`) +
+    stat('Stopa povrata i zamena', orders ? pct(retCount / orders) : '—', orders ? `${retCount} od ${orders} porudžbina` : 'još nema porudžbina') +
+    stat('Vraćeno kupcima', rsd(refunded), `slanje nas koštalo <b>${rsd(shipCost)}</b>`) +
+    stat('Prosečna ocena', rated.length ? (rated.reduce((a, r) => a + r.rating, 0) / rated.length).toFixed(1) + ' ★' : '—', `${all.filter(r => r.type === 'feedback').length} utisaka`);
+  $('retAlerts').innerHTML = [...late, ...soon].map(r => { const d = retDue(r); return `<div class="alert ${d.level === 'late' ? 'out' : ''}" data-ret="${r.id}">
+    <div class="a-ic">${d.level === 'late' ? '!' : d.days}</div><div><div class="a-t">${esc(r.case_no)} · ${esc(r.customer_name)}</div>
+    <div class="a-s">${RT[r.type]}: ${dueText(d)} (rok ${d.date.toLocaleDateString('sr-Latn-RS')})</div></div></div>`; }).join('');
+
+  const list = filteredRets();
+  $('retCount').textContent = `${list.length} prijava`;
+  document.querySelectorAll('#retViewSeg button').forEach(x => x.classList.toggle('active', x.dataset.view === state.retView));
+  document.querySelectorAll('#retTypeSeg button').forEach(x => x.classList.toggle('active', x.dataset.t === state.retType));
+  $('retBoard').style.display = state.retView === 'board' ? 'flex' : 'none';
+  $('retList').style.display = state.retView === 'list' ? '' : 'none';
+  $('retInsights').style.display = state.retView === 'insights' ? '' : 'none';
+  $('openFormBtn').href = FORM_URL();
+  if (state.retView === 'board') $('retBoard').innerHTML = boardCols(list, RET_ST, 'ret', retCard);
+  if (state.retView === 'list') $('retTbody').innerHTML = list.map(r => { const d = retDue(r); return `<tr data-ret="${r.id}">
+    <td><b>${esc(r.case_no)}</b></td><td><div class="lead-name">${esc(r.customer_name)}</div><div class="lead-social">${esc(r.phone || r.email || '')}</div></td>
+    <td><span class="rt-type ${r.type}">${RT[r.type]}</span></td><td>${esc(r.item || '—')} ${esc(r.size || '')}</td><td class="activity-cell">${esc(r.reason || '—')}</td>
+    <td>${pill(r.status)}</td><td>${d ? `<span class="due ${d.level}">${dueText(d)}</span>` : '—'}</td><td class="date-cell">${fmtDate(r.created_at)}</td></tr>`; }).join('')
+    || `<tr><td colspan="8" class="empty">Nema prijava. Pošalji kupcima link forme.</td></tr>`;
+  if (state.retView === 'insights') renderRetInsights();
+}
+function bars(obj) {
+  const rows = Object.entries(obj).sort((a, b) => b[1] - a[1]); const max = rows[0]?.[1] || 1;
+  return rows.length ? `<div class="bars">${rows.map(([k, v], i) => `<div class="bar-row"><span>${esc(k)}</span><div class="track"><div class="fill" style="width:${v / max * 100}%;animation-delay:${i * 60}ms"></div></div><b class="num">${v}</b></div>`).join('')}</div>` : '<div class="kb-empty">Još nema podataka.</div>';
+}
+function renderRetInsights() {
+  const rs = state.rets.filter(r => r.type !== 'feedback');
+  const reasons = {}, prods = {};
+  rs.forEach(r => {
+    if (r.reason) reasons[r.reason] = (reasons[r.reason] || 0) + 1;
+    const k = (r.product_id && product(r.product_id)?.name) || (r.item || '').toUpperCase().split(' ')[0] || 'Nepoznato';
+    prods[k] = (prods[k] || 0) + 1;
+  });
+  const sizes = {}; rs.filter(r => /veličin|mala|velika|premal|preveli/i.test(r.reason || '')).forEach(r => { const k = `${(r.product_id && product(r.product_id)?.name) || r.item || '?'} ${r.size || ''} · ${r.reason}`; sizes[k] = (sizes[k] || 0) + 1; });
+  const imp = state.rets.filter(r => r.improve);
+  const fb = state.rets.filter(r => r.type === 'feedback');
+  $('retInsights').innerHTML = `<div class="two-col">
+    <div class="panel"><h4>Najčešći razlozi</h4>${bars(reasons)}</div>
+    <div class="panel"><h4>Komadi sa najviše prijava</h4>${bars(prods)}</div>
+    <div class="panel"><h4>Problemi sa veličinom</h4>${bars(sizes)}<div class="hint">Ako se isti komad stalno vraća kao premali ili preveliki, ispravi tabelu veličina na sajtu.</div></div>
+    <div class="panel"><h4>Šta da popravimo <span class="fu-count">${imp.length}</span></h4>${imp.map(r => `<div class="list-row" data-ret="${r.id}"><span>${esc(r.improve)}</span><button class="mini-btn" data-toidea="${r.id}">→ predlog</button></div>`).join('') || '<div class="kb-empty">Upiši „Šta da popravimo“ u prijavi i skupljaće se ovde.</div>'}</div>
+  </div>
+  <div class="panel" style="margin-top:16px"><h4>Utisci kupaca</h4>${fb.map(r => `<div class="quote" data-ret="${r.id}">„${esc(r.description)}“<small>${esc(r.customer_name)} · ${r.rating ? '★'.repeat(r.rating) : 'bez ocene'} · ${fmtDate(r.created_at)}</small></div>`).join('') || '<div class="kb-empty">Još nema utisaka.</div>'}</div>`;
+}
+async function moveRet(id, status) {
+  const r = state.rets.find(x => x.id === id); if (!r || r.status === status) return;
+  const patch = { status };
+  if (status === 'resolved' || status === 'rejected') patch.resolved_at = new Date().toISOString();
+  if (status === 'received' && !r.package_received_at) patch.package_received_at = new Date().toISOString();
+  try {
+    await q(sb.from('h_returns').update(patch).eq('id', id));
+    await log({ return_id: id, type: 'status', body: `Status: ${ST[r.status]} → ${ST[status]}` });
+    Object.assign(r, patch); renderAll(); toast(`${r.case_no} → ${ST[status]}`);
+    if (status === 'received' && !r.restocked && r.type !== 'feedback') setTimeout(() => { openRetModal(id); toast('Paket stigao. Vrati komad na stanje ako je ispravan.'); }, 300);
+  } catch (e) { fail(e); }
+}
+const RTF = ['type', 'status', 'assignee', 'customer_name', 'phone', 'email', 'instagram', 'order_id', 'product_id', 'item', 'size', 'reason', 'resolution_wanted', 'description', 'exchange_details', 'bank_account', 'delivered_on', 'package_received_at', 'rating', 'refund_amount', 'return_shipping_cost', 'resolution_note', 'improve'];
+async function openRetModal(id) {
+  const r = id ? state.rets.find(x => x.id === id) : null;
+  state.editRetId = id || null;
+  $('rtTitle').textContent = r ? `${r.case_no} · ${r.customer_name}` : 'Nova prijava (ručni unos)';
+  const d = r && retDue(r);
+  $('rtHead').innerHTML = r ? `${pill(r.status)}<span class="rt-type ${r.type}">${RT[r.type]}</span><span class="ch-badge ch-other">${r.source === 'form' ? 'Sa forme' : 'Ručno'} · ${fmtDT(r.created_at)}</span>${d ? `<span class="due ${d.level}">⏱ ${dueText(d)} (${d.date.toLocaleDateString('sr-Latn-RS')})</span>` : ''}${r.order_no && !r.order_id ? `<span class="ch-badge ch-instagram">Kupac upisao porudžbinu ${esc(r.order_no)}</span>` : ''}` : '';
+  $('rt_status').innerHTML = RET_ST.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
+  $('rt_order_id').innerHTML = '<option value="">—</option>' + state.orders.map(o => `<option value="${o.id}">${esc(o.order_no || '')} · ${esc(o.customer_name)}</option>`).join('');
+  $('rt_product_id').innerHTML = '<option value="">—</option>' + state.products.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  $('retReasons').innerHTML = [...new Set(state.rets.map(x => x.reason).filter(Boolean).concat(['Ne odgovara veličina', 'Oštećen komad', 'Greška u šivenju', 'Pogrešan komad ili veličina', 'Predomislila sam se']))].map(x => `<option>${esc(x)}</option>`).join('');
+  RTF.forEach(f => {
+    let v = r ? r[f] : ({ type: 'return', status: 'new', assignee: state.user.display }[f]);
+    if (f === 'package_received_at' && v) v = String(v).slice(0, 10);
+    if (f === 'product_id' && r && !v && r.item) { const m = state.products.find(p => r.item.toUpperCase().includes(p.name)); if (m) v = m.id; }
+    $('rt_' + f).value = v ?? '';
+  });
+  $('rtDelete').style.display = r ? '' : 'none';
+  $('rtIdea').style.display = r ? '' : 'none';
+  $('rtPhotos').innerHTML = '';
+  if (r?.photos?.length) {
+    try {
+      const { data } = await sb.storage.from('returns').createSignedUrls(r.photos, 3600);
+      $('rtPhotos').innerHTML = `<div class="sec-title">Fotografije kupca</div><div class="photos">${(data || []).filter(x => x.signedUrl).map(x => `<img src="${esc(x.signedUrl)}" data-zoom alt="">`).join('')}</div>`;
+    } catch (e) { console.error(e); }
+  }
+  renderRestock(r);
+  $('rtComments').innerHTML = commentsBlock('return_id', state.editRetId);
+  $('retModal').classList.add('open');
+}
+function renderRestock(r) {
+  if (!r || r.type === 'feedback') return $('rtRestock').innerHTML = '';
+  if (r.restocked) return $('rtRestock').innerHTML = `<div class="hint" style="margin:6px 0 10px">✓ Komad je vraćen na stanje.</div>`;
+  const o = r.order_id && order(r.order_id);
+  const vs = r.product_id ? variantsOf(r.product_id) : [];
+  $('rtRestock').innerHTML = `<div class="sec-title">Zalihe</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    ${vs.length ? `<select id="rtVariant" class="inline-input" style="width:auto">${vs.map(v => `<option value="${v.id}" ${String(v.size).toUpperCase() === String(r.size || '').toUpperCase() ? 'selected' : ''}>${esc(v.size)}${v.color ? ' ' + esc(v.color) : ''} (${v.stock})</option>`).join('')}</select>
+      <button type="button" class="mini-btn" id="rtRestockBtn">Vrati 1 komad na stanje</button>` : '<span class="page-sub">Izaberi komad gore da bi mogao da ga vratiš na stanje.</span>'}
+    ${o && o.status !== 'returned' ? `<button type="button" class="mini-btn" id="rtOrderReturned">Cela porudžbina ${esc(o.order_no)} vraćena</button>` : ''}
+  </div><div class="hint">Koristi jedno od ova dva dugmeta, ne oba, da se komad ne bi dva puta vratio na stanje.</div>`;
+}
+async function restockOne() {
+  const r = state.rets.find(x => x.id === state.editRetId), v = variant($('rtVariant').value); if (!r || !v) return;
+  try {
+    await q(sb.from('h_variants').update({ stock: v.stock + 1 }).eq('id', v.id));
+    await log({ product_id: v.product_id, type: 'stock', body: `${product(v.product_id)?.name} ${v.size}: ${v.stock} → ${v.stock + 1} (povrat ${r.case_no})` });
+    v.stock++;
+    await q(sb.from('h_returns').update({ restocked: true }).eq('id', r.id)); r.restocked = true;
+    await log({ return_id: r.id, type: 'system', body: `Komad ${product(v.product_id)?.name} ${v.size} vraćen na stanje` });
+    renderRestock(r); renderAll(); toast('Vraćeno na stanje ✓');
+  } catch (e) { fail(e); }
+}
+async function restockOrder() {
+  const r = state.rets.find(x => x.id === state.editRetId), o = r && order(r.order_id); if (!o) return;
+  if (!confirm(`Porudžbina ${o.order_no} ide u status „Vraćena“ i svi njeni komadi se vraćaju na stanje. Nastaviti?`)) return;
+  await setOrderStatus(o, 'returned');
+  try { await q(sb.from('h_returns').update({ restocked: true }).eq('id', r.id)); r.restocked = true; await log({ return_id: r.id, type: 'system', body: `Porudžbina ${o.order_no} označena kao vraćena` }); renderRestock(r); } catch (e) { fail(e); }
+}
+async function saveRet(e) {
+  e.preventDefault();
+  const f = {};
+  RTF.forEach(k => { const v = $('rt_' + k).value.trim(); f[k] = v === '' ? null : v; });
+  ['refund_amount', 'return_shipping_cost'].forEach(k => f[k] = f[k] === null ? null : n(f[k]));
+  f.rating = f.rating === null ? null : Math.min(5, Math.max(1, parseInt(f.rating)));
+  if (f.package_received_at) f.package_received_at = new Date(f.package_received_at + 'T12:00:00').toISOString();
+  if (f.order_id) f.order_no = order(f.order_id)?.order_no || null;
+  try {
+    if (state.editRetId) {
+      const old = state.rets.find(x => x.id === state.editRetId);
+      if (old.status !== f.status && ['resolved', 'rejected'].includes(f.status)) f.resolved_at = new Date().toISOString();
+      const r = await q(sb.from('h_returns').update(f).eq('id', old.id).select().single());
+      if (old.status !== r.status) await log({ return_id: r.id, type: 'status', body: `Status: ${ST[old.status]} → ${ST[r.status]}` });
+      Object.assign(old, r);
+    } else {
+      Object.assign(f, { source: 'manual', consent: true });
+      const r = await q(sb.from('h_returns').insert(f).select().single());
+      state.rets.unshift(r);
+      await log({ return_id: r.id, type: 'system', body: 'Prijava uneta ručno' });
+    }
+    $('retModal').classList.remove('open'); renderAll(); toast('Prijava sačuvana ✓');
+  } catch (err) { fail(err); }
+}
+async function deleteRet() {
+  if (!confirm('Obrisati prijavu?')) return;
+  try { await q(sb.from('h_returns').delete().eq('id', state.editRetId)); state.rets = state.rets.filter(x => x.id !== state.editRetId); $('retModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
+}
+async function retToIdea(id) {
+  const r = state.rets.find(x => x.id === id); if (!r) return;
+  const title = (r.improve || $('rt_improve')?.value || r.reason || 'Predlog iz povrata').slice(0, 120);
+  try {
+    const i = await q(sb.from('h_site_ideas').insert({ area: 'site', title, category: 'proizvod', priority: 'medium', status: 'proposed', created_by: state.user.display, votes: [who()],
+      description: `Iz prijave ${r.case_no} (${RT[r.type]}): ${r.reason || ''}. ${r.description || ''}`.slice(0, 1000) }).select().single());
+    state.ideas.unshift(i);
+    await log({ return_id: r.id, type: 'system', body: `Napravljen predlog za sajt: ${title}` });
+    renderAll(); toast('Predlog dodat u Sajt ✓');
+  } catch (e) { fail(e); }
+}
+
 /* ---------------- shell ---------------- */
 function renderAll() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'v-' + state.tab));
   document.querySelectorAll('#periodSeg button').forEach(b => b.classList.toggle('active', +b.dataset.p === state.period));
   renderOverview(); renderOrders(); renderProducts(); renderAds();
-  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes();
+  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes(); renderReturns();
 }
 function setTab(t) {
   state.tab = t; LS.set('crm_tab', t); renderAll(); window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1114,6 +1322,8 @@ function bindEvents() {
     const cm = e.target.closest('[data-cal]'); if (cm) { const m = state.calMonth; state.calMonth = new Date(m.getFullYear(), m.getMonth() + +cm.dataset.cal, 1); return renderPosts(); }
     if (e.target.closest('a')) return;
     const pp = e.target.closest('[data-post]'); if (pp) return openPostModal(pp.dataset.post);
+    const ti = e.target.closest('[data-toidea]'); if (ti) { e.stopPropagation(); return retToIdea(ti.dataset.toidea); }
+    const rr = e.target.closest('[data-ret]'); if (rr && !e.target.closest('#retModal')) return openRetModal(rr.dataset.ret);
     const ii = e.target.closest('[data-idea]'); if (ii) return openIdeaModal(ii.dataset.idea);
     const pk = e.target.closest('[data-pack]'); if (pk) return openPackModal(pk.dataset.pack);
     const sb_ = e.target.closest('[data-stock]');
@@ -1183,6 +1393,14 @@ function bindEvents() {
   $('noteInput').addEventListener('input', (e) => autosize(e.target));
   document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.dataset?.cfield) { e.preventDefault(); addComment(e.target); } });
 
+  $('newRetBtn').addEventListener('click', () => openRetModal());
+  $('retForm').addEventListener('submit', saveRet);
+  $('rtDelete').addEventListener('click', deleteRet);
+  $('rtIdea').addEventListener('click', () => retToIdea(state.editRetId));
+  $('rtRestock').addEventListener('click', (e) => { if (e.target.id === 'rtRestockBtn') restockOne(); if (e.target.id === 'rtOrderReturned') restockOrder(); });
+  $('retViewSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.retView = b.dataset.view; LS.set('crm_rview', b.dataset.view); renderReturns(); });
+  $('retTypeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.retType = b.dataset.t; renderReturns(); });
+  $('copyFormBtn').addEventListener('click', async () => { try { await navigator.clipboard.writeText(FORM_URL()); toast('Link forme kopiran ✓'); } catch (e) { prompt('Kopiraj link:', FORM_URL()); } });
   $('adDay').value = dayStr(new Date());
   $('adForm').addEventListener('submit', async (e) => {
     e.preventDefault();

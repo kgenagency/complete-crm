@@ -220,3 +220,79 @@ select * from (values
  ('Akrilna šnalica (poklon)','poklon',null,null,null,1,10,'Uvoz čeka registraciju firme')
 ) v(name,kind,supplier,link,unit_price,per_order,min_stock,note)
 where not exists (select 1 from public.h_packaging);
+-- v4: Povrati, reklamacije, feedback
+create sequence if not exists public.h_returns_seq start 1;
+create table if not exists public.h_returns (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  case_no text not null unique default ('P-' || lpad(nextval('public.h_returns_seq')::text, 4, '0')),
+  type text not null check (type in ('return','exchange','complaint','feedback')),
+  source text not null default 'form',
+  status text not null default 'new' check (status in ('new','in_review','waiting_package','received','resolved','rejected')),
+  order_no text,
+  order_id uuid references public.h_orders(id) on delete set null,
+  customer_name text not null,
+  phone text, email text, instagram text,
+  item text,
+  size text,
+  product_id uuid references public.h_products(id) on delete set null,
+  reason text,
+  description text,
+  photos text[] not null default '{}',
+  resolution_wanted text,
+  exchange_details text,
+  bank_account text,
+  rating int check (rating between 1 and 5),
+  delivered_on date,
+  package_received_at timestamptz,
+  refund_amount numeric(10,2),
+  return_shipping_cost numeric(10,2),
+  restocked boolean not null default false,
+  resolution_note text,
+  improve text,
+  resolved_at timestamptz,
+  assignee text,
+  consent boolean not null default false
+);
+alter table public.h_returns enable row level security;
+drop policy if exists "team all" on public.h_returns;
+create policy "team all" on public.h_returns for all to authenticated using (true) with check (true);
+alter table public.h_activities add column if not exists return_id uuid references public.h_returns(id) on delete cascade;
+
+-- javna forma: kupac ne vidi ništa, samo šalje prijavu preko funkcije
+create or replace function public.submit_return(p jsonb)
+returns text language plpgsql security definer set search_path = public as $$
+declare v_type text := p->>'type'; v_case text; v_order uuid; v_desc text := trim(coalesce(p->>'description',''));
+begin
+  if coalesce(p->>'website','') <> '' then raise exception 'spam'; end if;
+  if v_type not in ('return','exchange','complaint','feedback') then raise exception 'Nepoznat tip prijave'; end if;
+  if length(trim(coalesce(p->>'customer_name',''))) < 2 then raise exception 'Upiši ime i prezime'; end if;
+  if coalesce(p->>'phone','') = '' and coalesce(p->>'email','') = '' then raise exception 'Upiši telefon ili email'; end if;
+  if v_type <> 'feedback' and length(v_desc) < 30 then raise exception 'Opis mora imati bar 30 karaktera'; end if;
+  if v_type = 'complaint' and jsonb_array_length(coalesce(p->'photos','[]'::jsonb)) = 0 then raise exception 'Za reklamaciju je potrebna bar jedna fotografija'; end if;
+  if (p->>'consent')::boolean is not true then raise exception 'Potrebna je saglasnost'; end if;
+  if length(v_desc) > 4000 then raise exception 'Opis je predugačak'; end if;
+  select id into v_order from h_orders where order_no is not null and upper(order_no) = upper(trim(p->>'order_no')) limit 1;
+  insert into h_returns (type, source, order_no, order_id, customer_name, phone, email, instagram, item, size, reason, description,
+    photos, resolution_wanted, exchange_details, bank_account, rating, delivered_on, consent, improve)
+  values (v_type, 'form', nullif(trim(p->>'order_no'),''), v_order, left(trim(p->>'customer_name'),120), left(p->>'phone',40), left(p->>'email',120),
+    left(p->>'instagram',80), left(p->>'item',200), left(p->>'size',20), left(p->>'reason',60), v_desc,
+    coalesce(array(select left(jsonb_array_elements_text(p->'photos'),300) limit 6), '{}'), left(p->>'resolution_wanted',40),
+    left(p->>'exchange_details',300), left(p->>'bank_account',40), nullif(p->>'rating','')::int,
+    nullif(p->>'delivered_on','')::date, true, left(p->>'improve',1000))
+  returning case_no into v_case;
+  insert into h_activities (return_id, type, author, body) select id, 'system', 'Forma', 'Prijava stigla preko forme' from h_returns where case_no = v_case;
+  return v_case;
+end $$;
+revoke all on function public.submit_return(jsonb) from public;
+grant execute on function public.submit_return(jsonb) to anon, authenticated;
+
+-- slike: kupac samo otprema u uploads/, vidi ih samo tim
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('returns','returns', false, 8388608, array['image/jpeg','image/png','image/webp','image/heic','image/heif'])
+on conflict (id) do update set public=false, file_size_limit=excluded.file_size_limit, allowed_mime_types=excluded.allowed_mime_types;
+drop policy if exists "returns anon upload" on storage.objects;
+create policy "returns anon upload" on storage.objects for insert to anon, authenticated
+  with check (bucket_id = 'returns' and (storage.foldername(name))[1] = 'uploads');
+drop policy if exists "returns team read" on storage.objects;
+create policy "returns team read" on storage.objects for select to authenticated using (bucket_id = 'returns');
