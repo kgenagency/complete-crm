@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609161323';
+const APP_BUILD = '202609161335';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -36,7 +36,9 @@ const FMT = { reel: 'Reel', carousel: 'Carousel', story: 'Story', post: 'Post', 
 const PRIO = { high: 'Visok', medium: 'Srednji', low: 'Nizak' };
 const CAT = { dizajn: 'Dizajn', tekst: 'Tekst', funkcija: 'Funkcija', proizvod: 'Proizvod', materijal: 'Materijal', ostalo: 'Ostalo' };
 const PEOPLE = { konstantin: { name: 'Konstantin', voc: 'Konstantine', f: false }, stasa: { name: 'Staša', voc: 'Staša', f: true, line: 'Vreme je da zablistamo i danas ✨' }, marjan: { name: 'Marjan', voc: 'Marjane', f: false } };
-const SHOP_URL = 'https://wegmk4-wf.myshopify.com';
+const SHOP_URL_DEFAULT = 'https://wegmk4-wf.myshopify.com';
+const setting = (k, d = '') => (state.settings.find(x => x.key === k)?.value ?? d);
+const siteUrl = () => setting('site_url', SHOP_URL_DEFAULT) || SHOP_URL_DEFAULT;
 Object.assign(ST, Object.fromEntries(POST_ST.map(s => [s.key, s.label])), Object.fromEntries(IDEA_ST.map(s => [s.key, s.label])));
 const lowT = () => +LS.get('crm_low', '2');
 
@@ -48,7 +50,7 @@ const LS = {
 let state = {
   user: null,
   products: [], variants: [], orders: [], items: [], ads: [], acts: [],
-  posts: [], ideas: [], story: [], notes: [], pack: [], rets: [],
+  posts: [], ideas: [], story: [], notes: [], pack: [], rets: [], settings: [],
   retView: LS.get('crm_rview', 'board'), retType: 'all', editRetId: null,
   postView: LS.get('crm_pview', 'board'), postFmt: 'all', siteCat: 'all', who: 'all',
   calMonth: (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(),
@@ -109,7 +111,7 @@ function userFrom(u) { const un = u.email.split('@')[0]; return { username: un, 
 
 /* ---------------- data ---------------- */
 async function loadData() {
-  const [products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets] = await Promise.all([
+  const [products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets, settings] = await Promise.all([
     q(sb.from('h_products').select('*').order('created_at', { ascending: false })),
     q(sb.from('h_variants').select('*')),
     q(sb.from('h_orders').select('*').order('created_at', { ascending: false })),
@@ -122,8 +124,9 @@ async function loadData() {
     q(sb.from('h_notes').select('*').order('created_at', { ascending: true })),
     q(sb.from('h_packaging').select('*').order('created_at')),
     q(sb.from('h_returns').select('*').order('created_at', { ascending: false })),
+    q(sb.from('h_settings').select('*')),
   ]);
-  Object.assign(state, { products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets });
+  Object.assign(state, { products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets, settings });
 }
 
 async function log(fields) {
@@ -848,7 +851,11 @@ function ideasFor(area) {
 function renderSite() {
   const l = ideasFor('site');
   $('siteCount').textContent = `${l.length} predloga`;
-  $('siteLink').href = SHOP_URL;
+  const u = siteUrl(), pw = setting('site_pass');
+  $('siteLink').href = u; $('siteUrlText').href = u;
+  $('siteUrlText').textContent = u.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const st = state.settings.find(x => x.key === 'site_url');
+  $('siteMeta').textContent = (pw ? `Lozinka sajta: ${pw} · ` : '') + (u.includes('myshopify.com') ? 'Privremena Shopify adresa, još nema svoj domen' : 'Sopstveni domen') + (st?.updated_by ? ` · izmenio/la ${st.updated_by}` : '');
   $('siteBoard').innerHTML = boardCols(l, IDEA_ST, 'idea', ideaCard);
 }
 async function moveIdea(id, status) {
@@ -1400,6 +1407,14 @@ function bindEvents() {
   $('rtRestock').addEventListener('click', (e) => { if (e.target.id === 'rtRestockBtn') restockOne(); if (e.target.id === 'rtOrderReturned') restockOrder(); });
   $('retViewSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.retView = b.dataset.view; LS.set('crm_rview', b.dataset.view); renderReturns(); });
   $('retTypeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.retType = b.dataset.t; renderReturns(); });
+  $('siteCopyBtn').addEventListener('click', async () => { try { await navigator.clipboard.writeText(siteUrl()); toast('Link sajta kopiran ✓'); } catch (e) { prompt('Kopiraj link:', siteUrl()); } });
+  $('siteEditBtn').addEventListener('click', () => { $('su_url').value = siteUrl(); $('su_pass').value = setting('site_pass'); $('siteUrlModal').classList.add('open'); $('su_url').focus(); });
+  $('siteUrlForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const rows = [{ key: 'site_url', value: $('su_url').value.trim().replace(/\/$/, ''), updated_at: new Date().toISOString(), updated_by: state.user.display },
+                  { key: 'site_pass', value: $('su_pass').value.trim(), updated_at: new Date().toISOString(), updated_by: state.user.display }];
+    try { await q(sb.from('h_settings').upsert(rows)); state.settings = await q(sb.from('h_settings').select('*')); $('siteUrlModal').classList.remove('open'); renderAll(); toast('Link sajta sačuvan ✓'); } catch (err) { fail(err); }
+  });
   $('copyFormBtn').addEventListener('click', async () => { try { await navigator.clipboard.writeText(FORM_URL()); toast('Link forme kopiran ✓'); } catch (e) { prompt('Kopiraj link:', FORM_URL()); } });
   $('adDay').value = dayStr(new Date());
   $('adForm').addEventListener('submit', async (e) => {

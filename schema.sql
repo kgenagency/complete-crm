@@ -296,3 +296,15 @@ create policy "returns anon upload" on storage.objects for insert to anon, authe
   with check (bucket_id = 'returns' and (storage.foldername(name))[1] = 'uploads');
 drop policy if exists "returns team read" on storage.objects;
 create policy "returns team read" on storage.objects for select to authenticated using (bucket_id = 'returns');
+-- v5: podešavanja (link sajta i sl.)
+create table if not exists public.h_settings (
+  key text primary key,
+  value text,
+  updated_at timestamptz not null default now(),
+  updated_by text
+);
+alter table public.h_settings enable row level security;
+drop policy if exists "team all" on public.h_settings;
+create policy "team all" on public.h_settings for all to authenticated using (true) with check (true);
+insert into public.h_settings (key, value) values ('site_url', 'https://wegmk4-wf.myshopify.com'), ('site_pass', '')
+on conflict (key) do nothing;
