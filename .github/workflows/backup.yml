@@ -1,0 +1,43 @@
+name: Dnevna kopija baze
+on:
+  schedule:
+    - cron: '30 1 * * *'   # svaki dan 03:30 po Beogradu (leti)
+  workflow_dispatch:
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preuzmi repo sa kopijama
+        run: git clone --depth 1 "https://x-access-token:${{ secrets.BACKUP_PUSH_TOKEN }}@github.com/kgenagency/complete-crm-backups.git" out
+      - name: Izvezi sve tabele
+        env:
+          SB_URL: https://treqdonahihterhaxxfw.supabase.co
+          SB_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, datetime
+          URL, KEY = os.environ['SB_URL'], os.environ['SB_KEY']
+          TABLES = ['h_products','h_variants','h_orders','h_order_items','h_ad_spend','h_activities','h_posts','h_site_ideas','h_story_sections','h_notes','h_packaging','h_returns','h_settings','h_promotions','h_milestones','h_daily_stats','h_audit']
+          os.makedirs('out/latest', exist_ok=True)
+          summary = {'exported_at': datetime.datetime.utcnow().isoformat() + 'Z', 'tables': {}}
+          for t in TABLES:
+              rows, off = [], 0
+              while True:
+                  req = urllib.request.Request(f'{URL}/rest/v1/{t}?select=*&limit=1000&offset={off}&order=' + ('id' if t != 'h_settings' and t != 'h_daily_stats' else ('key' if t == 'h_settings' else 'day')),
+                      headers={'apikey': KEY, 'Authorization': f'Bearer {KEY}'})
+                  page = json.load(urllib.request.urlopen(req, timeout=60))
+                  rows += page
+                  if len(page) < 1000: break
+                  off += 1000
+              with open(f'out/latest/{t}.json', 'w', encoding='utf-8') as f: json.dump(rows, f, ensure_ascii=False, indent=1, default=str)
+              summary['tables'][t] = len(rows)
+              print(t, len(rows))
+          with open('out/latest/_summary.json', 'w') as f: json.dump(summary, f, indent=1)
+          PY
+      - name: Sačuvaj kopiju
+        run: |
+          cd out
+          git config user.name "CRM backup"
+          git config user.email "crm@kgenagency.com"
+          git add -A
+          git diff --cached --quiet && echo "Nema promena" || (git commit -m "Kopija $(date -u +%F)" && git push)

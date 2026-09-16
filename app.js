@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609161335';
+const APP_BUILD = '202609161408';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -56,7 +56,9 @@ let state = {
   calMonth: (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(),
   writer: null, editPostId: null, editIdeaId: null, ideaArea: 'site', editPackId: null,
   tab: LS.get('crm_tab', 'overview'),
-  period: +LS.get('crm_period', '30'),
+  period: LS.get('crm_period', '30'),
+  range: { from: LS.get('crm_rfrom', ''), to: LS.get('crm_rto', '') },
+  promos: [], milestones: [], daily: [], promoF: 'all', histF: 'all', histMonth: 'all', histLimit: 150, editPromoId: null, editMsId: null,
   orderView: LS.get('crm_oview', 'table'),
   ch: 'all', status: 'all', q: '',
   openOrderId: null, dTab: 'info',
@@ -95,8 +97,9 @@ function totals(o) {
   const profit = itemsTotal - n(o.discount) - itemsCost - n(o.packaging_cost) - (n(o.shipping_cost) - n(o.shipping_price));
   return { itemsTotal, itemsCost, revenue, profit, pieces: its.reduce((a, i) => a + i.qty, 0) };
 }
-function inPeriod(iso, days) {
-  if (!days) return true;
+function inPeriod(iso, P) {
+  if (P === 'custom') { const f = state.range.from ? new Date(state.range.from + 'T00:00:00') : null, t = state.range.to ? new Date(state.range.to + 'T23:59:59') : null; const d = new Date(iso); return (!f || d >= f) && (!t || d <= t); }
+  const days = +P; if (!days) return true;
   const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - (days - 1));
   return new Date(iso) >= start;
 }
@@ -111,22 +114,25 @@ function userFrom(u) { const un = u.email.split('@')[0]; return { username: un, 
 
 /* ---------------- data ---------------- */
 async function loadData() {
-  const [products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets, settings] = await Promise.all([
-    q(sb.from('h_products').select('*').order('created_at', { ascending: false })),
-    q(sb.from('h_variants').select('*')),
-    q(sb.from('h_orders').select('*').order('created_at', { ascending: false })),
-    q(sb.from('h_order_items').select('*')),
-    q(sb.from('h_ad_spend').select('*').order('day', { ascending: false })),
+  const [products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets, settings, promos, milestones, daily] = await Promise.all([
+    q(sb.from('h_products').select('*').is('deleted_at', null).order('created_at', { ascending: false })),
+    q(sb.from('h_variants').select('*').is('deleted_at', null)),
+    q(sb.from('h_orders').select('*').is('deleted_at', null).order('created_at', { ascending: false })),
+    q(sb.from('h_order_items').select('*').is('deleted_at', null)),
+    q(sb.from('h_ad_spend').select('*').is('deleted_at', null).order('day', { ascending: false })),
     q(sb.from('h_activities').select('*').order('created_at', { ascending: true })),
-    q(sb.from('h_posts').select('*').order('publish_at', { ascending: true, nullsFirst: false })),
-    q(sb.from('h_site_ideas').select('*').order('created_at', { ascending: false })),
-    q(sb.from('h_story_sections').select('*').order('position')),
-    q(sb.from('h_notes').select('*').order('created_at', { ascending: true })),
-    q(sb.from('h_packaging').select('*').order('created_at')),
-    q(sb.from('h_returns').select('*').order('created_at', { ascending: false })),
+    q(sb.from('h_posts').select('*').is('deleted_at', null).order('publish_at', { ascending: true, nullsFirst: false })),
+    q(sb.from('h_site_ideas').select('*').is('deleted_at', null).order('created_at', { ascending: false })),
+    q(sb.from('h_story_sections').select('*').is('deleted_at', null).order('position')),
+    q(sb.from('h_notes').select('*').is('deleted_at', null).order('created_at', { ascending: true })),
+    q(sb.from('h_packaging').select('*').is('deleted_at', null).order('created_at')),
+    q(sb.from('h_returns').select('*').is('deleted_at', null).order('created_at', { ascending: false })),
     q(sb.from('h_settings').select('*')),
+    q(sb.from('h_promotions').select('*').is('deleted_at', null)),
+    q(sb.from('h_milestones').select('*').is('deleted_at', null)),
+    q(sb.from('h_daily_stats').select('*').order('day')),
   ]);
-  Object.assign(state, { products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets, settings });
+  Object.assign(state, { products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets, settings, promos, milestones, daily });
 }
 
 async function log(fields) {
@@ -382,7 +388,7 @@ function renderAds() {
   const days = new Set(ads.map(a => a.day));
   let rev = 0, cnt = 0; days.forEach(d => { if (byDay[d]) { rev += byDay[d].r; cnt += byDay[d].c; } });
   const metaRev = ads.reduce((a, x) => a + n(x.revenue), 0);
-  $('kpiAds').innerHTML = stat('Potrošeno', rsd(spend), `period: ${P ? P + ' dana' : 'sve'}`) +
+  $('kpiAds').innerHTML = stat('Potrošeno', rsd(spend), periodLabel()) +
     stat('ROAS (CRM)', spend ? (rev / spend).toFixed(2) + 'x' : '—', `prihod tih dana <b>${rsd(rev)}</b>`) +
     stat('Cena po porudžbini', cnt ? rsd(spend / cnt) : '—', `<b>${cnt}</b> porudžbina tih dana`) +
     stat('ROAS (Meta)', spend && metaRev ? (metaRev / spend).toFixed(2) + 'x' : '—', 'kako Meta prijavljuje');
@@ -451,10 +457,11 @@ async function saveShipping() {
   try { await q(sb.from('h_orders').update(patch).eq('id', o.id)); Object.assign(o, patch); toast('Sačuvano ✓'); renderAll(); } catch (e) { fail(e); }
 }
 async function deleteOrder(o) {
-  if (!confirm(`Obrisati porudžbinu ${o.order_no}? Roba se vraća na stanje.`)) return;
+  if (!confirm(`Porudžbina ${o.order_no} ide u arhivu, roba se vraća na stanje. Nastaviti?`)) return;
   try {
     if (!NO_STOCK.includes(o.status)) await adjustStock(itemsOf(o.id), +1);
-    await q(sb.from('h_orders').delete().eq('id', o.id));
+    await softDelete('h_orders', o.id);
+    await log({ order_id: o.id, type: 'system', body: 'Porudžbina obrisana (u arhivi)' });
     state.orders = state.orders.filter(x => x.id !== o.id);
     state.items = state.items.filter(i => i.order_id !== o.id);
     closeDrawer(); renderAll(); toast('Obrisano');
@@ -549,7 +556,7 @@ async function saveOrder(e) {
       const hold = !NO_STOCK.includes(old.status);
       if (hold) await adjustStock(itemsOf(old.id), +1);
       o = await q(sb.from('h_orders').update(f).eq('id', old.id).select().single());
-      await q(sb.from('h_order_items').delete().eq('order_id', old.id));
+      await q(sb.from('h_order_items').update({ deleted_at: new Date().toISOString(), deleted_by: state.user.display }).eq('order_id', old.id).is('deleted_at', null));
       state.items = state.items.filter(i => i.order_id !== old.id);
       Object.assign(old, o); o = old;
       const rows = await q(sb.from('h_order_items').insert(its.map(i => ({ ...i, order_id: o.id }))).select());
@@ -627,13 +634,13 @@ async function saveProduct(e) {
     }
     const keep = sizes.filter(s => s.id).map(s => s.id);
     const removed = variantsOf(p.id).filter(v => !keep.includes(v.id));
-    if (removed.length) await q(sb.from('h_variants').delete().in('id', removed.map(v => v.id)));
+    if (removed.length) await q(sb.from('h_variants').update({ deleted_at: new Date().toISOString(), deleted_by: state.user.display }).in('id', removed.map(v => v.id)));
     for (const s of sizes) {
       const row = { product_id: p.id, size: s.size, color: s.color, stock: s.stock };
       if (s.id) await q(sb.from('h_variants').update(row).eq('id', s.id));
       else await q(sb.from('h_variants').insert(row));
     }
-    state.variants = await q(sb.from('h_variants').select('*'));
+    state.variants = await q(sb.from('h_variants').select('*').is('deleted_at', null));
     await log({ product_id: p.id, type: 'system', body: `${p.name} ${state.editProductId ? 'izmenjen' : 'dodat'}` });
     $('prodModal').classList.remove('open');
     renderAll(); toast(`${p.name} sačuvan ✓`);
@@ -646,8 +653,9 @@ async function deleteProduct() {
     if (!confirm(`${p.name} postoji u porudžbinama. Arhivirati ga umesto brisanja?`)) return;
     await q(sb.from('h_products').update({ status: 'archived' }).eq('id', p.id)); p.status = 'archived';
   } else {
-    if (!confirm(`Obrisati ${p.name}?`)) return;
-    await q(sb.from('h_products').delete().eq('id', p.id));
+    if (!confirm(`${p.name} ide u arhivu (može da se vrati). Nastaviti?`)) return;
+    await softDelete('h_products', p.id);
+    await log({ product_id: p.id, type: 'system', body: `${p.name} obrisan (u arhivi)` });
     state.products = state.products.filter(x => x.id !== p.id);
     state.variants = state.variants.filter(v => v.product_id !== p.id);
   }
@@ -827,8 +835,8 @@ async function savePost(e) {
   } catch (err) { fail(err); }
 }
 async function deletePost() {
-  if (!confirm('Obrisati ovu objavu?')) return;
-  try { await q(sb.from('h_posts').delete().eq('id', state.editPostId)); state.posts = state.posts.filter(x => x.id !== state.editPostId); $('postModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
+  if (!confirm('Objava ide u arhivu (može da se vrati). Nastaviti?')) return;
+  try { await softDelete('h_posts', state.editPostId); state.posts = state.posts.filter(x => x.id !== state.editPostId); $('postModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
 }
 
 /* ---------- SAJT i predlozi za pakovanje ---------- */
@@ -905,8 +913,8 @@ async function saveIdea(e) {
   } catch (err) { fail(err); }
 }
 async function deleteIdea() {
-  if (!confirm('Obrisati predlog?')) return;
-  try { await q(sb.from('h_site_ideas').delete().eq('id', state.editIdeaId)); state.ideas = state.ideas.filter(x => x.id !== state.editIdeaId); $('siteModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
+  if (!confirm('Predlog ide u arhivu. Nastaviti?')) return;
+  try { await softDelete('h_site_ideas', state.editIdeaId); state.ideas = state.ideas.filter(x => x.id !== state.editIdeaId); $('siteModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
 }
 
 /* ---------- PAKOVANJE ---------- */
@@ -973,8 +981,8 @@ async function savePack(e) {
   } catch (err) { fail(err); }
 }
 async function deletePack() {
-  if (!confirm('Obrisati materijal?')) return;
-  try { await q(sb.from('h_packaging').delete().eq('id', state.editPackId)); state.pack = state.pack.filter(p => p.id !== state.editPackId); $('packModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
+  if (!confirm('Materijal ide u arhivu. Nastaviti?')) return;
+  try { await softDelete('h_packaging', state.editPackId); state.pack = state.pack.filter(p => p.id !== state.editPackId); $('packModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
 }
 
 /* ---------- BRAND STORY ---------- */
@@ -1014,8 +1022,8 @@ async function addSection() {
   } catch (e) { fail(e); }
 }
 async function deleteSection(id) {
-  if (!confirm('Obrisati ovo poglavlje?')) return;
-  try { await q(sb.from('h_story_sections').delete().eq('id', id)); state.story = state.story.filter(s => s.id !== id); renderStory(); } catch (e) { fail(e); }
+  if (!confirm('Poglavlje ide u arhivu. Nastaviti?')) return;
+  try { await softDelete('h_story_sections', id); state.story = state.story.filter(s => s.id !== id); renderStory(); } catch (e) { fail(e); }
 }
 function renderNotes() {
   document.querySelectorAll('#whoSeg button').forEach(b => b.classList.toggle('active', b.dataset.who === state.who));
@@ -1036,9 +1044,9 @@ async function addNote() {
 async function noteAction(id, act) {
   const x = state.notes.find(z => z.id === id); if (!x) return;
   try {
-    if (act === 'del') { if (!confirm('Obrisati belešku?')) return; await q(sb.from('h_notes').delete().eq('id', id)); state.notes = state.notes.filter(z => z.id !== id); }
+    if (act === 'del') { if (!confirm('Beleška ide u arhivu. Nastaviti?')) return; await softDelete('h_notes', id); state.notes = state.notes.filter(z => z.id !== id); }
     else { const f = act === 'pin' ? 'pinned' : 'done'; await q(sb.from('h_notes').update({ [f]: !x[f] }).eq('id', id)); x[f] = !x[f]; }
-    renderNotes();
+    renderNotes(); if (state.editPromoId && $('promoModal').classList.contains('open')) { renderPromoNotes(state.editPromoId); renderPromos(); }
   } catch (e) { fail(e); }
 }
 
@@ -1266,8 +1274,8 @@ async function saveRet(e) {
   } catch (err) { fail(err); }
 }
 async function deleteRet() {
-  if (!confirm('Obrisati prijavu?')) return;
-  try { await q(sb.from('h_returns').delete().eq('id', state.editRetId)); state.rets = state.rets.filter(x => x.id !== state.editRetId); $('retModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
+  if (!confirm('Prijava ide u arhivu. Nastaviti?')) return;
+  try { await softDelete('h_returns', state.editRetId); state.rets = state.rets.filter(x => x.id !== state.editRetId); $('retModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
 }
 async function retToIdea(id) {
   const r = state.rets.find(x => x.id === id); if (!r) return;
@@ -1281,13 +1289,275 @@ async function retToIdea(id) {
   } catch (e) { fail(e); }
 }
 
+/* ---------- MEKO BRISANJE: ništa ne nestaje ---------- */
+async function softDelete(table, id) {
+  await q(sb.from(table).update({ deleted_at: new Date().toISOString(), deleted_by: state.user.display }).eq('id', id));
+}
+const ARCH_TABLES = [
+  ['h_orders', 'Porudžbina', r => `${r.order_no || ''} ${r.customer_name}`], ['h_products', 'Komad', r => r.name], ['h_posts', 'Objava', r => r.title],
+  ['h_site_ideas', 'Predlog', r => r.title], ['h_returns', 'Prijava', r => `${r.case_no} ${r.customer_name}`], ['h_packaging', 'Materijal', r => r.name],
+  ['h_promotions', 'Promocija', r => r.name], ['h_milestones', 'Događaj', r => r.title], ['h_notes', 'Beleška', r => r.body], ['h_story_sections', 'Poglavlje', r => r.title], ['h_ad_spend', 'Reklame', r => `${r.day} ${r.campaign}`],
+];
+async function loadArchive() {
+  const res = await Promise.all(ARCH_TABLES.map(([t]) => q(sb.from(t).select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(100))));
+  const out = [];
+  ARCH_TABLES.forEach(([t, label, name], i) => res[i].forEach(r => out.push({ t, label, name: name(r), r })));
+  return out.sort((a, b) => b.r.deleted_at.localeCompare(a.r.deleted_at));
+}
+async function restoreRow(t, id) {
+  try {
+    await q(sb.from(t).update({ deleted_at: null, deleted_by: null }).eq('id', id));
+    if (t === 'h_orders') {
+      const o = await q(sb.from('h_orders').select('*').eq('id', id).single());
+      const its = await q(sb.from('h_order_items').select('*').eq('order_id', id).is('deleted_at', null));
+      await loadData();
+      if (!NO_STOCK.includes(o.status)) await adjustStock(its, -1);
+      await log({ order_id: id, type: 'system', body: 'Porudžbina vraćena iz arhive' });
+    } else await loadData();
+    renderAll(); showArchive(); toast('Vraćeno iz arhive ✓');
+  } catch (e) { fail(e); }
+}
+async function showArchive() {
+  const w = $('archiveWrap'); w.style.display = '';
+  $('archiveList').innerHTML = '<div class="kb-empty">Učitavam…</div>';
+  try {
+    const rows = await loadArchive();
+    $('archiveList').innerHTML = rows.map(x => `<div class="arch-row"><span><b>${x.label}:</b> ${esc(String(x.name || '').slice(0, 90))} <span class="page-sub">· obrisao/la ${esc(x.r.deleted_by || '?')} · ${fmtDT(x.r.deleted_at)}</span></span><button class="mini-btn" data-restore="${x.t}:${x.r.id}">↩ Vrati</button></div>`).join('')
+      || '<div class="kb-empty">Ništa nije obrisano. Sve što je ikad uneto još je tu.</div>';
+    w.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) { fail(e); }
+}
+
+/* ---------- DNEVNI PRESEK ---------- */
+function computeDayStats(ds) {
+  const os = state.orders.filter(o => dayStr(new Date(o.created_at)) === ds && !NO_REVENUE.includes(o.status));
+  let revenue = 0, profit = 0; os.forEach(o => { const t = totals(o); revenue += t.revenue; profit += t.profit; });
+  let stock_pcs = 0, stock_value = 0;
+  state.products.filter(p => p.status !== 'archived').forEach(p => variantsOf(p.id).forEach(v => { stock_pcs += v.stock; stock_value += v.stock * n(p.buy_price); }));
+  return { day: ds, orders: os.length, revenue, profit, stock_pcs, stock_value,
+    ad_spend: state.ads.filter(a => a.day === ds).reduce((a, x) => a + n(x.spend), 0),
+    open_returns: state.rets.filter(r => !retClosed(r) && r.type !== 'feedback').length,
+    active_products: state.products.filter(p => p.status === 'active').length, updated_at: new Date().toISOString() };
+}
+async function snapshotToday() {
+  try {
+    const today = dayStr(new Date()), y = new Date(); y.setDate(y.getDate() - 1); const yd = dayStr(y);
+    const rows = [computeDayStats(today)];
+    if (!state.daily.find(d => d.day === yd)) rows.push(computeDayStats(yd));
+    await q(sb.from('h_daily_stats').upsert(rows));
+    state.daily = state.daily.filter(d => !rows.find(r => r.day === d.day)).concat(rows).sort((a, b) => a.day.localeCompare(b.day));
+  } catch (e) { console.warn('snapshot', e); }
+}
+
+/* ---------- PROMOCIJE ---------- */
+const PROMO_T = { code: 'Kod za popust', launch: 'Lansiranje', flash: 'Flash akcija', free_shipping: 'Besplatna dostava', bundle: 'Paket', giveaway: 'Giveaway', influencer: 'Influenser', other: 'Drugo' };
+function promoStatus(p) { const now = new Date(); if (new Date(p.starts_at) > now) return 'planned'; if (p.ends_at && new Date(p.ends_at) < now) return 'ended'; return 'active'; }
+Object.assign(ST, { planned: 'Planirana', active: 'Aktivna', ended: 'Završena' });
+function promoResults(p) {
+  const s = new Date(p.starts_at), e = p.ends_at ? new Date(p.ends_at) : new Date();
+  const inP = state.orders.filter(o => !NO_REVENUE.includes(o.status) && new Date(o.created_at) >= s && new Date(o.created_at) <= e);
+  let revenue = 0, profit = 0; inP.forEach(o => { const t = totals(o); revenue += t.revenue; profit += t.profit; });
+  const code = (p.code || '').trim().toUpperCase();
+  const withCode = code ? inP.filter(o => (o.discount_code || '').trim().toUpperCase() === code) : [];
+  const codeRev = withCode.reduce((a, o) => a + totals(o).revenue, 0);
+  const days = Math.max(1, Math.ceil((Math.min(e, new Date()) - s) / 864e5));
+  const b0 = new Date(s); b0.setDate(b0.getDate() - 14);
+  const base = state.orders.filter(o => !NO_REVENUE.includes(o.status) && new Date(o.created_at) >= b0 && new Date(o.created_at) < s);
+  const baseDaily = base.reduce((a, o) => a + totals(o).revenue, 0) / 14;
+  const lift = baseDaily > 0 ? (revenue / days) / baseDaily - 1 : null;
+  const spend = state.ads.filter(a => { const d = new Date(a.day + 'T12:00:00'); return d >= s && d <= e; }).reduce((a, x) => a + n(x.spend), 0) + n(p.budget && !state.ads.length ? p.budget : 0);
+  return { orders: inP.length, revenue, profit, withCode: withCode.length, codeRev, days, lift, baseDaily, spend, net: profit - spend };
+}
+function promoNotes(id) { return state.notes.filter(x => x.area === 'promo:' + id).sort((a, b) => a.created_at.localeCompare(b.created_at)); }
+function renderPromos() {
+  const list = state.promos.filter(p => state.promoF === 'all' || promoStatus(p) === state.promoF)
+    .sort((a, b) => b.starts_at.localeCompare(a.starts_at));
+  const active = state.promos.filter(p => promoStatus(p) === 'active');
+  const pb = $('promoBadge'); pb.style.display = active.length ? '' : 'none'; pb.textContent = active.length;
+  document.querySelectorAll('#promoSeg button').forEach(b => b.classList.toggle('active', b.dataset.f === state.promoF));
+  $('promoCount').textContent = `${list.length} promocija`;
+  let best = null, totRev = 0;
+  state.promos.forEach(p => { const r = promoResults(p); totRev += r.revenue; if (!best || r.revenue > best.r.revenue) best = { p, r }; });
+  $('kpiPromo').innerHTML = stat('Aktivne', active.length, active.map(p => esc(p.name)).join(', ') || 'trenutno nijedna') +
+    stat('Ukupno promocija', state.promos.length, `${state.promos.filter(p => promoStatus(p) === 'ended').length} završenih`) +
+    stat('Prihod tokom promocija', rsd(totRev), 'sve porudžbine u periodima akcija') +
+    stat('Najbolja', best ? esc(best.p.name) : '—', best ? `${rsd(best.r.revenue)} · ${best.r.orders} porudžbina` : '');
+  // gantt
+  if (!state.promos.length) $('promoGantt').innerHTML = '<div class="gantt-empty">Još nema promocija. Kad dodaš prvu, ovde se vidi cela istorija na jednoj liniji.</div>';
+  else {
+    const now = new Date();
+    let min = new Date(Math.min(...state.promos.map(p => +new Date(p.starts_at)), +now)), max = new Date(Math.max(...state.promos.map(p => +(p.ends_at ? new Date(p.ends_at) : now)), +now));
+    min = new Date(min.getFullYear(), min.getMonth(), 1); max = new Date(max.getFullYear(), max.getMonth() + 1, 1);
+    const span = max - min, pct = (d) => Math.min(100, Math.max(0, (d - min) / span * 100));
+    const months = []; for (let d = new Date(min); d < max; d.setMonth(d.getMonth() + 1)) months.push(new Date(d));
+    $('promoGantt').innerHTML = `<div class="gantt-inner" style="min-width:${Math.max(600, months.length * 110)}px">
+      <div class="gantt-months">${months.map(m => `<span style="left:${pct(m)}%">${m.toLocaleDateString('sr-Latn-RS', { month: 'short', year: '2-digit' })}</span>`).join('')}</div>
+      ${state.promos.slice().sort((a, b) => a.starts_at.localeCompare(b.starts_at)).map((p, i) => { const s = new Date(p.starts_at), e = p.ends_at ? new Date(p.ends_at) : new Date(max); const st = promoStatus(p); const r = promoResults(p);
+        return `<div class="gantt-row"><div class="gantt-lbl" title="${esc(p.name)}">${esc(p.name)}</div><div class="gantt-track"><div class="gantt-bar ${st}" data-promo="${p.id}" style="left:${pct(s)}%;width:${Math.max(1.5, pct(e) - pct(s))}%;animation-delay:${i * 60}ms" title="${esc(p.name)}: ${rsd(r.revenue)}">${p.code ? esc(p.code) + ' · ' : ''}${rsd(r.revenue)}</div></div></div>`; }).join('')}
+      <div class="gantt-today" style="left:calc(170px + (100% - 170px) * ${pct(now) / 100})"></div></div>`;
+  }
+  $('promoList').innerHTML = list.map(p => { const st = promoStatus(p), r = promoResults(p), ns = promoNotes(p.id).slice(-2);
+    return `<div class="promo ${st}" data-promo="${p.id}">
+      <div class="promo-top"><div><div class="promo-name">${esc(p.name)}</div><div class="promo-when">${fmtDate(p.starts_at)} → ${p.ends_at ? fmtDate(p.ends_at) : 'traje'} · ${r.days} d · ${PROMO_T[p.type]}${p.channel ? ' · ' + esc(p.channel) : ''}</div></div>
+        <div style="text-align:right">${pill(st)}${p.code ? `<div style="margin-top:6px"><span class="promo-code">${esc(p.code)}</span></div>` : ''}</div></div>
+      <div class="promo-nums"><div><b>${r.orders}</b><span>porudžbina${p.code ? ` · ${r.withCode} sa kodom` : ''}</span></div><div><b>${rsd(r.revenue)}</b><span>prihod u periodu</span></div><div><b class="${r.profit >= 0 ? 'pos' : 'neg'}">${rsd(r.profit)}</b><span>bruto profit</span></div></div>
+      ${r.lift != null ? `<span class="lift ${r.lift >= 0 ? 'up' : 'down'}">${r.lift >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(r.lift * 100))}% dnevnog prihoda u odnosu na 14 dana pre</span>` : `<span class="lift">bez poređenja, nema porudžbina pre akcije</span>`}
+      ${p.result_note ? `<div class="promo-notes"><b>Zaključak:</b> ${esc(p.result_note)}</div>` : ''}
+      ${ns.length ? `<div class="promo-notes">${ns.map(x => `<div><span class="by ${PEOPLE[x.author] ? x.author : 'other'}">${esc(personName(x.author))}</span>${esc(x.body)}</div>`).join('')}</div>` : ''}
+    </div>`; }).join('') || `<div class="panel" style="grid-column:1/-1"><div class="page-sub">Nema promocija u ovom filteru.</div></div>`;
+}
+const PRF = ['name', 'type', 'code', 'discount_pct', 'discount_rsd', 'description', 'channel', 'budget', 'goal', 'result_note'];
+function openPromoModal(id) {
+  const p = id ? state.promos.find(x => x.id === id) : null;
+  state.editPromoId = id || null;
+  $('prTitle').textContent = p ? p.name : 'Nova promocija';
+  PRF.forEach(f => $('pr_' + f).value = p ? (p[f] ?? '') : (f === 'type' ? 'code' : ''));
+  $('pr_starts_at').value = p ? toLocalInput(p.starts_at) : toLocalInput(new Date().toISOString()).slice(0, 11) + '00:00';
+  $('pr_ends_at').value = p ? toLocalInput(p.ends_at) : '';
+  $('prDelete').style.display = p ? '' : 'none';
+  if (p) { const r = promoResults(p);
+    $('prResults').innerHTML = `<div class="sec-title">Rezultat (računa se iz porudžbina)</div><div class="pr-res"><div><b>${r.orders}</b><span>porudžbina</span></div><div><b>${rsd(r.revenue)}</b><span>prihod</span></div><div><b>${rsd(r.profit)}</b><span>profit</span></div><div><b>${r.lift != null ? (r.lift >= 0 ? '+' : '') + Math.round(r.lift * 100) + '%' : '—'}</b><span>vs 14 dana pre</span></div></div>${p.code ? `<div class="hint">Sa kodom ${esc(p.code)}: ${r.withCode} porudžbina, ${rsd(r.codeRev)}. Kod se prepoznaje iz polja „Kod za popust“ na porudžbini.</div>` : ''}`;
+    renderPromoNotes(p.id);
+  } else { $('prResults').innerHTML = ''; $('prNotes').innerHTML = ''; }
+  $('promoModal').classList.add('open'); $('pr_name').focus();
+}
+function renderPromoNotes(id) {
+  const w = state.writer || who();
+  $('prNotes').innerHTML = `<div class="sec-title">Beleške tima</div><div class="notes-inline">${promoNotes(id).map(x => `<div class="note"><span class="by ${PEOPLE[x.author] ? x.author : 'other'}">${esc(personName(x.author))}</span><span class="txt">${esc(x.body)}</span><span class="n-act"><button type="button" data-note="${x.id}" data-act="del">✕</button></span></div>`).join('') || '<div class="page-sub">Još nema beleški.</div>'}
+    <div class="writer" style="margin-top:8px"><span>Piše:</span>${Object.keys(PEOPLE).map(k => `<button type="button" data-pwriter="${k}" class="${k === w ? 'active' : ''}">${PEOPLE[k].name}</button>`).join('')}</div>
+    <textarea id="prNoteInput" placeholder="Beleška uz ovu promociju… (Enter za čuvanje)"></textarea></div>`;
+}
+async function savePromo(e) {
+  e.preventDefault();
+  const f = {}; PRF.forEach(k => { const v = $('pr_' + k).value.trim(); f[k] = v === '' ? null : v; });
+  if (f.code) f.code = f.code.toUpperCase();
+  ['discount_pct', 'discount_rsd', 'budget'].forEach(k => f[k] = f[k] === null ? null : n(f[k]));
+  f.starts_at = new Date($('pr_starts_at').value).toISOString();
+  f.ends_at = $('pr_ends_at').value ? new Date($('pr_ends_at').value).toISOString() : null;
+  if (f.ends_at && f.ends_at < f.starts_at) return toast('Kraj je pre početka');
+  try {
+    if (state.editPromoId) { const r = await q(sb.from('h_promotions').update(f).eq('id', state.editPromoId).select().single()); Object.assign(state.promos.find(x => x.id === r.id), r); }
+    else { f.created_by = state.user.display; const r = await q(sb.from('h_promotions').insert(f).select().single()); state.promos.push(r); await log({ promo_id: r.id, type: 'system', body: `Promocija „${r.name}“ dodata (${fmtDate(r.starts_at)} → ${r.ends_at ? fmtDate(r.ends_at) : 'traje'})` }); }
+    $('promoModal').classList.remove('open'); renderAll(); toast('Promocija sačuvana ✓');
+  } catch (err) { fail(err); }
+}
+async function deletePromo() {
+  if (!confirm('Promocija ide u arhivu (može da se vrati). Nastaviti?')) return;
+  try { await softDelete('h_promotions', state.editPromoId); state.promos = state.promos.filter(x => x.id !== state.editPromoId); $('promoModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
+}
+async function addPromoNote() {
+  const body = $('prNoteInput').value.trim(); if (!body) return;
+  try { state.notes.push(await q(sb.from('h_notes').insert({ area: 'promo:' + state.editPromoId, author: state.writer || who(), body }).select().single())); renderPromoNotes(state.editPromoId); renderPromos(); } catch (e) { fail(e); }
+}
+
+/* ---------- ISTORIJA ---------- */
+const MS_K = { start: 'Početak', end: 'Kraj', decision: 'Odluka', milestone: 'Prekretnica', event: 'Događaj' };
+function actCategory(a) {
+  if (a.return_id) return 'ret'; if (a.post_id) return 'post'; if (a.promo_id) return 'promo'; if (a.site_id || a.packaging_id) return 'site';
+  if (a.type === 'stock' || a.type === 'alert' || (a.product_id && !a.order_id)) return 'stock';
+  return 'order';
+}
+function actText(a) {
+  const o = a.order_id && order(a.order_id), p = a.product_id && product(a.product_id), po = a.post_id && state.posts.find(x => x.id === a.post_id),
+    r = a.return_id && state.rets.find(x => x.id === a.return_id), pr = a.promo_id && state.promos.find(x => x.id === a.promo_id), i = a.site_id && state.ideas.find(x => x.id === a.site_id), pk = a.packaging_id && state.pack.find(x => x.id === a.packaging_id);
+  const ref = o ? `<span class="ref">${esc(o.order_no || '')} ${esc(o.customer_name)}</span>` : po ? `<span class="ref">${esc(po.title)}</span>` : r ? `<span class="ref">${esc(r.case_no)} ${esc(r.customer_name)}</span>` : pr ? `<span class="ref">${esc(pr.name)}</span>` : i ? `<span class="ref">${esc(i.title)}</span>` : pk ? `<span class="ref">${esc(pk.name)}</span>` : p && !/^[A-ZČĆŠĐŽ]/.test(a.body || '') ? `<span class="ref">${esc(p.name)}</span>` : '';
+  const body = a.type === 'comment' ? `komentar: „${esc(a.body)}“` : a.type === 'screenshot' ? 'dodat screenshot' : esc(a.body || '');
+  const open = o ? `order:${o.id}` : po ? `post:${po.id}` : r ? `ret:${r.id}` : pr ? `promo:${pr.id}` : i ? `idea:${i.id}` : pk ? `pack:${pk.id}` : p ? `product:${p.id}` : '';
+  return { html: `<span class="who">${esc(a.author)}</span> · ${ref ? ref + ' · ' : ''}${body}`, open };
+}
+function historyEvents() {
+  const ev = [];
+  state.milestones.forEach(m => ev.push({ at: m.happened_at, cat: 'milestone', m }));
+  state.acts.forEach(a => ev.push({ at: a.created_at, cat: actCategory(a), a }));
+  state.promos.forEach(p => { ev.push({ at: p.starts_at, cat: 'promo', txt: `Počela promocija <span class="ref">${esc(p.name)}</span>${p.code ? ' (' + esc(p.code) + ')' : ''}`, open: `promo:${p.id}`, future: new Date(p.starts_at) > new Date() });
+    if (p.ends_at) ev.push({ at: p.ends_at, cat: 'promo', txt: `Završena promocija <span class="ref">${esc(p.name)}</span>`, open: `promo:${p.id}`, future: new Date(p.ends_at) > new Date() }); });
+  return ev.filter(e => !e.future).sort((a, b) => b.at.localeCompare(a.at));
+}
+function renderHistory() {
+  const all = historyEvents();
+  const months = [...new Set(all.map(e => e.at.slice(0, 7)))];
+  const sel = $('histMonth'); const cur = state.histMonth;
+  sel.innerHTML = `<option value="all">Svi meseci</option>` + months.map(m => `<option value="${m}" ${m === cur ? 'selected' : ''}>${new Date(m + '-01T12:00:00').toLocaleDateString('sr-Latn-RS', { month: 'long', year: 'numeric' })}</option>`).join('');
+  document.querySelectorAll('#histSeg button').forEach(b => b.classList.toggle('active', b.dataset.f === state.histF));
+  const list = all.filter(e => (state.histF === 'all' || e.cat === state.histF) && (cur === 'all' || e.at.startsWith(cur)));
+  $('histCount').textContent = `${list.length} zapisa`;
+  const first = all.length ? all[all.length - 1].at : null;
+  const allRev = state.orders.filter(o => !NO_REVENUE.includes(o.status)).reduce((a, o) => a + totals(o).revenue, 0);
+  $('kpiHist').innerHTML = stat('Dana od početka', first ? Math.max(1, Math.ceil((new Date() - new Date(first)) / 864e5)) : 0, first ? `od ${fmtDate(first)}` : '') +
+    stat('Zapisa u istoriji', all.length, `${state.milestones.length} prekretnica`) +
+    stat('Porudžbina ikad', state.orders.length, `${state.orders.filter(o => o.status === 'delivered').length} isporučenih`) +
+    stat('Prihod ikad', rsd(allRev), 'bez otkazanih i vraćenih');
+  renderHistChart();
+  const groups = {};
+  list.slice(0, state.histLimit).forEach(e => { const d = dayStr(new Date(e.at)); (groups[d] = groups[d] || []).push(e); });
+  $('timeline').innerHTML = Object.entries(groups).map(([d, evs], gi) => {
+    const dayOrders = state.orders.filter(o => dayStr(new Date(o.created_at)) === d && !NO_REVENUE.includes(o.status));
+    const rev = dayOrders.reduce((a, o) => a + totals(o).revenue, 0);
+    const ds = state.daily.find(x => x.day === d);
+    const dt = new Date(d + 'T12:00:00');
+    return `<div class="tl-day" style="animation-delay:${Math.min(gi, 10) * 40}ms"><div class="tl-dayhead"><span class="tl-date">${dt.toLocaleDateString('sr-Latn-RS', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+      <span class="tl-sum">${dayOrders.length ? `<b>${dayOrders.length}</b> porudžbina · <b>${rsd(rev)}</b>` : 'bez porudžbina'}${ds ? ` · na stanju <b>${ds.stock_pcs}</b> kom` : ''}</span></div>
+      ${evs.map(e => {
+        const t = new Date(e.at).toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' });
+        if (e.m) return `<div class="tl-item milestone" data-open="ms:${e.m.id}"><div class="tl-time">${t}</div><div class="tl-body"><div class="tl-milestone"><div class="k">${MS_K[e.m.kind]}</div><div class="t">${esc(e.m.title)}</div>${e.m.body ? `<p>${esc(e.m.body)}</p>` : ''}<div class="page-sub" style="margin-top:6px">${esc(e.m.author || '')}</div></div></div></div>`;
+        const x = e.a ? actText(e.a) : { html: e.txt, open: e.open };
+        const ic = { order: '◫', stock: '▤', alert: '!', post: '▶', ret: '↩', promo: '％', site: '✎' }[e.cat] || '•';
+        return `<div class="tl-item" ${x.open ? `data-open="${x.open}"` : ''}><div class="tl-time">${t}</div><div class="tl-ic ${e.a && e.a.type === 'alert' ? 'alert' : e.cat}">${ic}</div><div class="tl-body">${x.html}</div></div>`;
+      }).join('')}</div>`;
+  }).join('') || '<div class="kb-empty" style="padding:30px">Još nema zapisa za ovaj filter.</div>';
+  $('timeline').insertAdjacentHTML('beforeend', list.length > state.histLimit ? `<div class="tl-more"><button class="btn-ghost" id="histMore">Prikaži još (${list.length - state.histLimit})</button></div>` : '');
+}
+function renderHistChart() {
+  const days = 60, today = new Date(); today.setHours(0, 0, 0, 0);
+  const data = []; let max = 0;
+  for (let i = days - 1; i >= 0; i--) { const d = new Date(today); d.setDate(d.getDate() - i); const ds = dayStr(d);
+    const os = state.orders.filter(o => dayStr(new Date(o.created_at)) === ds && !NO_REVENUE.includes(o.status));
+    const v = os.reduce((a, o) => a + totals(o).revenue, 0); max = Math.max(max, v); data.push({ ds, v, c: os.length, d }); }
+  $('histChartSub').textContent = `poslednjih ${days} dana`;
+  const W = 1000, H = 130, bw = W / days;
+  $('histChart').innerHTML = `<svg viewBox="0 0 ${W} ${H + 18}" preserveAspectRatio="none">${data.map((x, i) => `<rect class="bar ${x.v ? '' : 'empty'}" x="${i * bw + 1}" y="${x.v ? H - Math.max(3, x.v / (max || 1) * H) : H - 2}" width="${bw - 2}" height="${x.v ? Math.max(3, x.v / (max || 1) * H) : 2}" rx="2" style="animation-delay:${i * 8}ms" data-i="${i}"><title>${x.d.toLocaleDateString('sr-Latn-RS')}: ${rsd(x.v)} · ${x.c} porudžbina</title></rect>`).join('')}
+    ${data.map((x, i) => x.d.getDate() === 1 || i === 0 ? `<text class="lbl" x="${i * bw + 2}" y="${H + 14}">${x.d.toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' })}</text>` : '').join('')}</svg>`;
+}
+const MSF = ['title', 'kind', 'body'];
+function openMsModal(id) {
+  const m = id ? state.milestones.find(x => x.id === id) : null;
+  state.editMsId = id || null;
+  $('msTitle').textContent = m ? 'Događaj' : 'Zabeleži događaj';
+  MSF.forEach(f => $('ms_' + f).value = m ? (m[f] ?? '') : (f === 'kind' ? 'event' : ''));
+  $('ms_happened_at').value = toLocalInput(m ? m.happened_at : new Date().toISOString());
+  $('msDelete').style.display = m ? '' : 'none';
+  $('msModal').classList.add('open'); $('ms_title').focus();
+}
+async function saveMs(e) {
+  e.preventDefault();
+  const f = {}; MSF.forEach(k => { const v = $('ms_' + k).value.trim(); f[k] = v === '' ? null : v; });
+  f.happened_at = new Date($('ms_happened_at').value || Date.now()).toISOString();
+  try {
+    if (state.editMsId) { const r = await q(sb.from('h_milestones').update(f).eq('id', state.editMsId).select().single()); Object.assign(state.milestones.find(x => x.id === r.id), r); }
+    else { f.author = state.user.display; state.milestones.push(await q(sb.from('h_milestones').insert(f).select().single())); }
+    $('msModal').classList.remove('open'); renderAll(); toast('Zabeleženo ✓');
+  } catch (err) { fail(err); }
+}
+async function deleteMs() {
+  if (!confirm('Događaj ide u arhivu. Nastaviti?')) return;
+  try { await softDelete('h_milestones', state.editMsId); state.milestones = state.milestones.filter(x => x.id !== state.editMsId); $('msModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
+}
+function openRef(ref) {
+  const [k, id] = ref.split(':');
+  if (k === 'order') openDrawer(id); else if (k === 'post') openPostModal(id); else if (k === 'ret') openRetModal(id); else if (k === 'promo') openPromoModal(id);
+  else if (k === 'idea') openIdeaModal(id); else if (k === 'pack') openPackModal(id); else if (k === 'product') openProductModal(id); else if (k === 'ms') openMsModal(id);
+}
+function periodLabel() { const P = state.period; return P === 'custom' ? `${state.range.from || '…'} do ${state.range.to || '…'}` : P === '0' || P === 0 ? 'sve vreme' : P === '1' || P === 1 ? 'danas' : `poslednjih ${P} dana`; }
+
 /* ---------------- shell ---------------- */
 function renderAll() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'v-' + state.tab));
-  document.querySelectorAll('#periodSeg button').forEach(b => b.classList.toggle('active', +b.dataset.p === state.period));
+  document.querySelectorAll('#periodSeg button').forEach(b => b.classList.toggle('active', b.dataset.p === String(state.period)));
+  $('rangeWrap').style.display = state.period === 'custom' ? '' : 'none';
   renderOverview(); renderOrders(); renderProducts(); renderAds();
-  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes(); renderReturns();
+  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes(); renderReturns(); renderPromos();
+  if (state.tab === 'history') renderHistory();
 }
 function setTab(t) {
   state.tab = t; LS.set('crm_tab', t); renderAll(); window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1306,7 +1576,8 @@ function bindEvents() {
     $('harizma').style.display = h ? '' : 'none'; $('soonView').style.display = h ? 'none' : '';
   });
   $('tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
-  $('periodSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.period = +b.dataset.p; LS.set('crm_period', b.dataset.p); renderAll(); });
+  $('periodSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.period = b.dataset.p; LS.set('crm_period', b.dataset.p); if (b.dataset.p === 'custom' && !state.range.from) { const d = new Date(); d.setDate(1); state.range.from = dayStr(d); state.range.to = dayStr(new Date()); } $('rangeFrom').value = state.range.from; $('rangeTo').value = state.range.to; renderAll(); });
+  ['rangeFrom', 'rangeTo'].forEach(id => $(id).addEventListener('change', () => { state.range = { from: $('rangeFrom').value, to: $('rangeTo').value }; LS.set('crm_rfrom', state.range.from); LS.set('crm_rto', state.range.to); renderAll(); }));
   $('search').addEventListener('input', (e) => {
     state.q = e.target.value.trim();
     if (state.q && state.tab === 'overview') state.tab = 'orders';
@@ -1329,6 +1600,11 @@ function bindEvents() {
     const cm = e.target.closest('[data-cal]'); if (cm) { const m = state.calMonth; state.calMonth = new Date(m.getFullYear(), m.getMonth() + +cm.dataset.cal, 1); return renderPosts(); }
     if (e.target.closest('a')) return;
     const pp = e.target.closest('[data-post]'); if (pp) return openPostModal(pp.dataset.post);
+    const rs = e.target.closest('[data-restore]'); if (rs) { const [t, id] = rs.dataset.restore.split(':'); return restoreRow(t, id); }
+    const pw = e.target.closest('[data-pwriter]'); if (pw) { state.writer = pw.dataset.pwriter; renderPromoNotes(state.editPromoId); return; }
+    if (e.target.id === 'histMore') { state.histLimit += 200; return renderHistory(); }
+    const op = e.target.closest('[data-open]'); if (op && !e.target.closest('.modal-wrap')) return openRef(op.dataset.open);
+    const pm = e.target.closest('[data-promo]'); if (pm && !e.target.closest('#promoModal')) return openPromoModal(pm.dataset.promo);
     const ti = e.target.closest('[data-toidea]'); if (ti) { e.stopPropagation(); return retToIdea(ti.dataset.toidea); }
     const rr = e.target.closest('[data-ret]'); if (rr && !e.target.closest('#retModal')) return openRetModal(rr.dataset.ret);
     const ii = e.target.closest('[data-idea]'); if (ii) return openIdeaModal(ii.dataset.idea);
@@ -1336,7 +1612,7 @@ function bindEvents() {
     const sb_ = e.target.closest('[data-stock]');
     if (sb_) { e.stopPropagation(); return bumpStock(sb_.dataset.stock, +sb_.dataset.d); }
     const del = e.target.closest('[data-delad]');
-    if (del) { if (confirm('Obrisati unos?')) q(sb.from('h_ad_spend').delete().eq('id', del.dataset.delad)).then(() => { state.ads = state.ads.filter(a => a.id !== del.dataset.delad); renderAll(); }).catch(fail); return; }
+    if (del) { if (confirm('Unos ide u arhivu. Nastaviti?')) softDelete('h_ad_spend', del.dataset.delad).then(() => { state.ads = state.ads.filter(a => a.id !== del.dataset.delad); renderAll(); }).catch(fail); return; }
     const zoom = e.target.closest('[data-zoom]');
     if (zoom) { $('lightboxImg').src = zoom.src; $('lightbox').classList.add('open'); return; }
     const go = e.target.closest('[data-goto]'); if (go) return setTab(go.dataset.goto);
@@ -1400,6 +1676,17 @@ function bindEvents() {
   $('noteInput').addEventListener('input', (e) => autosize(e.target));
   document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.dataset?.cfield) { e.preventDefault(); addComment(e.target); } });
 
+  $('newPromoBtn').addEventListener('click', () => openPromoModal());
+  $('promoForm').addEventListener('submit', savePromo);
+  $('prDelete').addEventListener('click', deletePromo);
+  $('promoSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.promoF = b.dataset.f; renderPromos(); });
+  $('prNotes').addEventListener('keydown', (e) => { if (e.target.id === 'prNoteInput' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addPromoNote(); } });
+  $('newMilestoneBtn').addEventListener('click', () => openMsModal());
+  $('msForm').addEventListener('submit', saveMs);
+  $('msDelete').addEventListener('click', deleteMs);
+  $('archiveBtn').addEventListener('click', showArchive);
+  $('histSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.histF = b.dataset.f; state.histLimit = 150; renderHistory(); });
+  $('histMonth').addEventListener('change', (e) => { state.histMonth = e.target.value; state.histLimit = 150; renderHistory(); });
   $('newRetBtn').addEventListener('click', () => openRetModal());
   $('retForm').addEventListener('submit', saveRet);
   $('rtDelete').addEventListener('click', deleteRet);
@@ -1438,6 +1725,7 @@ async function enterApp(user) {
   const splash = playSplash(user);
   await loadData();
   renderAll();
+  snapshotToday();
   await splash;
   $('loginPage').style.display = 'none';
   $('app').style.display = 'block';

@@ -308,3 +308,119 @@ drop policy if exists "team all" on public.h_settings;
 create policy "team all" on public.h_settings for all to authenticated using (true) with check (true);
 insert into public.h_settings (key, value) values ('site_url', 'https://wegmk4-wf.myshopify.com'), ('site_pass', '')
 on conflict (key) do nothing;
+-- v6: trajna istorija, promocije, prekretnice, dnevni presek, meko brisanje
+
+-- 1) meko brisanje: ništa se fizički ne briše
+do $$ declare t text; begin
+  foreach t in array array['h_products','h_variants','h_orders','h_order_items','h_posts','h_site_ideas','h_returns','h_packaging','h_notes','h_story_sections','h_ad_spend'] loop
+    execute format('alter table public.%I add column if not exists deleted_at timestamptz', t);
+    execute format('alter table public.%I add column if not exists deleted_by text', t);
+  end loop;
+end $$;
+
+-- 2) audit: svaka promena svakog reda, zauvek
+create table if not exists public.h_audit (
+  id bigserial primary key,
+  at timestamptz not null default now(),
+  actor text,
+  tbl text not null,
+  row_id text,
+  op text not null,
+  old_row jsonb,
+  new_row jsonb,
+  changed jsonb
+);
+create index if not exists h_audit_at_idx on public.h_audit(at desc);
+create index if not exists h_audit_row_idx on public.h_audit(tbl, row_id);
+alter table public.h_audit enable row level security;
+drop policy if exists "team read" on public.h_audit;
+create policy "team read" on public.h_audit for select to authenticated using (true);
+
+create or replace function public.h_audit_fn() returns trigger language plpgsql security definer set search_path = public as $$
+declare v_actor text; v_old jsonb; v_new jsonb; v_changed jsonb; k text;
+begin
+  v_actor := coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb->>'email', 'system');
+  v_actor := split_part(v_actor, '@', 1);
+  if tg_op = 'INSERT' then v_new := to_jsonb(new);
+  elsif tg_op = 'UPDATE' then v_old := to_jsonb(old); v_new := to_jsonb(new);
+    v_changed := '{}'::jsonb;
+    for k in select jsonb_object_keys(v_new) loop
+      if v_new->k is distinct from v_old->k then v_changed := v_changed || jsonb_build_object(k, jsonb_build_object('od', v_old->k, 'na', v_new->k)); end if;
+    end loop;
+    if v_changed = '{}'::jsonb then return new; end if;
+  else v_old := to_jsonb(old); end if;
+  insert into h_audit (actor, tbl, row_id, op, old_row, new_row, changed)
+  values (v_actor, tg_table_name, coalesce(v_new->>'id', v_old->>'id', v_new->>'key', v_old->>'key'), tg_op, v_old, v_new, v_changed);
+  return coalesce(new, old);
+end $$;
+
+do $$ declare t text; begin
+  foreach t in array array['h_products','h_variants','h_orders','h_order_items','h_posts','h_site_ideas','h_returns','h_packaging','h_notes','h_story_sections','h_ad_spend','h_settings','h_activities'] loop
+    execute format('drop trigger if exists h_audit_trg on public.%I', t);
+    execute format('create trigger h_audit_trg after insert or update or delete on public.%I for each row execute function public.h_audit_fn()', t);
+  end loop;
+end $$;
+
+-- 3) promocije
+create table if not exists public.h_promotions (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  name text not null,
+  type text not null default 'code' check (type in ('code','free_shipping','flash','bundle','giveaway','influencer','launch','other')),
+  code text,
+  discount_pct numeric(5,2),
+  discount_rsd numeric(10,2),
+  description text,
+  channel text,
+  starts_at timestamptz not null,
+  ends_at timestamptz,
+  budget numeric(10,2),
+  goal text,
+  result_note text,
+  created_by text,
+  deleted_at timestamptz, deleted_by text
+);
+alter table public.h_promotions enable row level security;
+drop policy if exists "team all" on public.h_promotions;
+create policy "team all" on public.h_promotions for all to authenticated using (true) with check (true);
+drop trigger if exists h_audit_trg on public.h_promotions;
+create trigger h_audit_trg after insert or update or delete on public.h_promotions for each row execute function public.h_audit_fn();
+alter table public.h_activities add column if not exists promo_id uuid references public.h_promotions(id) on delete set null;
+
+-- 4) prekretnice (ručni zapisi u istoriji)
+create table if not exists public.h_milestones (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  happened_at timestamptz not null default now(),
+  kind text not null default 'event' check (kind in ('start','end','decision','milestone','event')),
+  title text not null,
+  body text,
+  author text,
+  deleted_at timestamptz, deleted_by text
+);
+alter table public.h_milestones enable row level security;
+drop policy if exists "team all" on public.h_milestones;
+create policy "team all" on public.h_milestones for all to authenticated using (true) with check (true);
+drop trigger if exists h_audit_trg on public.h_milestones;
+create trigger h_audit_trg after insert or update or delete on public.h_milestones for each row execute function public.h_audit_fn();
+
+-- 5) dnevni presek stanja (da se zna kako je bilo tog dana)
+create table if not exists public.h_daily_stats (
+  day date primary key,
+  orders int not null default 0,
+  revenue numeric(12,2) not null default 0,
+  profit numeric(12,2) not null default 0,
+  stock_pcs int not null default 0,
+  stock_value numeric(12,2) not null default 0,
+  ad_spend numeric(12,2) not null default 0,
+  open_returns int not null default 0,
+  active_products int not null default 0,
+  updated_at timestamptz not null default now()
+);
+alter table public.h_daily_stats enable row level security;
+drop policy if exists "team all" on public.h_daily_stats;
+create policy "team all" on public.h_daily_stats for all to authenticated using (true) with check (true);
+
+insert into public.h_milestones (happened_at, kind, title, body, author)
+select '2026-09-16T12:00:00+02'::timestamptz, 'start', 'Pokrenut COMPLETE CRM', 'Prva verzija CRM-a za HARIZMU: porudžbine, garderoba, pakovanje, objave, sajt, brand story, povrati.', 'Konstantin'
+where not exists (select 1 from public.h_milestones);
