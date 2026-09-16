@@ -706,6 +706,48 @@ kbd{font-family:var(--font-ui);font-size:10.5px;font-weight:700;padding:2px 6px;
 .led{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
 .led b.plus{color:#067306}.led b.minus{color:#a32c2c}
 @media (max-width:980px){.cust-nums{grid-template-columns:1fr 1fr}.cust-quick{margin-left:0;width:100%}}
+
+/* ---------- OBAVEŠTENJA ---------- */
+.bell-wrap{position:relative}
+.bell{position:relative}
+.bell.has{color:#1B2620;border-color:#1B2620}
+.bell-n{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:#a32c2c;color:#fff;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center;animation:pop .4s var(--ease);box-shadow:0 0 0 2px var(--surface)}
+.bell-zz{position:absolute;top:-6px;right:-8px;font-size:9px;font-weight:800;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:0 4px}
+.bell-menu{display:none;position:absolute;right:0;top:44px;width:250px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);padding:8px;z-index:70;animation:modalIn .22s var(--ease)}
+.bell-menu.open{display:block}
+.bell-menu button{display:block;width:100%;text-align:left;border:none;background:none;padding:9px 10px;border-radius:9px;font-size:13.5px;font-weight:500;color:var(--ink)}
+.bell-menu button:hover{background:#f1eee6}
+.bm-head{font-size:12px;color:var(--muted);padding:6px 10px 8px;border-bottom:1px solid var(--line-soft);margin-bottom:4px}
+.bm-sep{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;padding:10px 10px 4px}
+.bm-row{display:flex;gap:4px;padding:0 4px 4px}
+.bm-row button{flex:1;text-align:center;border:1px solid var(--line);font-size:12px;padding:6px 4px}
+.ntray{overflow:hidden;position:fixed;bottom:18px;right:18px;z-index:65;display:flex;flex-direction:column;gap:10px;width:360px;max-width:calc(100vw - 24px);pointer-events:none;max-height:calc(100vh - 100px);justify-content:flex-end}
+.ncard{cursor:pointer;pointer-events:auto;position:relative;background:rgba(255,253,248,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:16px;padding:12px 40px 12px 12px;box-shadow:0 18px 40px -16px rgba(27,38,32,.45);display:flex;gap:11px;align-items:flex-start;animation:nIn .5s var(--ease) both;transition:transform .3s var(--ease),opacity .3s}
+.ncard.out{transform:translateX(40px) scale(.96);opacity:0}
+.ncard.live{box-shadow:0 0 0 2px rgba(126,140,116,.5),0 18px 40px -16px rgba(27,38,32,.45)}
+@keyframes nIn{from{opacity:0;transform:translateX(30px) scale(.97)}to{opacity:1;transform:none}}
+.n-st{flex:none;width:44px;text-align:center}
+.n-av{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:19px;font-weight:700;margin:0 auto;transform:rotate(-4deg);box-shadow:0 3px 8px -3px rgba(0,0,0,.35)}
+.n-av.konstantin{background:#1B2620;color:#E8E4D9}.n-av.stasa{background:#f4c9d3;color:#7a2540}.n-av.marjan{background:#cfe0fb;color:#1c4c96}.n-av.system{background:#e6e1d4;color:#5d5a4d}
+.n-when{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-top:4px;line-height:1.2}
+.n-body{flex:1;min-width:0;font-size:12.5px;line-height:1.35}
+.n-who{font-weight:700}
+.n-txt{margin-top:1px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.n-txt .ref{font-weight:700}
+.n-more{font-size:11.5px;color:var(--muted);margin-top:4px}
+.n-more span{display:inline-block;background:#f1eee6;border-radius:5px;padding:1px 6px;margin:2px 3px 0 0}
+.n-act{margin-top:6px;display:flex;gap:6px}
+.n-act button{border:none;background:none;padding:0;font-size:12px;font-weight:700;color:#2f4a3a;text-decoration:underline;text-underline-offset:2px}
+.n-x{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,.6);background:rgba(255,255,255,.35);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#d02b2b;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px -2px rgba(0,0,0,.25);transition:transform .15s,background .15s}
+.n-x:hover{transform:scale(1.1) rotate(90deg);background:rgba(255,255,255,.6)}
+.ncard.summary{cursor:default;background:rgba(27,38,32,.92);color:#E8E4D9;border-color:transparent;padding:10px 40px 10px 14px;font-size:13px}
+.ncard.summary .n-x{color:#ffb4b4}
+.ncard.summary b{font-weight:700}
+.nf-list .ncard{animation:fadeUp .3s var(--ease) both;margin-bottom:8px;padding-right:12px;backdrop-filter:none;background:var(--surface);box-shadow:var(--shadow-sm)}
+.nf-list .ncard.read{opacity:.62}
+.nf-list .ncard.mine{border-left:3px solid var(--sage)}
+.nf-day{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;margin:10px 0 6px}
+@media (max-width:980px){.ntray{bottom:12px;right:12px;left:12px;width:auto}.bell-menu{right:-40px}}
 </style>
 </head>
 <body>
@@ -753,6 +795,17 @@ kbd{font-family:var(--font-ui);font-size:10.5px;font-weight:700;padding:2px 6px;
     <button class="cmd-filter" id="cmdFilter" type="button" style="display:none"></button>
     <button class="icon-btn cmd-mobile" id="cmdBtnM" type="button" title="Pretraga"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
     <div class="top-right">
+      <div class="bell-wrap">
+        <button class="icon-btn bell" id="bellBtn" title="Obaveštenja"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="bell-n" id="bellN" style="display:none"></span><span class="bell-zz" id="bellZz" style="display:none">zz</span></button>
+        <div class="bell-menu" id="bellMenu">
+          <div class="bm-head" id="bmHead"></div>
+          <button data-bm="history">Istorija svih promena</button>
+          <button data-bm="show">Prikaži obaveštenja ponovo</button>
+          <button data-bm="clear">Skloni sve trenutne</button>
+          <div class="bm-sep">Utišaj</div>
+          <div class="bm-row"><button data-bm="snooze:1">1 h</button><button data-bm="snooze:3">3 h</button><button data-bm="snooze:tomorrow">do sutra 9h</button><button data-bm="snooze:0">uključi</button></div>
+        </div>
+      </div>
       <div class="user-chip"><div class="avatar" id="avatar">K</div><div class="user-name" id="userName"></div></div>
       <button class="icon-btn" id="logoutBtn" title="Odjavi se"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
@@ -1378,12 +1431,30 @@ kbd{font-family:var(--font-ui);font-size:10.5px;font-weight:700;padding:2px 6px;
   </div>
 </div>
 
+<!-- OBAVEŠTENJA: traka -->
+<div class="ntray" id="ntray"></div>
+
+<!-- MODAL istorija obaveštenja -->
+<div class="modal-wrap" id="notifModal"><div class="modal-bg" data-close></div>
+  <div class="modal wide" style="max-width:860px;max-height:90vh;display:flex;flex-direction:column">
+    <h3 style="margin-bottom:10px">Istorija promena</h3>
+    <div class="toolbar" style="margin-bottom:10px">
+      <div class="seg" id="nfWho"><button data-w="others" class="active">Tuđe</button><button data-w="all">Sve</button><button data-w="konstantin">Konstantin</button><button data-w="stasa">Staša</button><button data-w="marjan">Marjan</button></div>
+      <div class="select-wrap"><select id="nfCat"><option value="all">Sve vrste</option><option value="order">Porudžbine</option><option value="customer">Kupci</option><option value="stock">Garderoba</option><option value="ret">Povrati</option><option value="promo">Promocije</option><option value="post">Objave</option><option value="pack">Pakovanje</option><option value="site">Sajt</option><option value="story">Brand story</option><option value="ads">Reklame</option><option value="code">Kodovi i poeni</option><option value="history">Istorija</option><option value="settings">Podešavanja</option><option value="comment">Komentari</option></select></div>
+      <input class="inline-input" id="nfQ" placeholder="traži…" style="width:160px">
+      <div class="count" id="nfCount"></div>
+    </div>
+    <div class="nf-list" id="nfList" style="overflow-y:auto;flex:1"></div>
+    <div class="modal-actions" style="justify-content:space-between"><button class="btn-ghost" id="nfMore">Učitaj starije</button><button class="btn-ghost" data-close>Zatvori</button></div>
+  </div>
+</div>
+
 <div class="lightbox" id="lightbox"><img id="lightboxImg"></div>
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202609161538"></script>
-<script>window.HTML_BUILD="202609161538";</script>
-<script src="app.js?v=202609161538"></script>
+<script src="config.js?v=202609161700"></script>
+<script>window.HTML_BUILD="202609161700";</script>
+<script src="app.js?v=202609161700"></script>
 </body>
 </html>

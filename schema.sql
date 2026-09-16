@@ -543,3 +543,20 @@ insert into public.h_settings (key, value) values ('loyalty', '{"points_per_100"
 on conflict (key) do nothing;
 insert into public.h_discount_codes (code, kind, pct, note, created_by) select 'HARIZMA10', 'general', 10, 'Popust sa sajta, jednom po kupcu', 'Konstantin'
 where not exists (select 1 from public.h_discount_codes where upper(code) = 'HARIZMA10');
+-- v8: obaveštenja
+create table if not exists public.h_notif_state (
+  username text primary key,
+  cleared_before timestamptz,
+  dismissed bigint[] not null default '{}',
+  snooze_until timestamptz,
+  updated_at timestamptz not null default now()
+);
+alter table public.h_notif_state enable row level security;
+drop policy if exists "team all" on public.h_notif_state;
+create policy "team all" on public.h_notif_state for all to authenticated using (true) with check (true);
+-- realtime na audit (živa obaveštenja)
+do $$ begin
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and tablename='h_audit') then
+    alter publication supabase_realtime add table public.h_audit;
+  end if;
+end $$;

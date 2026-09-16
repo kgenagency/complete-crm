@@ -17,7 +17,7 @@ jobs:
           python3 - <<'PY'
           import json, os, urllib.request, datetime
           URL, KEY = os.environ['SB_URL'], os.environ['SB_KEY']
-          TABLES = ['h_products','h_variants','h_orders','h_order_items','h_ad_spend','h_activities','h_posts','h_site_ideas','h_story_sections','h_notes','h_packaging','h_returns','h_settings','h_promotions','h_milestones','h_daily_stats','h_audit','h_customers','h_loyalty_events','h_discount_codes']
+          TABLES = ['h_products','h_variants','h_orders','h_order_items','h_ad_spend','h_activities','h_posts','h_site_ideas','h_story_sections','h_notes','h_packaging','h_returns','h_settings','h_promotions','h_milestones','h_daily_stats','h_audit','h_customers','h_loyalty_events','h_discount_codes','h_notif_state']
           os.makedirs('out/latest', exist_ok=True)
           summary = {'exported_at': datetime.datetime.utcnow().isoformat() + 'Z', 'tables': {}}
           for t in TABLES:

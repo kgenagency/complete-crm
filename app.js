@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609161538';
+const APP_BUILD = '202609161700';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -59,6 +59,7 @@ let state = {
   period: LS.get('crm_period', '30'),
   range: { from: LS.get('crm_rfrom', ''), to: LS.get('crm_rto', '') },
   promos: [], milestones: [], daily: [], customers: [], levents: [], codes: [],
+  audit: [], nfGroups: [], nfState: null, trayHidden: false, nfWho: 'others',
   custView: LS.get('crm_cview', 'list'), custSeg: 'all', custSort: 'spend', custTab: 'profile', editCustId: null, editCodeId: null, promoF: 'all', histF: 'all', histMonth: 'all', histLimit: 150, editPromoId: null, editMsId: null,
   orderView: LS.get('crm_oview', 'table'),
   ch: 'all', status: 'all', q: '',
@@ -149,7 +150,8 @@ async function adjustStock(orderItems, sign) {
   for (const it of orderItems) {
     const v = variant(it.variant_id);
     if (!v) continue;
-    const ns = v.stock + sign * it.qty;
+    let ns = v.stock + sign * it.qty;
+    if (ns < 0) { toast(`${product(v.product_id)?.name || ''} ${v.size}: nema na stanju, prodato bez zalihe`); await log({ product_id: v.product_id, type: 'alert', body: `${product(v.product_id)?.name || ''} ${v.size}: poručeno ${it.qty} a na stanju ${v.stock}. Proveri zalihu.` }); ns = 0; }
     await q(sb.from('h_variants').update({ stock: ns }).eq('id', v.id));
     await stockAlert(v, v.stock, ns);
     v.stock = ns;
@@ -1887,6 +1889,201 @@ async function deleteCust() {
   try { await softDelete('h_customers', state.editCustId); state.customers = state.customers.filter(x => x.id !== state.editCustId); $('custModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
 }
 
+/* ---------- OBAVEŠTENJA: ko je šta kad menjao ---------- */
+const NF_FIELD = { status: 'status', courier: 'kurir', tracking_no: 'broj pošiljke', sell_price: 'prodajna', buy_price: 'nabavna', compare_price: '„bila“ cena', stock: 'stanje', publish_at: 'datum objave', drive_link: 'Drive link', assignee: 'zadužen', priority: 'prioritet', title: 'naslov', body: 'tekst', value: 'vrednost', note: 'napomena', refund_amount: 'vraćeno kupcu', return_shipping_cost: 'trošak slanja', resolution_note: 'rešenje', improve: 'šta da popravimo', vip: 'VIP', tags: 'oznake', points_adj: 'poeni', name: 'ime', phone: 'telefon', city: 'grad', address: 'adresa', postal_code: 'poštanski broj', payment: 'plaćanje', shipping_price: 'dostava (kupac)', shipping_cost: 'dostava (kurir)', packaging_cost: 'pakovanje', discount: 'popust', discount_code: 'kod', channel: 'kanal', category: 'kategorija', supplier: 'dobavljač', material: 'materijal', image_url: 'slika', concept: 'koncept', hook: 'hook', caption: 'opis', format: 'format', post_url: 'link objave', views: 'pregledi', likes: 'lajkovi', saves: 'sačuvano', description: 'opis', link: 'link', votes: 'glasovi', code: 'kod', pct: 'popust %', rsd: 'popust RSD', valid_to: 'važi do', valid_from: 'važi od', active: 'aktivan', max_uses: 'maks. upotreba', starts_at: 'početak', ends_at: 'kraj', budget: 'budžet', goal: 'cilj', result_note: 'zaključak', happened_at: 'datum', kind: 'vrsta', min_stock: 'granica', per_order: 'po paketu', unit_price: 'cena', spend: 'potrošeno', purchases: 'kupovine', revenue: 'prihod', reason: 'razlog', package_received_at: 'paket stigao', resolution_wanted: 'kupac želi', restocked: 'vraćeno na stanje', size: 'veličina', color: 'boja', qty: 'količina', email: 'email', instagram: 'instagram', birthday: 'rođendan', source: 'izvor', position: 'redosled', pinned: 'zakačeno', done: 'završeno', delivered_on: 'paket primljen', shipped_at: 'poslato', delivered_at: 'isporučeno', photos: 'fotografije', order_no: 'broj', exchange_details: 'želi umesto toga', item: 'komad', rating: 'ocena', customer_name: 'kupac', type: 'tip', discount_pct: 'popust %', discount_rsd: 'popust RSD', deleted_at: '__del' };
+const NF_SKIP = new Set(['updated_at', 'updated_by', 'created_at', 'created_by', 'deleted_by', 'phone_norm', 'first_order_at', 'customer_id', 'product_id', 'variant_id', 'order_id', 'code_id', 'consent', 'case_no', 'id', 'bank_account', 'shopify_order_id', 'shopify_product_id', 'shopify_variant_id', 'resolved_at', 'area', 'author']);
+const prodName = (id) => product(id)?.name || 'komad';
+const custName = (id) => state.customers.find(c => c.id === id)?.name || 'kupac';
+const NF_TBL = {
+  h_orders: { cat: 'order', label: 'porudžbinu', name: r => `${r.order_no || ''} · ${r.customer_name}`, open: r => `order:${r.id}`, ins: () => 'nova porudžbina', prio: 10 },
+  h_order_items: { skip: true },
+  h_products: { cat: 'stock', label: 'komad', name: r => r.name, open: r => `product:${r.id}`, ins: () => 'nov komad', prio: 7 },
+  h_variants: { cat: 'stock', label: 'zalihu', name: r => `${prodName(r.product_id)} ${r.size}`, open: r => `product:${r.product_id}`, ins: r => `nova veličina ${prodName(r.product_id)}`, prio: 3, only: r => true },
+  h_customers: { cat: 'customer', label: 'kupca', name: r => r.name, open: r => `cust:${r.id}`, ins: () => 'nov kupac', prio: 6 },
+  h_returns: { cat: 'ret', label: 'prijavu', name: r => `${r.case_no} · ${r.customer_name}`, open: r => `ret:${r.id}`, ins: r => `${r.source === 'form' ? 'nova prijava sa forme' : 'nova prijava'} (${RT[r.type] || r.type})`, prio: 9 },
+  h_promotions: { cat: 'promo', label: 'promociju', name: r => r.name, open: r => `promo:${r.id}`, ins: () => 'nova promocija', prio: 8 },
+  h_posts: { cat: 'post', label: 'objavu', name: r => r.title, open: r => `post:${r.id}`, ins: () => 'nova ideja za objavu', prio: 7 },
+  h_packaging: { cat: 'pack', label: 'materijal', name: r => r.name, open: r => `pack:${r.id}`, ins: () => 'nov materijal', prio: 4 },
+  h_site_ideas: { cat: r => r.area === 'packaging' ? 'pack' : 'site', label: 'predlog', name: r => r.title, open: r => `idea:${r.id}`, ins: r => r.area === 'packaging' ? 'nov predlog za pakovanje' : 'nov predlog za sajt', prio: 6 },
+  h_story_sections: { cat: 'story', label: 'poglavlje', name: r => r.title, open: () => 'tab:story', ins: () => 'novo poglavlje priče', prio: 5 },
+  h_notes: { cat: r => (r.area || '').startsWith('promo:') ? 'promo' : 'story', label: 'belešku', name: r => `„${(r.body || '').slice(0, 60)}“`, open: r => (r.area || '').startsWith('promo:') ? `promo:${r.area.split(':')[1]}` : 'tab:story', ins: r => (r.area || '').startsWith('promo:') ? 'nova beleška uz promociju' : 'nova beleška', prio: 5 },
+  h_ad_spend: { cat: 'ads', label: 'reklame', name: r => `${r.day} · ${rsd(r.spend)}`, open: () => 'tab:ads', ins: () => 'upisana potrošnja na reklame', prio: 4 },
+  h_discount_codes: { cat: 'code', label: 'kod', name: r => r.code, open: r => `code:${r.id}`, ins: r => r.kind === 'loyalty' ? 'nagrada iz kluba, kod' : 'nov kod za popust', prio: 6 },
+  h_loyalty_events: { cat: 'code', label: 'poene', name: r => `${r.points > 0 ? '+' : ''}${r.points} za ${custName(r.customer_id)}${r.reason ? ' (' + r.reason + ')' : ''}`, open: r => `cust:${r.customer_id}`, ins: () => 'poeni', prio: 6 },
+  h_milestones: { cat: 'history', label: 'događaj', name: r => r.title, open: r => `ms:${r.id}`, ins: () => 'zabeležen događaj', prio: 8 },
+  h_settings: { cat: 'settings', label: 'podešavanje', name: r => ({ site_url: 'link sajta', site_pass: 'lozinka sajta', loyalty: 'pravila kluba' }[r.key] || r.key), open: r => r.key === 'loyalty' ? 'tab:customers' : 'tab:site', prio: 6 },
+  h_activities: { cat: 'comment', only: r => ['comment', 'screenshot'].includes(r.type), label: 'komentar', prio: 8,
+    name: r => { const o = r.order_id && order(r.order_id), p = r.post_id && state.posts.find(x => x.id === r.post_id), rt = r.return_id && state.rets.find(x => x.id === r.return_id), c = r.customer_id && state.customers.find(x => x.id === r.customer_id), i = r.site_id && state.ideas.find(x => x.id === r.site_id); return o ? `uz porudžbinu ${o.order_no || ''} ${o.customer_name}` : p ? `uz objavu ${p.title}` : rt ? `uz prijavu ${rt.case_no}` : c ? `uz kupca ${c.name}` : i ? `uz predlog ${i.title}` : ''; },
+    open: r => r.order_id ? `order:${r.order_id}` : r.post_id ? `post:${r.post_id}` : r.return_id ? `ret:${r.return_id}` : r.customer_id ? `cust:${r.customer_id}` : r.site_id ? `idea:${r.site_id}` : '',
+    ins: r => r.type === 'comment' ? `komentar „${(r.body || '').slice(0, 90)}“` : 'screenshot' },
+};
+const NF_CAT = { order: 'Porudžbine', customer: 'Kupci', stock: 'Garderoba', ret: 'Povrati', promo: 'Promocije', post: 'Objave', pack: 'Pakovanje', site: 'Sajt', story: 'Brand story', ads: 'Reklame', code: 'Kodovi i poeni', history: 'Istorija', settings: 'Podešavanja', comment: 'Komentari' };
+function nfVerb(actor, what) {
+  const f = PEOPLE[actor]?.f, sys = !PEOPLE[actor];
+  return { add: sys ? 'dodato' : f ? 'dodala' : 'dodao', edit: sys ? 'izmenjeno' : f ? 'izmenila' : 'izmenio', del: sys ? 'obrisano' : f ? 'obrisala' : 'obrisao', restore: sys ? 'vraćeno' : f ? 'vratila' : 'vratio' }[what];
+}
+function nfVal(field, v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'da' : 'ne';
+  if (Array.isArray(v)) return v.map(x => PEOPLE[x]?.name || x).join(', ') || '—';
+  if (field === 'status' || field === 'kind' || field === 'type') return ST[v] || RT[v] || PROMO_T[v] || MS_K[v] || FMT[v] || v;
+  if (field === 'resolution_wanted') return RES_W[v] || v;
+  if (field === 'payment') return PAY[v] || v;
+  if (field === 'channel') return CH[v] || v;
+  if (/_at$|_on$|publish_at/.test(field) && /^\d{4}-\d{2}-\d{2}/.test(String(v))) return String(v).length > 10 ? fmtDT(v) : fmtDate(v + 'T12:00:00');
+  if (/price|cost|discount$|budget|spend|revenue|refund_amount|rsd|min_order|discount_rsd/.test(field) && typeof v === 'number') return rsd(v);
+  if (field === 'loyalty' || (typeof v === 'string' && v.startsWith('{'))) return 'nova pravila';
+  const s = String(v); return s.length > 70 ? s.slice(0, 70) + '…' : s;
+}
+function describeAudit(a) {
+  const T = NF_TBL[a.tbl]; if (!T || T.skip) return null;
+  const row = a.new_row || a.old_row || {};
+  if (T.only && !T.only(row)) return null;
+  const cat = typeof T.cat === 'function' ? T.cat(row) : T.cat;
+  const nm = esc(T.name(row) || ''), ref = nm ? `<span class="ref">${nm}</span>` : '';
+  let text, kind = 'edit';
+  if (a.op === 'INSERT') { kind = 'add'; text = `${nfVerb(a.actor, 'add')} ${T.ins ? T.ins(row) : T.label}${ref ? ': ' + ref : ''}`; }
+  else if (a.op === 'DELETE') { kind = 'del'; text = `trajno ${nfVerb(a.actor, 'del')} ${T.label} ${ref}`; }
+  else {
+    const ch = a.changed || {};
+    if (ch.deleted_at) { if (ch.deleted_at.na) { kind = 'del'; text = `${nfVerb(a.actor, 'del')} ${T.label} ${ref} <span class="page-sub">(u arhivi)</span>`; } else { kind = 'restore'; text = `${nfVerb(a.actor, 'restore')} ${T.label} ${ref} iz arhive`; } }
+    else {
+      const parts = Object.entries(ch).filter(([k]) => !NF_SKIP.has(k) && NF_FIELD[k] !== '__del').slice(0, 4)
+        .map(([k, d]) => a.tbl === 'h_settings' && k === 'value' ? '' : `${NF_FIELD[k] || k}: ${esc(nfVal(k, d.od))} → ${esc(nfVal(k, d.na))}`).filter(Boolean);
+      if (a.tbl === 'h_settings') text = `${nfVerb(a.actor, 'edit')} ${ref}${ch.value && row.key !== 'loyalty' ? `: ${esc(nfVal('value', ch.value.na))}` : ''}`;
+      else if (!parts.length) return null;
+      else text = `${nfVerb(a.actor, 'edit')} ${T.label} ${ref}: ${parts.join(' · ')}`;
+    }
+  }
+  return { cat, text, open: T.open ? T.open(row) : '', prio: T.prio + (kind === 'add' ? 1 : 0), kind };
+}
+function groupAudit(rows) {
+  const asc = rows.slice().sort((a, b) => a.id - b.id), groups = [];
+  let g = null;
+  asc.forEach(a => {
+    const d = describeAudit(a); if (!d) return;
+    const t = new Date(a.at);
+    if (!g || g.actor !== a.actor || t - g.lastT > 90000) { g = { actor: a.actor, rows: [], ids: [], firstT: t, lastT: t }; groups.push(g); }
+    g.rows.push({ a, d }); g.ids.push(a.id); g.lastT = t;
+  });
+  return groups.map(g => {
+    const prim = g.rows.slice().sort((x, y) => y.d.prio - x.d.prio)[0];
+    const extras = {};
+    g.rows.forEach(({ a, d }) => { if (a === prim.a) return; const k = NF_CAT[d.cat] || d.cat; extras[k] = (extras[k] || 0) + 1; });
+    return { key: Math.max(...g.ids), ids: g.ids, actor: g.actor, at: g.lastT.toISOString(), cat: prim.d.cat, cats: [...new Set(g.rows.map(x => x.d.cat))], text: prim.d.text, open: prim.d.open, extras, n: g.rows.length, rows: g.rows };
+  }).sort((a, b) => b.key - a.key);
+}
+const nfState = () => state.nfState || (state.nfState = { username: who(), cleared_before: null, dismissed: [], snooze_until: null });
+const nfDismissed = (g) => { const s = nfState(); return (s.cleared_before && g.at <= s.cleared_before) || s.dismissed.includes(g.key); };
+const nfSnoozed = () => { const s = nfState(); return s.snooze_until && new Date(s.snooze_until) > new Date(); };
+let nfSaveT = null;
+function nfPersist() {
+  clearTimeout(nfSaveT);
+  nfSaveT = setTimeout(async () => { const s = nfState(); try { await q(sb.from('h_notif_state').upsert({ username: who(), cleared_before: s.cleared_before, dismissed: s.dismissed.slice(-1500), snooze_until: s.snooze_until, updated_at: new Date().toISOString() })); } catch (e) { console.warn('notif state', e); } }, 400);
+}
+async function loadNotifs(older) {
+  try {
+    if (!older) {
+      const st = await q(sb.from('h_notif_state').select('*').eq('username', who()).maybeSingle());
+      state.nfState = st || { username: who(), cleared_before: null, dismissed: [], snooze_until: null };
+      const since = new Date(); since.setDate(since.getDate() - 30);
+      state.audit = await q(sb.from('h_audit').select('*').gte('at', since.toISOString()).order('id', { ascending: false }).limit(800));
+    } else {
+      const minId = Math.min(...state.audit.map(a => a.id));
+      const more = await q(sb.from('h_audit').select('*').lt('id', minId).order('id', { ascending: false }).limit(400));
+      state.audit = state.audit.concat(more);
+      if (!more.length) toast('Nema starijih zapisa');
+    }
+    state.nfGroups = groupAudit(state.audit);
+  } catch (e) { console.warn('notifs', e); state.audit = state.audit || []; state.nfGroups = []; }
+}
+const relTime = (iso) => { const m = Math.round((new Date() - new Date(iso)) / 60000); if (m < 1) return 'upravo'; if (m < 60) return `pre ${m} min`; const h = Math.round(m / 60); if (h < 24) return `pre ${h} h`; const d = new Date(iso), today = new Date(); const y = new Date(today); y.setDate(y.getDate() - 1); if (dayStr(d) === dayStr(y)) return 'juče ' + d.toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' }); return fmtDT(iso); };
+function nfCard(g, opts = {}) {
+  const p = PEOPLE[g.actor], who_ = p ? p.name : (g.actor === 'system' ? 'Forma / sistem' : g.actor);
+  const ex = Object.entries(g.extras).sort((a, b) => b[1] - a[1]); const extras = ex.slice(0, 4).map(([k, v]) => `<span>${esc(k)}${v > 1 ? ' ×' + v : ''}</span>`).join('') + (ex.length > 4 ? `<span>+${ex.length - 4}</span>` : '');
+  return `<div class="ncard ${opts.cls || ''}" data-nk="${g.key}" ${g.open ? `data-nopen="${esc(g.open)}"` : ''}>
+    <div class="n-st"><div class="n-av ${PEOPLE[g.actor] ? g.actor : 'system'}">${esc(who_.charAt(0))}</div><div class="n-when">${relTime(g.at)}</div></div>
+    <div class="n-body"><div class="n-who">${esc(who_)}</div><div class="n-txt">${g.text}</div>${extras ? `<div class="n-more">+ ${extras}</div>` : ''}
+      ${opts.history && !nfDismissed(g) && g.actor !== who() ? `<div class="n-act"><button data-ndis="${g.key}">Označi kao viđeno</button></div>` : ''}</div>
+    ${!opts.history ? `<button class="n-x" data-ndis="${g.key}" title="Skloni">✕</button>` : ''}</div>`;
+}
+function renderTray() {
+  const s = nfState(), me = who();
+  const list = (state.nfGroups || []).filter(g => g.actor !== me && !nfDismissed(g) && (PEOPLE[g.actor] || g.rows.some(x => ['h_returns', 'h_orders'].includes(x.a.tbl) && x.a.op === 'INSERT')));
+  const bell = $('bellBtn'); bell.classList.toggle('has', list.length > 0);
+  $('bellN').style.display = list.length ? '' : 'none'; $('bellN').textContent = list.length > 99 ? '99+' : list.length;
+  $('bellZz').style.display = nfSnoozed() ? '' : 'none';
+  $('bmHead').textContent = nfSnoozed() ? `Utišano do ${fmtDT(s.snooze_until)}` : list.length ? `${list.length} novih promena od drugih` : 'Nema novih promena';
+  const tray = $('ntray');
+  if (nfSnoozed() || state.trayHidden) { tray.innerHTML = ''; return; }
+  const show = list.slice(0, 3);
+  const keys = new Set(show.map(g => String(g.key)));
+  [...tray.querySelectorAll('.ncard[data-nk]')].forEach(el => { if (!keys.has(el.dataset.nk)) el.remove(); });
+  show.slice().reverse().forEach(g => { if (!tray.querySelector(`.ncard[data-nk="${g.key}"]`)) tray.insertAdjacentHTML('afterbegin', nfCard(g, { cls: g.live ? 'live' : '' })); });
+  // reorder to match
+  show.forEach(g => tray.appendChild(tray.querySelector(`.ncard[data-nk="${g.key}"]`)));
+  tray.querySelector('.summary')?.remove();
+  if (list.length > 3) tray.insertAdjacentHTML('beforeend', `<div class="ncard summary" data-nk="sum"><div>Još <b>${list.length - 3}</b> promena. <button data-bm="history" style="border:none;background:none;color:#E8E4D9;text-decoration:underline;font-weight:700;padding:0">Otvori istoriju</button></div><button class="n-x" data-bm="clear" title="Skloni sve">✕</button></div>`);
+}
+function nfDismiss(key) {
+  const s = nfState(); if (!s.dismissed.includes(key)) s.dismissed.push(key);
+  const el = $('ntray').querySelector(`.ncard[data-nk="${key}"]`);
+  if (el) { el.classList.add('out'); setTimeout(() => { el.remove(); renderTray(); }, 300); } else renderTray();
+  if ($('notifModal').classList.contains('open')) renderNotifHistory();
+  nfPersist();
+}
+function nfMenu(action) {
+  const s = nfState();
+  if (action === 'history') { $('bellMenu').classList.remove('open'); return openNotifHistory(); }
+  if (action === 'clear') { s.cleared_before = new Date().toISOString(); s.dismissed = []; }
+  if (action === 'show') { const d = new Date(); d.setDate(d.getDate() - 7); s.cleared_before = d.toISOString(); s.dismissed = []; s.snooze_until = null; state.trayHidden = false; }
+  if (action.startsWith('snooze:')) {
+    const v = action.split(':')[1];
+    if (v === '0') s.snooze_until = null;
+    else if (v === 'tomorrow') { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); s.snooze_until = d.toISOString(); }
+    else { const d = new Date(); d.setHours(d.getHours() + (+v)); s.snooze_until = d.toISOString(); }
+    toast(s.snooze_until ? `Obaveštenja utišana do ${fmtDT(s.snooze_until)}` : 'Obaveštenja uključena');
+  }
+  $('bellMenu').classList.remove('open'); nfPersist(); renderTray();
+}
+function openNotifHistory() { state.trayHidden = true; renderTray(); state.nfWho = 'others'; $('nfCat').value = 'all'; $('nfQ').value = ''; renderNotifHistory(); $('notifModal').classList.add('open'); }
+function renderNotifHistory() {
+  const me = who(), w = state.nfWho || 'others', cat = $('nfCat').value, qn = fold($('nfQ').value.trim());
+  document.querySelectorAll('#nfWho button').forEach(b => b.classList.toggle('active', b.dataset.w === w));
+  const list = (state.nfGroups || []).filter(g => (w === 'all' || (w === 'others' ? g.actor !== me : g.actor === w)) && (cat === 'all' || g.cats.includes(cat)) && (!qn || fold(g.text.replace(/<[^>]+>/g, '')).includes(qn)));
+  $('nfCount').textContent = `${list.length} promena`;
+  let last = null;
+  $('nfList').innerHTML = list.map(g => { const d = dayStr(new Date(g.at)); const head = d !== last ? `<div class="nf-day">${new Date(g.at).toLocaleDateString('sr-Latn-RS', { weekday: 'long', day: 'numeric', month: 'long' })}</div>` : ''; last = d;
+    return head + nfCard(g, { history: true, cls: (g.actor === me ? 'mine ' : '') + (nfDismissed(g) || g.actor === me ? 'read' : '') }); }).join('') || '<div class="kb-empty" style="padding:30px">Nema promena za ovaj filter.</div>';
+}
+let nfReloadT = null;
+function onAuditLive(row) {
+  if (!row || state.audit.some(a => a.id === row.id)) return;
+  state.audit.unshift(row);
+  state.nfGroups = groupAudit(state.audit);
+  if (row.actor !== who()) {
+    const g = state.nfGroups.find(x => x.ids.includes(row.id)); if (g) { g.live = true; const s = nfState(); s.dismissed = s.dismissed.filter(k => k !== g.key); }
+    renderTray();
+    clearTimeout(nfReloadT);
+    nfReloadT = setTimeout(async () => { if (document.querySelector('.modal-wrap.open') && !$('notifModal').classList.contains('open')) return; try { await loadData(); renderAll(); if (state.openOrderId) renderDrawer(); } catch (e) {} }, 1200);
+  }
+  if ($('notifModal').classList.contains('open')) renderNotifHistory();
+}
+async function pollAudit() {
+  if (document.hidden) return;
+  try {
+    const maxId = state.audit.length ? Math.max(...state.audit.map(a => a.id)) : 0;
+    const rows = await q(sb.from('h_audit').select('*').gt('id', maxId).order('id', { ascending: true }).limit(200));
+    rows.forEach(onAuditLive);
+  } catch (e) {}
+}
+function startLive() {
+  setInterval(pollAudit, 45000);
+  try {
+    sb.channel('h_audit_live').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'h_audit' }, (payload) => onAuditLive(payload.new)).subscribe();
+  } catch (e) { console.warn('realtime', e); }
+}
+
 /* ---------------- shell ---------------- */
 function renderAll() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
@@ -1937,6 +2134,13 @@ function bindEvents() {
     else if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey) { openOrderModal(); }
   });
   if (!/Mac|iPhone|iPad/.test(navigator.platform)) $('cmdKbd').textContent = 'Ctrl K';
+  // obaveštenja
+  $('bellBtn').addEventListener('click', (e) => { e.stopPropagation(); $('bellMenu').classList.toggle('open'); });
+  document.addEventListener('click', (e) => { if (!e.target.closest('.bell-wrap')) $('bellMenu').classList.remove('open'); });
+  $('nfWho').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.nfWho = b.dataset.w; renderNotifHistory(); });
+  $('nfCat').addEventListener('change', renderNotifHistory);
+  $('nfQ').addEventListener('input', renderNotifHistory);
+  $('nfMore').addEventListener('click', async () => { await loadNotifs(true); renderNotifHistory(); renderTray(); });
   // kupci
   $('newCustBtn').addEventListener('click', () => openCustModal());
   $('newCodeBtn').addEventListener('click', () => openCodeModal());
@@ -1964,6 +2168,9 @@ function bindEvents() {
     const cm = e.target.closest('[data-cal]'); if (cm) { const m = state.calMonth; state.calMonth = new Date(m.getFullYear(), m.getMonth() + +cm.dataset.cal, 1); return renderPosts(); }
     if (e.target.closest('a')) return;
     const pp = e.target.closest('[data-post]'); if (pp) return openPostModal(pp.dataset.post);
+    const bm = e.target.closest('[data-bm]'); if (bm) { e.stopPropagation(); return nfMenu(bm.dataset.bm); }
+    const nd = e.target.closest('[data-ndis]'); if (nd) { e.stopPropagation(); return nfDismiss(+nd.dataset.ndis); }
+    const no = e.target.closest('[data-nopen]'); if (no) { e.stopPropagation(); const r = no.dataset.nopen; $('notifModal').classList.remove('open'); if (r.startsWith('tab:')) return setTab(r.slice(4)); const tabFor = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' }; const k = r.split(':')[0]; if (tabFor[k] && state.tab !== tabFor[k]) setTab(tabFor[k]); return openRef(r); }
     if (e.target.id === 'loySave') return saveLoyalty();
     const rw = e.target.closest('[data-reward]'); if (rw) { e.stopPropagation(); return giveReward(rw.dataset.reward); }
     const noc = e.target.closest('[data-newordercust]'); if (noc) { const c = state.customers.find(x => x.id === noc.dataset.newordercust); $('custModal').classList.remove('open'); openOrderModal(); if (c) { $('o_name').value = c.name; $('o_phone').value = c.phone || ''; $('o_ig').value = c.instagram || ''; $('o_email').value = c.email || ''; $('o_addr').value = c.address || ''; $('o_city').value = c.city || ''; $('o_zip').value = c.postal_code || ''; } return; }
@@ -1987,7 +2194,7 @@ function bindEvents() {
     const go = e.target.closest('[data-goto]'); if (go) return setTab(go.dataset.goto);
     const oe = e.target.closest('[data-order]'); if (oe && !e.target.closest('.drawer')) { if (e.target.closest('#custModal')) $('custModal').classList.remove('open'); return openDrawer(oe.dataset.order); }
     const pe = e.target.closest('[data-product]'); if (pe) return openProductModal(pe.dataset.product);
-    if (e.target.matches('[data-close]')) e.target.closest('.modal-wrap').classList.remove('open');
+    if (e.target.matches('[data-close]')) { const mw = e.target.closest('.modal-wrap'); mw.classList.remove('open'); if (mw.id === 'notifModal') { state.trayHidden = false; renderTray(); } }
   });
 
   $('overlay').addEventListener('click', closeDrawer);
@@ -2085,7 +2292,7 @@ function bindEvents() {
     } catch (err) { fail(err); }
   });
 
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeCmd(); closeDrawer(); document.querySelectorAll('.modal-wrap').forEach(m => m.classList.remove('open')); $('lightbox').classList.remove('open'); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if ($('notifModal').classList.contains('open')) { state.trayHidden = false; setTimeout(renderTray, 50); } closeCmd(); closeDrawer(); document.querySelectorAll('.modal-wrap').forEach(m => m.classList.remove('open')); $('lightbox').classList.remove('open'); } });
 }
 
 async function enterApp(user) {
@@ -2096,9 +2303,12 @@ async function enterApp(user) {
   await loadData();
   renderAll();
   snapshotToday();
+  await loadNotifs();
   await splash;
   $('loginPage').style.display = 'none';
   $('app').style.display = 'block';
+  renderTray(); startLive();
+  setInterval(renderTray, 60000);
   countUp($('v-' + state.tab));
   setInterval(async () => {
     if (document.hidden || document.querySelector('.modal-wrap.open')) return;
