@@ -564,3 +564,4 @@ end $$;
 alter table public.h_notes add column if not exists updated_at timestamptz;
 alter table public.h_notes add column if not exists updated_by text;
 alter table public.h_notes add column if not exists done_by text;
+alter table public.h_notif_state add column if not exists seen_tabs jsonb not null default '{}'::jsonb;

@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609162138';
+const APP_BUILD = '202609162147';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -59,7 +59,7 @@ let state = {
   period: LS.get('crm_period', '30'),
   range: { from: LS.get('crm_rfrom', ''), to: LS.get('crm_rto', '') },
   promos: [], milestones: [], daily: [], customers: [], levents: [], codes: [],
-  audit: [], nfGroups: [], nfState: null, trayHidden: false, nfWho: 'others',
+  audit: [], nfGroups: [], nfState: null, chgShow: {}, chgAll: {}, trayHidden: false, nfWho: 'others',
   custView: LS.get('crm_cview', 'list'), custSeg: 'all', custSort: 'spend', custTab: 'profile', editCustId: null, editCodeId: null, promoF: 'all', histF: 'all', histMonth: 'all', histLimit: 150, editPromoId: null, editMsId: null,
   orderView: LS.get('crm_oview', 'table'),
   ch: 'all', status: 'all', q: '',
@@ -1909,7 +1909,7 @@ const NF_TBL = {
   h_packaging: { cat: 'pack', label: 'materijal', name: r => r.name, open: r => `pack:${r.id}`, ins: () => 'nov materijal', prio: 4 },
   h_site_ideas: { cat: r => r.area === 'packaging' ? 'pack' : 'site', label: 'predlog', name: r => r.title, open: r => `idea:${r.id}`, ins: r => r.area === 'packaging' ? 'nov predlog za pakovanje' : 'nov predlog za sajt', prio: 6 },
   h_story_sections: { cat: 'story', label: 'poglavlje', name: r => r.title, open: () => 'tab:story', ins: () => 'novo poglavlje priče', prio: 5 },
-  h_notes: { cat: r => (r.area || '').startsWith('promo:') ? 'promo' : 'story', label: 'belešku', name: r => `„${(r.body || '').slice(0, 60)}“`, open: r => (r.area || '').startsWith('promo:') ? `promo:${r.area.split(':')[1]}` : 'tab:story', ins: r => (r.area || '').startsWith('promo:') ? 'nova beleška uz promociju' : 'nova beleška', prio: 5 },
+  h_notes: { cat: r => (r.area || '').startsWith('promo:') ? 'promo' : r.area === 'story' ? 'story' : 'notes', label: 'belešku', name: r => `„${(r.body || '').slice(0, 60)}“`, open: r => (r.area || '').startsWith('promo:') ? `promo:${r.area.split(':')[1]}` : 'tab:story', ins: r => (r.area || '').startsWith('promo:') ? 'nova beleška uz promociju' : 'nova beleška', prio: 5 },
   h_ad_spend: { cat: 'ads', label: 'reklame', name: r => `${r.day} · ${rsd(r.spend)}`, open: () => 'tab:ads', ins: () => 'upisana potrošnja na reklame', prio: 4 },
   h_discount_codes: { cat: 'code', label: 'kod', name: r => r.code, open: r => `code:${r.id}`, ins: r => r.kind === 'loyalty' ? 'nagrada iz kluba, kod' : 'nov kod za popust', prio: 6 },
   h_loyalty_events: { cat: 'code', label: 'poene', name: r => `${r.points > 0 ? '+' : ''}${r.points} za ${custName(r.customer_id)}${r.reason ? ' (' + r.reason + ')' : ''}`, open: r => `cust:${r.customer_id}`, ins: () => 'poeni', prio: 6 },
@@ -1920,7 +1920,7 @@ const NF_TBL = {
     open: r => r.order_id ? `order:${r.order_id}` : r.post_id ? `post:${r.post_id}` : r.return_id ? `ret:${r.return_id}` : r.customer_id ? `cust:${r.customer_id}` : r.site_id ? `idea:${r.site_id}` : '',
     ins: r => r.type === 'comment' ? `komentar „${(r.body || '').slice(0, 90)}“` : 'screenshot' },
 };
-const NF_CAT = { order: 'Porudžbine', customer: 'Kupci', stock: 'Garderoba', ret: 'Povrati', promo: 'Promocije', post: 'Objave', pack: 'Pakovanje', site: 'Sajt', story: 'Brand story', ads: 'Reklame', code: 'Kodovi i poeni', history: 'Istorija', settings: 'Podešavanja', comment: 'Komentari' };
+const NF_CAT = { notes: 'Beleške', order: 'Porudžbine', customer: 'Kupci', stock: 'Garderoba', ret: 'Povrati', promo: 'Promocije', post: 'Objave', pack: 'Pakovanje', site: 'Sajt', story: 'Brand story', ads: 'Reklame', code: 'Kodovi i poeni', history: 'Istorija', settings: 'Podešavanja', comment: 'Komentari' };
 function nfVerb(actor, what) {
   const f = PEOPLE[actor]?.f, sys = !PEOPLE[actor];
   return { add: sys ? 'dodato' : f ? 'dodala' : 'dodao', edit: sys ? 'izmenjeno' : f ? 'izmenila' : 'izmenio', del: sys ? 'obrisano' : f ? 'obrisala' : 'obrisao', restore: sys ? 'vraćeno' : f ? 'vratila' : 'vratio' }[what];
@@ -1982,13 +1982,13 @@ const nfSnoozed = () => { const s = nfState(); return s.snooze_until && new Date
 let nfSaveT = null;
 function nfPersist() {
   clearTimeout(nfSaveT);
-  nfSaveT = setTimeout(async () => { const s = nfState(); try { await q(sb.from('h_notif_state').upsert({ username: who(), cleared_before: s.cleared_before, dismissed: s.dismissed.slice(-1500), snooze_until: s.snooze_until, updated_at: new Date().toISOString() })); } catch (e) { console.warn('notif state', e); } }, 400);
+  nfSaveT = setTimeout(async () => { const s = nfState(); try { await q(sb.from('h_notif_state').upsert({ username: who(), cleared_before: s.cleared_before, dismissed: s.dismissed.slice(-1500), snooze_until: s.snooze_until, seen_tabs: seenTabs(), updated_at: new Date().toISOString() })); } catch (e) { console.warn('notif state', e); } }, 400);
 }
 async function loadNotifs(older) {
   try {
     if (!older) {
       const st = await q(sb.from('h_notif_state').select('*').eq('username', who()).maybeSingle());
-      state.nfState = st || { username: who(), cleared_before: null, dismissed: [], snooze_until: null };
+      state.nfState = st || { username: who(), cleared_before: null, dismissed: [], snooze_until: null, seen_tabs: {} };
       const since = new Date(); since.setDate(since.getDate() - 30);
       state.audit = await q(sb.from('h_audit').select('*').gte('at', since.toISOString()).order('id', { ascending: false }).limit(800));
     } else {
@@ -2081,6 +2081,7 @@ function onAuditLive(row) {
     const g = state.nfGroups.find(x => x.ids.includes(row.id)); if (g) { g.live = true; const s = nfState(); s.dismissed = s.dismissed.filter(k => k !== g.key); }
     renderTray();
     applyAuditRow(row);
+    chgLive(row);
     clearTimeout(nfReloadT);
     nfReloadT = setTimeout(async () => { if (document.querySelector('.modal-wrap.open:not(#notifModal):not(#noteModal)')) { nfPending = true; return; } try { await loadData(); renderAll(); if (state.openOrderId) renderDrawer(); } catch (e) {} }, 250);
   }
@@ -2307,8 +2308,11 @@ async function saveQuickNote() {
 function openNav() { renderNav(); document.body.classList.add('nav-open'); $('navQ').value = ''; }
 function closeNav() { document.body.classList.remove('nav-open'); $('navQ').blur(); }
 function navBadge(tab) {
+  const cn = tab === state.tab || !state.nfState ? 0 : chgUnread(tab);
+  const chg = cn ? `<span class="chg-badge" title="nove promene">${cn > 99 ? '99+' : cn}</span>` : '';
   const id = { products: 'alertBadge', returns: 'retBadge', promos: 'promoBadge', packaging: 'packBadge', notes: 'notesBadge' }[tab];
-  const el = id && $(id); return el && el.style.display !== 'none' && el.textContent ? `<span class="tab-badge ${el.classList.contains('live') ? 'live' : ''}">${esc(el.textContent)}</span>` : '';
+  const el = id && $(id); const al = el && el.style.display !== 'none' && el.textContent ? `<span class="tab-badge ${el.classList.contains('live') ? 'live' : ''}">${esc(el.textContent)}</span>` : '';
+  return chg || al ? `<span class="nd-badges">${chg}${al}</span>` : '';
 }
 function renderNav() {
   if (!state.user) return;
@@ -2332,7 +2336,7 @@ const npState = { who: 'all', status: 'open', area: 'all', sort: 'new', editId: 
 const notePlace = (x) => x.area === 'story' ? 'Brand story' : (x.area || '').startsWith('promo:') ? ('Promocija: ' + (state.promos.find(p => p.id === x.area.split(':')[1])?.name || '')) : 'Opšta';
 const seenKey = () => 'crm_notes_seen_' + who();
 function notesUnread() { const seen = LS.get(seenKey(), ''); return state.notes.filter(x => x.author !== who() && !x.done && (!seen || x.created_at > seen)).length; }
-function renderNotesBadge() { const n = notesUnread(), b = $('notesBadge'); if (!b) return; b.style.display = n && state.tab !== 'notes' ? '' : 'none'; b.textContent = n; }
+function renderNotesBadge() { const b = $('notesBadge'); if (b) b.style.display = 'none'; return; const n = notesUnread(); b.style.display = n && state.tab !== 'notes' ? '' : 'none'; b.textContent = n; }
 function npCard(x, i) {
   const editing = npState.editId === x.id;
   const p = PEOPLE[x.author];
@@ -2393,6 +2397,105 @@ async function npSaveEdit(id) {
   } catch (e) { fail(e); }
 }
 
+/* ---------- PROMENE PO SEKCIJI: brojač + panel „Šta je novo“ ---------- */
+const CHG_TABS = ['notes', 'orders', 'customers', 'products', 'returns', 'promos', 'posts', 'packaging', 'site', 'story', 'ads', 'history'];
+const CHG_TAB_CAT = { notes: 'story', orders: 'order', customers: 'customer', products: 'stock', returns: 'ret', promos: 'promo', posts: 'post', packaging: 'pack', site: 'site', story: 'story', ads: 'ads', history: 'history' };
+function auditTabs(a) {
+  const r = a.new_row || a.old_row || {};
+  switch (a.tbl) {
+    case 'h_orders': case 'h_order_items': return ['orders'];
+    case 'h_customers': case 'h_loyalty_events': case 'h_discount_codes': return ['customers'];
+    case 'h_products': case 'h_variants': return ['products'];
+    case 'h_returns': return ['returns'];
+    case 'h_promotions': return ['promos'];
+    case 'h_posts': return ['posts'];
+    case 'h_packaging': return ['packaging'];
+    case 'h_site_ideas': return [r.area === 'packaging' ? 'packaging' : 'site'];
+    case 'h_story_sections': return ['story'];
+    case 'h_notes': return (r.area || '') === 'story' ? ['notes', 'story'] : (r.area || '').startsWith('promo:') ? ['notes', 'promos'] : ['notes'];
+    case 'h_ad_spend': return ['ads'];
+    case 'h_milestones': return ['history'];
+    case 'h_settings': return [r.key === 'loyalty' ? 'customers' : 'site'];
+    case 'h_activities': return [r.order_id ? 'orders' : r.post_id ? 'posts' : r.return_id ? 'returns' : r.customer_id ? 'customers' : r.site_id ? 'site' : r.promo_id ? 'promos' : r.packaging_id ? 'packaging' : r.product_id ? 'products' : null].filter(Boolean);
+  }
+  return [];
+}
+const chgCounts = (a) => a.actor !== who() && (PEOPLE[a.actor] || (['h_orders', 'h_returns'].includes(a.tbl) && a.op === 'INSERT'));
+function seenTabs() { const s = nfState(); if (!s.seen_tabs || typeof s.seen_tabs !== 'object') s.seen_tabs = {}; return s.seen_tabs; }
+function chgInit() {
+  const st = seenTabs();
+  if (!st._init) { const max = state.audit.length ? Math.max(...state.audit.map(a => a.id)) : 0; CHG_TABS.forEach(t => { st[t] = max; }); st._init = 1; nfPersist(); }
+}
+function chgRows(tab, sinceId) {
+  const rows = state.audit.filter(a => a.id > sinceId && chgCounts(a) && auditTabs(a).includes(tab)).map(a => ({ a, d: describeAudit(a) })).filter(x => x.d).sort((x, y) => y.a.id - x.a.id);
+  // spoji više novih veličina istog komada u jedan red
+  const out = [], vmap = {};
+  rows.forEach(x => {
+    if (x.a.tbl === 'h_variants' && x.a.op === 'INSERT') {
+      const r = x.a.new_row, k = x.a.actor + '|' + r.product_id;
+      if (vmap[k]) { vmap[k].sizes.push(r.size); return; }
+      const m = { a: x.a, d: { ...x.d }, sizes: [r.size], pid: r.product_id }; vmap[k] = m; out.push(m); return;
+    }
+    out.push(x);
+  });
+  out.forEach(x => { if (x.sizes) { const f = PEOPLE[x.a.actor]?.f; x.d.text = `${f ? 'dodala' : 'dodao'} ${x.sizes.length > 1 ? 'veličine' : 'veličinu'} za <span class="ref">${esc(prodName(x.pid))}</span>: ${esc(x.sizes.reverse().join(', '))}`; } });
+  return out;
+}
+function chgUnread(tab) { return chgRows(tab, seenTabs()[tab] || 0).length; }
+function markTabSeen(tab) {
+  const st = seenTabs(), max = state.audit.length ? Math.max(...state.audit.map(a => a.id)) : 0;
+  if ((st[tab] || 0) < max) { st[tab] = max; nfPersist(); }
+}
+function renderChgBadges() {
+  if (!state.nfState) return;
+  const tot = CHG_TABS.filter(t => t !== state.tab).reduce((a, t) => a + chgUnread(t), 0);
+  const nb = $('navBtn'); if (nb) { nb.dataset.n = tot > 99 ? '99+' : tot; nb.classList.toggle('has-chg', tot > 0); }
+  CHG_TABS.forEach(t => {
+    const btn = document.querySelector(`#tabs [data-tab="${t}"]`); if (!btn) return;
+    let el = btn.querySelector('.chg-badge');
+    const n = t === state.tab ? 0 : chgUnread(t);
+    if (!el) { el = document.createElement('span'); el.className = 'chg-badge'; btn.appendChild(el); }
+    el.textContent = n > 99 ? '99+' : n; el.style.display = n ? '' : 'none'; el.title = n ? `${n} novih promena od drugih` : '';
+  });
+}
+function chgPanelHtml(tab) {
+  const rows = state.chgShow[tab]; if (!rows || !rows.length) return '';
+  const add = rows.filter(x => x.d.kind === 'add').length, del = rows.filter(x => x.d.kind === 'del').length, res = rows.filter(x => x.d.kind === 'restore').length, ed = rows.length - add - del - res;
+  const people = [...new Set(rows.map(x => x.a.actor))].map(k => PEOPLE[k] ? PEOPLE[k].name : 'Forma/sistem');
+  const lim = state.chgAll[tab] ? rows.length : 6;
+  return `<div class="chg-panel" data-chgtab="${tab}">
+    <button class="n-x" data-chgclose="${tab}" title="Skloni">✕</button>
+    <div class="chg-top"><div class="chg-title">Šta je novo ovde</div><div class="chg-sub">od tvog poslednjeg ulaska · ${esc(people.join(', '))}</div></div>
+    <div class="chg-chips">${add ? `<span class="c-add">+ ${add} dodato</span>` : ''}${ed ? `<span class="c-edit">✎ ${ed} izmenjeno</span>` : ''}${del ? `<span class="c-del">− ${del} obrisano</span>` : ''}${res ? `<span class="c-edit">↩ ${res} vraćeno</span>` : ''}</div>
+    <div class="chg-list">${rows.slice(0, lim).map((x, i) => { const p = PEOPLE[x.a.actor];
+      return `<div class="chg-row k-${x.d.kind}" ${x.d.open ? `data-nopen="${esc(x.d.open)}"` : ''} style="animation-delay:${i * 35}ms"><span class="n-av ${p ? x.a.actor : 'system'}">${esc((p ? p.name : 'F').charAt(0))}</span><span class="chg-k">${{ add: '+', edit: '✎', del: '−', restore: '↩' }[x.d.kind]}</span><div class="chg-txt"><b>${esc(p ? p.name : 'Forma')}</b> ${x.d.text}</div><span class="chg-when">${relTime(x.a.at)}</span></div>`; }).join('')}</div>
+    ${rows.length > 6 ? `<button class="chg-more" data-chgall="${tab}">${state.chgAll[tab] ? 'Prikaži manje' : `Prikaži sve (${rows.length})`}</button>` : ''}
+  </div>`;
+}
+function renderChgPanel(tab) {
+  const view = $('v-' + tab); if (!view) return;
+  let box = view.querySelector(':scope > .chg-box');
+  if (!box) { box = document.createElement('div'); box.className = 'chg-box'; const head = view.querySelector(':scope > .page-head'); head ? head.after(box) : view.prepend(box); }
+  box.innerHTML = chgPanelHtml(tab);
+}
+function chgEnter(tab) {
+  if (!state.nfState || !CHG_TABS.includes(tab)) return;
+  const rows = chgRows(tab, seenTabs()[tab] || 0);
+  if (rows.length) { state.chgShow[tab] = rows; state.chgAll[tab] = false; }
+  markTabSeen(tab);
+  CHG_TABS.forEach(t => { if (t !== tab) { const v = $('v-' + t); const b = v && v.querySelector(':scope > .chg-box'); if (b) b.innerHTML = ''; if (t !== tab) delete state.chgShow[t]; } });
+  renderChgPanel(tab); renderChgBadges();
+}
+function chgLive(row) {
+  if (!chgCounts(row)) return;
+  const tabs = auditTabs(row);
+  if (tabs.includes(state.tab)) {
+    const d = describeAudit(row); if (d) { state.chgShow[state.tab] = [{ a: row, d }].concat(state.chgShow[state.tab] || []); markTabSeen(state.tab); renderChgPanel(state.tab); }
+  }
+  renderChgBadges();
+  if (document.body.classList.contains('nav-open')) renderNav();
+}
+
 /* ---------------- shell ---------------- */
 function renderAll() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
@@ -2400,13 +2503,14 @@ function renderAll() {
   document.querySelectorAll('#periodSeg button').forEach(b => b.classList.toggle('active', b.dataset.p === String(state.period)));
   $('rangeWrap').style.display = state.period === 'custom' ? '' : 'none';
   renderOverview(); renderOrders(); renderProducts(); renderAds();
-  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes(); renderReturns(); renderPromos(); renderCustomers(); renderHomeNotes(); renderNotesPage(); renderNotesBadge(); if (document.body.classList.contains('nav-open')) renderNav();
+  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes(); renderReturns(); renderPromos(); renderCustomers(); renderHomeNotes(); renderNotesPage(); renderChgBadges(); if (document.body.classList.contains('nav-open')) renderNav();
   if (state.tab === 'history') renderHistory();
 }
 function setTab(t) {
   if (t === 'notes') LS.set(seenKey(), new Date().toISOString());
   closeNav();
   state.tab = t; LS.set('crm_tab', t); renderAll(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  chgEnter(t);
   countUp($('v-' + t));
 }
 
@@ -2526,6 +2630,8 @@ function bindEvents() {
     const cm = e.target.closest('[data-cal]'); if (cm) { const m = state.calMonth; state.calMonth = new Date(m.getFullYear(), m.getMonth() + +cm.dataset.cal, 1); return renderPosts(); }
     if (e.target.closest('a')) return;
     const pp = e.target.closest('[data-post]'); if (pp) return openPostModal(pp.dataset.post);
+    const cc = e.target.closest('[data-chgclose]'); if (cc) { e.stopPropagation(); const t = cc.dataset.chgclose; const pnl = cc.closest('.chg-panel'); pnl.classList.add('out'); setTimeout(() => { delete state.chgShow[t]; renderChgPanel(t); }, 280); return; }
+    const ca = e.target.closest('[data-chgall]'); if (ca) { const t = ca.dataset.chgall; state.chgAll[t] = !state.chgAll[t]; return renderChgPanel(t); }
     const bm = e.target.closest('[data-bm]'); if (bm) { e.stopPropagation(); return nfMenu(bm.dataset.bm); }
     const nd = e.target.closest('[data-ndis]'); if (nd) { e.stopPropagation(); return nfDismiss(+nd.dataset.ndis); }
     const no = e.target.closest('[data-nopen]'); if (no) { e.stopPropagation(); const r = no.dataset.nopen; $('notifModal').classList.remove('open'); if (r.startsWith('tab:')) return setTab(r.slice(4)); const tabFor = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' }; const k = r.split(':')[0]; if (tabFor[k] && state.tab !== tabFor[k]) setTab(tabFor[k]); return openRef(r); }
@@ -2668,7 +2774,7 @@ async function enterApp(user) {
   await splash;
   $('loginPage').style.display = 'none';
   $('app').style.display = 'block';
-  renderTray(); startLive();
+  chgInit(); renderTray(); chgEnter(state.tab); renderChgBadges(); startLive();
   setInterval(renderTray, 60000);
   countUp($('v-' + state.tab));
   setInterval(async () => {
