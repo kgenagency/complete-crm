@@ -424,3 +424,122 @@ create policy "team all" on public.h_daily_stats for all to authenticated using 
 insert into public.h_milestones (happened_at, kind, title, body, author)
 select '2026-09-16T12:00:00+02'::timestamptz, 'start', 'Pokrenut COMPLETE CRM', 'Prva verzija CRM-a za HARIZMU: porudžbine, garderoba, pakovanje, objave, sajt, brand story, povrati.', 'Konstantin'
 where not exists (select 1 from public.h_milestones);
+-- v7: kupci, loyalty, popusti
+create table if not exists public.h_customers (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  name text not null,
+  phone text, phone_norm text, email text, instagram text,
+  city text, address text, postal_code text,
+  tags text[] not null default '{}',
+  vip boolean not null default false,
+  points_adj int not null default 0,
+  birthday date,
+  source text,
+  note text,
+  first_order_at timestamptz,
+  deleted_at timestamptz, deleted_by text
+);
+create index if not exists h_customers_phone_idx on public.h_customers(phone_norm);
+alter table public.h_orders add column if not exists customer_id uuid references public.h_customers(id) on delete set null;
+alter table public.h_returns add column if not exists customer_id uuid references public.h_customers(id) on delete set null;
+alter table public.h_activities add column if not exists customer_id uuid references public.h_customers(id) on delete cascade;
+
+create table if not exists public.h_loyalty_events (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  customer_id uuid not null references public.h_customers(id) on delete cascade,
+  points int not null,
+  reason text,
+  author text,
+  order_id uuid references public.h_orders(id) on delete set null,
+  code_id uuid
+);
+create table if not exists public.h_discount_codes (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  code text not null,
+  kind text not null default 'general' check (kind in ('general','personal','loyalty','influencer')),
+  customer_id uuid references public.h_customers(id) on delete set null,
+  pct numeric(5,2), rsd numeric(10,2), min_order numeric(10,2),
+  valid_from timestamptz not null default now(), valid_to timestamptz,
+  max_uses int,
+  note text, created_by text,
+  active boolean not null default true,
+  deleted_at timestamptz, deleted_by text
+);
+create unique index if not exists h_discount_codes_code_idx on public.h_discount_codes(upper(code)) where deleted_at is null;
+
+do $$ declare t text; begin
+  foreach t in array array['h_customers','h_loyalty_events','h_discount_codes'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "team all" on public.%I', t);
+    execute format('create policy "team all" on public.%I for all to authenticated using (true) with check (true)', t);
+    execute format('drop trigger if exists h_audit_trg on public.%I', t);
+    execute format('create trigger h_audit_trg after insert or update or delete on public.%I for each row execute function public.h_audit_fn()', t);
+  end loop;
+end $$;
+
+create or replace function public.h_norm_phone(p text) returns text language sql immutable as $$
+  select case when p is null then null else
+    regexp_replace(regexp_replace(regexp_replace(p, '\D', '', 'g'), '^00381', '0'), '^381', '0') end $$;
+create or replace function public.h_norm_ig(p text) returns text language sql immutable as $$
+  select nullif(lower(regexp_replace(coalesce(p,''), '^@|\s|https?://(www\.)?instagram\.com/|/$', '', 'g')), '') $$;
+
+-- nađi ili napravi kupca za porudžbinu
+create or replace function public.h_find_or_create_customer(p_name text, p_phone text, p_email text, p_ig text, p_city text, p_address text, p_zip text, p_source text, p_at timestamptz)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare cid uuid; ph text := nullif(h_norm_phone(p_phone), ''); ig text := h_norm_ig(p_ig); em text := nullif(lower(trim(p_email)), '');
+begin
+  if ph is not null then select id into cid from h_customers where phone_norm = ph and deleted_at is null limit 1; end if;
+  if cid is null and ig is not null then select id into cid from h_customers where h_norm_ig(instagram) = ig and deleted_at is null limit 1; end if;
+  if cid is null and em is not null then select id into cid from h_customers where lower(email) = em and deleted_at is null limit 1; end if;
+  if cid is null and ph is null and ig is null and em is null then
+    select id into cid from h_customers where lower(name) = lower(trim(p_name)) and deleted_at is null limit 1; end if;
+  if cid is null then
+    insert into h_customers (name, phone, phone_norm, email, instagram, city, address, postal_code, source, first_order_at)
+    values (trim(p_name), p_phone, ph, p_email, p_ig, p_city, p_address, p_zip, p_source, p_at) returning id into cid;
+  else
+    update h_customers set
+      phone = coalesce(phone, p_phone), phone_norm = coalesce(phone_norm, ph), email = coalesce(email, p_email), instagram = coalesce(instagram, p_ig),
+      city = coalesce(p_city, city), address = coalesce(p_address, address), postal_code = coalesce(p_zip, postal_code),
+      first_order_at = least(coalesce(first_order_at, p_at), coalesce(p_at, first_order_at))
+    where id = cid;
+  end if;
+  return cid;
+end $$;
+
+create or replace function public.h_order_link_customer() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.customer_id is null and new.customer_name is not null then
+    new.customer_id := h_find_or_create_customer(new.customer_name, new.phone, new.email, new.instagram, new.city, new.address, new.postal_code, new.channel, new.created_at);
+  end if;
+  return new;
+end $$;
+drop trigger if exists h_order_link_trg on public.h_orders;
+create trigger h_order_link_trg before insert or update of customer_name, phone, email, instagram on public.h_orders for each row execute function public.h_order_link_customer();
+
+create or replace function public.h_return_link_customer() returns trigger language plpgsql security definer set search_path = public as $$
+declare cid uuid; ph text := nullif(h_norm_phone(new.phone), ''); ig text := h_norm_ig(new.instagram); em text := nullif(lower(trim(new.email)), '');
+begin
+  if new.customer_id is null then
+    if new.order_id is not null then select customer_id into cid from h_orders where id = new.order_id; end if;
+    if cid is null and ph is not null then select id into cid from h_customers where phone_norm = ph and deleted_at is null limit 1; end if;
+    if cid is null and ig is not null then select id into cid from h_customers where h_norm_ig(instagram) = ig and deleted_at is null limit 1; end if;
+    if cid is null and em is not null then select id into cid from h_customers where lower(email) = em and deleted_at is null limit 1; end if;
+    new.customer_id := cid;
+  end if;
+  return new;
+end $$;
+drop trigger if exists h_return_link_trg on public.h_returns;
+create trigger h_return_link_trg before insert or update of phone, email, instagram, order_id on public.h_returns for each row execute function public.h_return_link_customer();
+
+-- poveži postojeće
+update public.h_orders set customer_id = null where customer_id is null; -- pokreće trigger
+update public.h_returns set customer_id = null where customer_id is null;
+
+-- podrazumevana pravila kluba
+insert into public.h_settings (key, value) values ('loyalty', '{"points_per_100":1,"reward_points":100,"reward_discount":10,"reward_days":30,"tiers":[{"key":"nova","name":"Nova","min_spend":0,"min_orders":1,"discount":0},{"key":"stalna","name":"Stalna","min_spend":8000,"min_orders":2,"discount":5},{"key":"klub","name":"HARIZMA klub","min_spend":20000,"min_orders":4,"discount":10},{"key":"vip","name":"VIP","min_spend":50000,"min_orders":8,"discount":15}]}')
+on conflict (key) do nothing;
+insert into public.h_discount_codes (code, kind, pct, note, created_by) select 'HARIZMA10', 'general', 10, 'Popust sa sajta, jednom po kupcu', 'Konstantin'
+where not exists (select 1 from public.h_discount_codes where upper(code) = 'HARIZMA10');

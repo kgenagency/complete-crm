@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609161408';
+const APP_BUILD = '202609161538';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -58,7 +58,8 @@ let state = {
   tab: LS.get('crm_tab', 'overview'),
   period: LS.get('crm_period', '30'),
   range: { from: LS.get('crm_rfrom', ''), to: LS.get('crm_rto', '') },
-  promos: [], milestones: [], daily: [], promoF: 'all', histF: 'all', histMonth: 'all', histLimit: 150, editPromoId: null, editMsId: null,
+  promos: [], milestones: [], daily: [], customers: [], levents: [], codes: [],
+  custView: LS.get('crm_cview', 'list'), custSeg: 'all', custSort: 'spend', custTab: 'profile', editCustId: null, editCodeId: null, promoF: 'all', histF: 'all', histMonth: 'all', histLimit: 150, editPromoId: null, editMsId: null,
   orderView: LS.get('crm_oview', 'table'),
   ch: 'all', status: 'all', q: '',
   openOrderId: null, dTab: 'info',
@@ -114,7 +115,7 @@ function userFrom(u) { const un = u.email.split('@')[0]; return { username: un, 
 
 /* ---------------- data ---------------- */
 async function loadData() {
-  const [products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets, settings, promos, milestones, daily] = await Promise.all([
+  const [products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets, settings, promos, milestones, daily, customers, levents, codes] = await Promise.all([
     q(sb.from('h_products').select('*').is('deleted_at', null).order('created_at', { ascending: false })),
     q(sb.from('h_variants').select('*').is('deleted_at', null)),
     q(sb.from('h_orders').select('*').is('deleted_at', null).order('created_at', { ascending: false })),
@@ -131,8 +132,11 @@ async function loadData() {
     q(sb.from('h_promotions').select('*').is('deleted_at', null)),
     q(sb.from('h_milestones').select('*').is('deleted_at', null)),
     q(sb.from('h_daily_stats').select('*').order('day')),
+    q(sb.from('h_customers').select('*').is('deleted_at', null)),
+    q(sb.from('h_loyalty_events').select('*')),
+    q(sb.from('h_discount_codes').select('*').is('deleted_at', null)),
   ]);
-  Object.assign(state, { products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets, settings, promos, milestones, daily });
+  Object.assign(state, { products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets, settings, promos, milestones, daily, customers, levents, codes });
 }
 
 async function log(fields) {
@@ -411,6 +415,7 @@ function renderDrawer() {
     $('dBody').innerHTML = `
       <div class="status-select-row"><label>Status</label><div class="select-wrap"><select id="dStatus">${STATUSES.map(s => `<option value="${s.key}" ${s.key === o.status ? 'selected' : ''}>${s.label}</option>`).join('')}</select></div></div>
       <div class="sec-title">Kupac</div>
+      ${(() => { const c = o.customer_id && state.customers.find(x => x.id === o.customer_id); if (!c) return ''; const s = custStats(c); return `<div class="list-row" data-cust="${c.id}" style="border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:8px"><span><b>${esc(c.name)}</b> · ${s.count} porudžbina · ${rsd(s.spend)}</span>${tierBadge(s.tier)}</div>`; })()}
       <div class="info-grid">
         ${row('Telefon', o.phone ? `<a href="tel:${esc(o.phone)}">${esc(o.phone)}</a>` : '')}
         ${row('Instagram', o.instagram ? `<a href="https://instagram.com/${esc(o.instagram.replace('@', ''))}" target="_blank">${esc(o.instagram)}</a>` : '')}
@@ -534,6 +539,8 @@ function openOrderModal(id) {
   $('omTitle').textContent = o ? `Izmena ${o.order_no}` : 'Nova porudžbina';
   const def = { channel: 'instagram', payment: 'cod', shipping_price: LS.get('crm_ship_price', 0), shipping_cost: LS.get('crm_ship_cost', 0), packaging_cost: packCostPerOrder() || LS.get('crm_pack', 0), discount: 0 };
   Object.entries(OF).forEach(([el, f]) => { $(el).value = (o ? o[f] : def[f]) ?? ''; });
+  let dl = $('custDl'); if (!dl) { dl = document.createElement('datalist'); dl.id = 'custDl'; document.body.appendChild(dl); $('o_name').setAttribute('list', 'custDl'); }
+  dl.innerHTML = state.customers.map(c => `<option value="${esc(c.name)}">${esc(c.phone || c.instagram || '')}</option>`).join('');
   $('itemRows').innerHTML = '';
   (o ? itemsOf(o.id) : [{}]).forEach(addItemRow);
   orderSum();
@@ -574,6 +581,7 @@ async function saveOrder(e) {
       await log({ order_id: o.id, type: 'system', body: `Porudžbina kreirana (${CH[o.channel]})` });
       LS.set('crm_ship_price', f.shipping_price); LS.set('crm_ship_cost', f.shipping_cost); LS.set('crm_pack', f.packaging_cost);
     }
+    try { state.customers = await q(sb.from('h_customers').select('*').is('deleted_at', null)); const fresh = await q(sb.from('h_orders').select('customer_id').eq('id', o.id).single()); o.customer_id = fresh.customer_id; } catch (e2) {}
     $('orderModal').classList.remove('open');
     renderAll();
     if (state.openOrderId) renderDrawer();
@@ -1296,7 +1304,7 @@ async function softDelete(table, id) {
 const ARCH_TABLES = [
   ['h_orders', 'Porudžbina', r => `${r.order_no || ''} ${r.customer_name}`], ['h_products', 'Komad', r => r.name], ['h_posts', 'Objava', r => r.title],
   ['h_site_ideas', 'Predlog', r => r.title], ['h_returns', 'Prijava', r => `${r.case_no} ${r.customer_name}`], ['h_packaging', 'Materijal', r => r.name],
-  ['h_promotions', 'Promocija', r => r.name], ['h_milestones', 'Događaj', r => r.title], ['h_notes', 'Beleška', r => r.body], ['h_story_sections', 'Poglavlje', r => r.title], ['h_ad_spend', 'Reklame', r => `${r.day} ${r.campaign}`],
+  ['h_promotions', 'Promocija', r => r.name], ['h_customers', 'Kupac', r => r.name], ['h_discount_codes', 'Kod', r => r.code], ['h_milestones', 'Događaj', r => r.title], ['h_notes', 'Beleška', r => r.body], ['h_story_sections', 'Poglavlje', r => r.title], ['h_ad_spend', 'Reklame', r => `${r.day} ${r.campaign}`],
 ];
 async function loadArchive() {
   const res = await Promise.all(ARCH_TABLES.map(([t]) => q(sb.from(t).select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(100))));
@@ -1545,9 +1553,339 @@ async function deleteMs() {
 function openRef(ref) {
   const [k, id] = ref.split(':');
   if (k === 'order') openDrawer(id); else if (k === 'post') openPostModal(id); else if (k === 'ret') openRetModal(id); else if (k === 'promo') openPromoModal(id);
-  else if (k === 'idea') openIdeaModal(id); else if (k === 'pack') openPackModal(id); else if (k === 'product') openProductModal(id); else if (k === 'ms') openMsModal(id);
+  else if (k === 'idea') openIdeaModal(id); else if (k === 'pack') openPackModal(id); else if (k === 'product') openProductModal(id); else if (k === 'ms') openMsModal(id); else if (k === 'cust') openCustModal(id); else if (k === 'code') openCodeModal(id);
 }
 function periodLabel() { const P = state.period; return P === 'custom' ? `${state.range.from || '…'} do ${state.range.to || '…'}` : P === '0' || P === 0 ? 'sve vreme' : P === '1' || P === 1 ? 'danas' : `poslednjih ${P} dana`; }
+
+/* ---------- PRETRAGA (command palette) ---------- */
+const SECTIONS = [
+  { tab: 'overview', name: 'Pregled', kw: 'dashboard pocetna prihod profit statistika brojke', ic: '◈' },
+  { tab: 'orders', name: 'Porudžbine', kw: 'narudzbine order kupovine pipeline tabela', ic: '◫' },
+  { tab: 'customers', name: 'Kupci', kw: 'klijenti kupac loyalty klub popusti kodovi vip poeni', ic: '☺' },
+  { tab: 'products', name: 'Garderoba', kw: 'roba proizvodi zalihe stanje velicine komadi upozorenja', ic: '▤' },
+  { tab: 'returns', name: 'Povrati', kw: 'reklamacije zamene zalbe feedback utisci forma', ic: '↩' },
+  { tab: 'promos', name: 'Promocije', kw: 'akcije popust kampanje kod lansiranje', ic: '％' },
+  { tab: 'posts', name: 'Objave', kw: 'instagram reel content sadrzaj kalendar video drive', ic: '▶' },
+  { tab: 'packaging', name: 'Pakovanje', kw: 'ambalaza kutije stikeri kartice papir', ic: '▣' },
+  { tab: 'site', name: 'Sajt', kw: 'shopify web predlozi link domen', ic: '◎' },
+  { tab: 'story', name: 'Brand story', kw: 'prica brend beleske poglavlja', ic: '✎' },
+  { tab: 'ads', name: 'Reklame', kw: 'meta ads potrosnja roas facebook', ic: '▲' },
+  { tab: 'history', name: 'Istorija', kw: 'vremenska linija dogadjaji arhiva prekretnice obrisano backup', ic: '◷' },
+];
+const ACTIONS = [
+  { name: 'Nova porudžbina', kw: 'dodaj unesi', ic: '+', run: () => openOrderModal() },
+  { name: 'Novi kupac', kw: 'dodaj', ic: '+', run: () => openCustModal() },
+  { name: 'Novi komad', kw: 'proizvod roba dodaj', ic: '+', run: () => openProductModal() },
+  { name: 'Nova ideja za objavu', kw: 'post reel', ic: '+', run: () => openPostModal() },
+  { name: 'Nova promocija', kw: 'akcija', ic: '+', run: () => openPromoModal() },
+  { name: 'Novi kod za popust', kw: 'kupon', ic: '+', run: () => openCodeModal() },
+  { name: 'Nova prijava povrata (ručno)', kw: 'reklamacija', ic: '+', run: () => openRetModal() },
+  { name: 'Novi predlog za sajt', kw: 'ideja', ic: '+', run: () => openIdeaModal(null, 'site') },
+  { name: 'Novi predlog za pakovanje', kw: 'ambalaza', ic: '+', run: () => openIdeaModal(null, 'packaging') },
+  { name: 'Zabeleži događaj u istoriji', kw: 'prekretnica milestone', ic: '+', run: () => openMsModal() },
+  { name: 'Kopiraj link forme za povrate', kw: 'link', ic: '⧉', run: async () => { try { await navigator.clipboard.writeText(FORM_URL()); toast('Link kopiran ✓'); } catch (e) { prompt('Kopiraj:', FORM_URL()); } } },
+  { name: 'Otvori HARIZMA sajt', kw: 'shop', ic: '↗', run: () => window.open(siteUrl(), '_blank') },
+  { name: 'Arhiva obrisanog', kw: 'vrati obrisano', ic: '◷', run: () => { setTab('history'); showArchive(); } },
+  { name: 'Odjavi se', kw: 'logout izlaz', ic: '⎋', run: async () => { await sb.auth.signOut(); location.reload(); } },
+];
+const fold = (s) => String(s || '').toLowerCase().replace(/č|ć/g, 'c').replace(/š/g, 's').replace(/đ/g, 'd').replace(/ž/g, 'z').normalize('NFD').replace(/[̀-ͯ]/g, '');
+function scoreMatch(hay, qn) { const h = fold(hay); if (!qn) return 1; if (h === qn) return 100; if (h.startsWith(qn)) return 60; if (h.split(/\s+/).some(w => w.startsWith(qn))) return 40; if (h.includes(qn)) return 20; return 0; }
+function hl(text, qn) { if (!qn) return esc(text); const f = fold(text), i = f.indexOf(qn); if (i < 0) return esc(text); return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + qn.length)) + '</mark>' + esc(text.slice(i + qn.length)); }
+const recent = () => { try { return JSON.parse(LS.get('crm_recent', '[]')); } catch (e) { return []; } };
+function remember(item) { const r = recent().filter(x => !(x.k === item.k && x.id === item.id)); r.unshift(item); LS.set('crm_recent', JSON.stringify(r.slice(0, 6))); }
+function cmdItems(qraw) {
+  const qn = fold(qraw.trim()); const out = [];
+  const push = (grp, it, score) => { if (score > 0) out.push({ grp, score, ...it }); };
+  SECTIONS.forEach(s => push('Sekcije', { ic: s.ic, title: s.name, sub: 'Sekcija', k: 'tab', id: s.tab }, qn ? Math.max(scoreMatch(s.name, qn), scoreMatch(s.kw, qn) ? 15 : 0) : 1));
+  ACTIONS.forEach(a => push('Akcije', { ic: a.ic, title: a.name, sub: 'Akcija', k: 'act', run: a.run }, qn ? Math.max(scoreMatch(a.name, qn), scoreMatch(a.kw, qn) ? 10 : 0) : 1));
+  if (!qn) {
+    recent().forEach(r => push('Nedavno', { ic: '◷', title: r.label, sub: r.sub || '', k: r.k, id: r.id }, 1));
+  } else {
+    state.customers.forEach(c => { const s = custStats(c); push('Kupci', { ic: '☺', title: c.name, sub: [c.phone, c.instagram, `${s.count} porudžbina`, rsd(s.spend)].filter(Boolean).join(' · '), k: 'cust', id: c.id }, Math.max(scoreMatch(c.name, qn), scoreMatch(c.phone, qn), scoreMatch(c.instagram, qn), scoreMatch(c.email, qn))); });
+    state.orders.forEach(o => push('Porudžbine', { ic: '◫', title: `${o.order_no || ''} · ${o.customer_name}`, sub: `${ST[o.status]} · ${rsd(totals(o).revenue)} · ${fmtDate(o.created_at)} · ${itemsSummary(o).replace(/<[^>]+>/g, '')}`, k: 'order', id: o.id }, Math.max(scoreMatch(o.order_no, qn), scoreMatch(o.customer_name, qn), scoreMatch(o.phone, qn), scoreMatch(o.tracking_no, qn), scoreMatch(o.city, qn) / 2)));
+    state.products.forEach(p => { const st = variantsOf(p.id).reduce((a, v) => a + v.stock, 0); push('Garderoba', { ic: '▤', title: p.name, sub: `${p.category || ''} · ${st} kom na stanju · ${rsd(p.sell_price)}`, k: 'product', id: p.id }, Math.max(scoreMatch(p.name, qn), scoreMatch(p.category, qn) / 2)); });
+    state.posts.forEach(p => push('Objave', { ic: '▶', title: p.title, sub: `${ST[p.status]} · ${FMT[p.format] || ''}${p.publish_at ? ' · ' + fmtDate(p.publish_at) : ''}`, k: 'post', id: p.id }, Math.max(scoreMatch(p.title, qn), scoreMatch(p.hook, qn) / 2)));
+    state.rets.forEach(r => push('Povrati', { ic: '↩', title: `${r.case_no} · ${r.customer_name}`, sub: `${RT[r.type]} · ${ST[r.status]} · ${r.item || ''}`, k: 'ret', id: r.id }, Math.max(scoreMatch(r.case_no, qn), scoreMatch(r.customer_name, qn), scoreMatch(r.phone, qn))));
+    state.promos.forEach(p => push('Promocije', { ic: '％', title: p.name, sub: `${fmtDate(p.starts_at)} → ${p.ends_at ? fmtDate(p.ends_at) : 'traje'}${p.code ? ' · ' + p.code : ''}`, k: 'promo', id: p.id }, Math.max(scoreMatch(p.name, qn), scoreMatch(p.code, qn))));
+    state.codes.forEach(c => push('Popusti', { ic: '％', title: c.code, sub: `${c.pct ? c.pct + '%' : ''}${c.rsd ? rsd(c.rsd) : ''} · ${codeUses(c).n} upotreba`, k: 'code', id: c.id }, scoreMatch(c.code, qn)));
+    state.milestones.forEach(m => push('Istorija', { ic: '◷', title: m.title, sub: fmtDate(m.happened_at), k: 'ms', id: m.id }, scoreMatch(m.title, qn)));
+    state.ideas.forEach(i => push('Predlozi', { ic: '✎', title: i.title, sub: i.area === 'site' ? 'Sajt' : 'Pakovanje', k: 'idea', id: i.id }, scoreMatch(i.title, qn)));
+    state.pack.forEach(p => push('Pakovanje', { ic: '▣', title: p.name, sub: `${p.stock} kom`, k: 'pack', id: p.id }, scoreMatch(p.name, qn)));
+    out.push({ grp: 'Filter', score: 0.5, ic: '⌕', title: `Filtriraj tekuću sekciju po „${qraw.trim()}“`, sub: 'Sužava tabele i table u sekciji u kojoj si', k: 'filter', q: qraw.trim() });
+  }
+  out.sort((a, b) => b.score - a.score);
+  const grouped = {}, order = [];
+  out.forEach(it => { if (!grouped[it.grp]) { grouped[it.grp] = []; order.push(it.grp); } if (grouped[it.grp].length < (qn ? 6 : 12)) grouped[it.grp].push(it); });
+  return order.flatMap(g => grouped[g]);
+}
+let cmdSel = 0, cmdCur = [];
+function openCmd() { $('cmdWrap').classList.add('open'); $('cmdInput').value = ''; renderCmd(); setTimeout(() => $('cmdInput').focus(), 30); }
+function closeCmd() { $('cmdWrap').classList.remove('open'); }
+function renderCmd() {
+  const qraw = $('cmdInput').value, qn = fold(qraw.trim());
+  cmdCur = cmdItems(qraw); cmdSel = Math.min(cmdSel, Math.max(0, cmdCur.length - 1));
+  let last = null;
+  $('cmdList').innerHTML = cmdCur.map((it, i) => { const g = it.grp !== last ? `<div class="cmd-grp">${it.grp}</div>` : ''; last = it.grp;
+    return g + `<div class="cmd-item ${i === cmdSel ? 'sel' : ''}" data-ci="${i}"><div class="ci">${it.ic}</div><div class="ct"><b>${hl(it.title, qn)}</b>${it.sub ? `<small>${hl(it.sub, qn)}</small>` : ''}</div>${it.k === 'tab' ? `<span class="ck">${SECTIONS.findIndex(s => s.tab === it.id) + 1}</span>` : ''}</div>`; }).join('')
+    || `<div class="cmd-empty">Ništa za „${esc(qraw)}“. Probaj ime kupca, broj porudžbine ili ime sekcije.</div>`;
+  const el = $('cmdList').querySelector('.cmd-item.sel'); if (el) el.scrollIntoView({ block: 'nearest' });
+}
+function runCmd(it) {
+  if (!it) return; closeCmd();
+  if (it.k === 'tab') return setTab(it.id);
+  if (it.k === 'act') return it.run();
+  if (it.k === 'filter') return setQuery(it.q);
+  remember({ k: it.k, id: it.id, label: it.title, sub: it.sub });
+  const tabFor = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' };
+  if (tabFor[it.k] && state.tab !== tabFor[it.k]) setTab(tabFor[it.k]);
+  if (it.k === 'cust') return openCustModal(it.id);
+  if (it.k === 'code') return openCodeModal(it.id);
+  openRef(`${it.k}:${it.id}`);
+}
+function setQuery(qv) {
+  state.q = qv || '';
+  const f = $('cmdFilter'); f.style.display = state.q ? '' : 'none'; f.innerHTML = `⌕ ${esc(state.q)} <b>✕</b>`;
+  if (state.q && state.tab === 'overview') state.tab = 'orders';
+  renderAll();
+}
+
+/* ---------- KUPCI ---------- */
+const LOY_DEFAULT = { points_per_100: 1, reward_points: 100, reward_discount: 10, reward_days: 30, tiers: [{ key: 'nova', name: 'Nova', min_spend: 0, min_orders: 1, discount: 0 }, { key: 'stalna', name: 'Stalna', min_spend: 8000, min_orders: 2, discount: 5 }, { key: 'klub', name: 'HARIZMA klub', min_spend: 20000, min_orders: 4, discount: 10 }, { key: 'vip', name: 'VIP', min_spend: 50000, min_orders: 8, discount: 15 }] };
+function loy() { try { return { ...LOY_DEFAULT, ...JSON.parse(setting('loyalty', '{}') || '{}') }; } catch (e) { return LOY_DEFAULT; } }
+const custOrders = (id) => state.orders.filter(o => o.customer_id === id);
+function custStats(c) {
+  const os = custOrders(c.id).filter(o => !NO_REVENUE.includes(o.status)).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const spend = os.reduce((a, o) => a + totals(o).revenue, 0);
+  const L = loy();
+  const earned = Math.floor(spend / 100) * n(L.points_per_100);
+  const ev = state.levents.filter(e => e.customer_id === c.id).reduce((a, e) => a + e.points, 0);
+  const points = earned + ev + n(c.points_adj);
+  let tier = L.tiers[0];
+  L.tiers.forEach(t => { if ((spend >= n(t.min_spend) && os.length >= 1 && n(t.min_spend) > 0) || os.length >= n(t.min_orders)) tier = t; });
+  if (c.vip) tier = L.tiers.find(t => t.key === 'vip') || tier;
+  const last = os.length ? os[os.length - 1].created_at : null;
+  const idle = last ? Math.floor((new Date() - new Date(last)) / 864e5) : null;
+  const next = L.tiers[L.tiers.indexOf(tier) + 1] || null;
+  return { count: os.length, spend, points, tier, last, first: os[0]?.created_at || c.first_order_at, idle, next, rets: state.rets.filter(r => r.customer_id === c.id).length, all: custOrders(c.id) };
+}
+const tierBadge = (t) => `<span class="tier ${t.key}"><span class="dot"></span>${esc(t.name)}</span>`;
+function codeUses(code) {
+  const cc = (code.code || '').toUpperCase();
+  const os = state.orders.filter(o => (o.discount_code || '').toUpperCase() === cc && !NO_REVENUE.includes(o.status));
+  return { n: os.length, rev: os.reduce((a, o) => a + totals(o).revenue, 0), disc: os.reduce((a, o) => a + n(o.discount), 0) };
+}
+function filteredCustomers() {
+  const L = loy(), qq = fold(state.q);
+  let list = state.customers.map(c => ({ c, s: custStats(c) })).filter(({ c, s }) => {
+    const seg = state.custSeg;
+    if (seg === 'new' && s.count !== 1) return false;
+    if (seg === 'repeat' && s.count < 2) return false;
+    if (seg === 'club' && !['klub', 'vip'].includes(s.tier.key)) return false;
+    if (seg === 'vip' && s.tier.key !== 'vip') return false;
+    if (seg === 'idle' && !(s.idle != null && s.idle >= 60)) return false;
+    if (seg === 'reward' && s.points < n(L.reward_points)) return false;
+    if (qq && !fold([c.name, c.phone, c.instagram, c.email, c.city, (c.tags || []).join(' ')].join(' ')).includes(qq)) return false;
+    return true;
+  });
+  const so = state.custSort;
+  list.sort((a, b) => so === 'name' ? a.c.name.localeCompare(b.c.name) : so === 'orders' ? b.s.count - a.s.count : so === 'recent' ? (b.s.last || '').localeCompare(a.s.last || '') : b.s.spend - a.s.spend);
+  return list;
+}
+function renderCustomers() {
+  const all = state.customers.map(c => ({ c, s: custStats(c) })), L = loy();
+  const repeat = all.filter(x => x.s.count >= 2).length, club = all.filter(x => ['klub', 'vip'].includes(x.s.tier.key)).length;
+  const spend = all.reduce((a, x) => a + x.s.spend, 0);
+  const buyers = all.filter(x => x.s.count > 0).length;
+  $('kpiCust').innerHTML = stat('Kupaca', state.customers.length, `${buyers} sa bar jednom porudžbinom`) +
+    stat('Vraćaju se', buyers ? pct(repeat / buyers) : '—', `<b>${repeat}</b> kupilo 2+ puta`) +
+    stat('Vrednost kupca', buyers ? rsd(spend / buyers) : '—', 'prosečno potrošeno po kupcu') +
+    stat('U klubu', club, `${all.filter(x => x.s.points >= n(L.reward_points)).length} čeka nagradu`);
+  document.querySelectorAll('#custViewSeg button').forEach(b => b.classList.toggle('active', b.dataset.view === state.custView));
+  document.querySelectorAll('#custSeg button').forEach(b => b.classList.toggle('active', b.dataset.s === state.custSeg));
+  $('custList').style.display = state.custView === 'list' ? '' : 'none';
+  $('clubView').style.display = state.custView === 'club' ? '' : 'none';
+  $('codesView').style.display = state.custView === 'codes' ? '' : 'none';
+  $('custSeg').style.display = state.custView === 'list' ? '' : 'none'; $('custSort').parentElement.style.display = state.custView === 'list' ? '' : 'none';
+  if (state.custView === 'list') {
+    const list = filteredCustomers();
+    $('custCount').textContent = `${list.length} kupaca`;
+    $('custTbody').innerHTML = list.map(({ c, s }) => `<tr data-cust="${c.id}">
+      <td><div class="prod-cell"><div class="avatar ${s.tier.key === 'vip' ? 'vip' : ''}" style="width:34px;height:34px;font-size:14px;border-radius:10px">${esc(c.name.charAt(0).toUpperCase())}</div><div><div class="lead-name">${esc(c.name)}</div><div class="lead-social">${esc(c.city || '')}${(c.tags || []).length ? ' · ' + c.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('') : ''}</div></div></div></td>
+      <td class="contact">${c.phone ? `<div>${esc(c.phone)}</div>` : ''}${c.instagram ? `<div class="page-sub">${esc(c.instagram)}</div>` : ''}${!c.phone && !c.instagram && c.email ? `<div class="page-sub">${esc(c.email)}</div>` : ''}</td>
+      <td>${tierBadge(s.tier)}</td><td class="num">${s.count}${s.rets ? `<span class="page-sub"> · ${s.rets} povrat</span>` : ''}</td><td class="num">${rsd(s.spend)}</td>
+      <td class="num">${s.points}${s.points >= n(L.reward_points) ? ' <span class="tab-badge live" style="margin:0">nagrada</span>' : ''}</td>
+      <td class="date-cell">${s.last ? `${fmtDate(s.last)}${s.idle >= 60 ? `<div class="neg" style="font-size:11px">${s.idle} d bez kupovine</div>` : ''}` : '—'}</td></tr>`).join('')
+      || `<tr><td colspan="7" class="empty">Još nema kupaca. Prave se sami iz porudžbina, ili dodaj ručno.</td></tr>`;
+  }
+  if (state.custView === 'club') renderClub(all);
+  if (state.custView === 'codes') renderCodes();
+}
+function renderClub(all) {
+  const L = loy();
+  $('custCount').textContent = `${all.length} kupaca`;
+  const rewards = all.filter(x => x.s.points >= n(L.reward_points)).sort((a, b) => b.s.points - a.s.points);
+  $('clubView').innerHTML = `
+    <div class="two-col" style="margin-bottom:16px">
+      <div class="panel"><h4>Pravila kluba</h4>
+        <div class="tier-row"><span style="width:200px">Poena za svakih 100 RSD</span><input type="number" step="0.5" id="ly_ppc" value="${L.points_per_100}"></div>
+        <div class="tier-row"><span style="width:200px">Nagrada na</span><input type="number" id="ly_rp" value="${L.reward_points}"> poena → kod <input type="number" id="ly_rd" value="${L.reward_discount}"> % koji važi <input type="number" id="ly_days" value="${L.reward_days}"> dana</div>
+        <div class="sec-title">Nivoi (kupac ulazi u nivo kad pređe potrošnju ILI broj porudžbina)</div>
+        ${L.tiers.map((t, i) => `<div class="tier-row" data-ti="${i}">${tierBadge(t)}<span>od</span><input type="number" data-tf="min_spend" value="${t.min_spend}"> RSD <span>ili</span><input type="number" data-tf="min_orders" value="${t.min_orders}" style="width:60px"> porudžbina <span>→ popust</span><input type="number" data-tf="discount" value="${t.discount}" style="width:60px"> %</div>`).join('')}
+        <div class="modal-actions" style="justify-content:flex-start"><button class="btn-gold" id="loySave">Sačuvaj pravila</button></div>
+        <div class="hint">Nivo i poeni se računaju iz isporučenih porudžbina, stalno, iz istorije. Ako promeniš pravila, važe unazad.</div></div>
+      <div class="panel"><h4>Čekaju nagradu <span class="fu-count">${rewards.length}</span></h4>
+        ${rewards.map(({ c, s }) => `<div class="list-row"><span data-cust="${c.id}"><b>${esc(c.name)}</b> · ${s.points} poena · ${tierBadge(s.tier)}</span><button class="mini-btn" data-reward="${c.id}">🎁 Dodeli nagradu</button></div>`).join('') || '<div class="kb-empty">Niko još nije skupio dovoljno poena.</div>'}
+        <div class="hint">Nagrada pravi lični kod (npr. HARIZMA-ANA-10), skida ${L.reward_points} poena i upisuje se u istoriju kupca. Kod treba napraviti i na Shopify sajtu.</div></div>
+    </div>
+    <div class="tier-grid">${L.tiers.map(t => { const m = all.filter(x => x.s.tier.key === t.key).sort((a, b) => b.s.spend - a.s.spend);
+      return `<div class="tier-card"><h5>${tierBadge(t)}<span class="page-sub">${m.length}</span></h5><div class="page-sub" style="margin-bottom:8px">popust ${t.discount}% · od ${rsd(t.min_spend)} ili ${t.min_orders} porudžbina</div>
+        ${m.slice(0, 8).map(({ c, s }) => `<div class="m" data-cust="${c.id}"><span>${esc(c.name)}</span><span class="num">${rsd(s.spend)}</span></div>`).join('') || '<div class="kb-empty">Prazno</div>'}${m.length > 8 ? `<div class="page-sub">+ još ${m.length - 8}</div>` : ''}</div>`; }).join('')}</div>`;
+}
+async function saveLoyalty() {
+  const L = loy();
+  L.points_per_100 = n($('ly_ppc').value); L.reward_points = parseInt($('ly_rp').value) || 100; L.reward_discount = n($('ly_rd').value); L.reward_days = parseInt($('ly_days').value) || 30;
+  document.querySelectorAll('[data-ti]').forEach(r => { const t = L.tiers[+r.dataset.ti]; r.querySelectorAll('[data-tf]').forEach(i => t[i.dataset.tf] = n(i.value)); });
+  try { await q(sb.from('h_settings').upsert({ key: 'loyalty', value: JSON.stringify(L), updated_at: new Date().toISOString(), updated_by: state.user.display })); state.settings = await q(sb.from('h_settings').select('*')); renderAll(); toast('Pravila kluba sačuvana ✓'); } catch (e) { fail(e); }
+}
+async function giveReward(cid) {
+  const c = state.customers.find(x => x.id === cid); if (!c) return;
+  const L = loy(), s = custStats(c);
+  if (s.points < n(L.reward_points)) return toast('Nema dovoljno poena');
+  const base = 'HARIZMA-' + fold(c.name.split(' ')[0]).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) + '-' + Math.round(n(L.reward_discount));
+  let code = base, k = 2; while (state.codes.some(x => x.code.toUpperCase() === code)) code = base + '-' + (k++);
+  if (!confirm(`Napraviti kod ${code} (${L.reward_discount}%, ${L.reward_days} dana) za ${c.name} i skinuti ${L.reward_points} poena?`)) return;
+  try {
+    const vt = new Date(); vt.setDate(vt.getDate() + n(L.reward_days));
+    const cd = await q(sb.from('h_discount_codes').insert({ code, kind: 'loyalty', customer_id: c.id, pct: n(L.reward_discount), valid_to: vt.toISOString(), max_uses: 1, note: 'Nagrada iz kluba', created_by: state.user.display }).select().single());
+    state.codes.push(cd);
+    const ev = await q(sb.from('h_loyalty_events').insert({ customer_id: c.id, points: -n(L.reward_points), reason: `Nagrada: kod ${code}`, author: state.user.display, code_id: cd.id }).select().single());
+    state.levents.push(ev);
+    await log({ customer_id: c.id, type: 'system', body: `Dodeljena nagrada: kod ${code} (${L.reward_discount}%)` });
+    renderAll(); if (state.editCustId === c.id) renderCustBody(); toast(`Kod ${code} napravljen ✓ Pošalji ga kupcu i dodaj na Shopify.`);
+  } catch (e) { fail(e); }
+}
+function renderCodes() {
+  const list = state.codes.slice().sort((a, b) => b.created_at.localeCompare(a.created_at));
+  $('custCount').textContent = `${list.length} kodova`;
+  const KIND = { general: 'Opšti', personal: 'Lični', loyalty: 'Nagrada', influencer: 'Influenser' };
+  const tot = list.reduce((a, c) => { const u = codeUses(c); a.n += u.n; a.rev += u.rev; a.disc += u.disc; return a; }, { n: 0, rev: 0, disc: 0 });
+  $('codesView').innerHTML = `<div class="stats s3" style="margin-bottom:14px">${stat('Upotreba kodova', tot.n, 'porudžbina sa nekim kodom')}${stat('Prihod sa kodovima', rsd(tot.rev), 'ukupno')}${stat('Dati popusti', rsd(tot.disc), 'zbir popusta na porudžbinama')}</div>
+    <div class="table-card"><table><thead><tr><th>Kod</th><th>Vrsta</th><th>Popust</th><th>Važi</th><th>Upotreba</th><th>Prihod</th><th>Status</th></tr></thead><tbody>
+    ${list.map(c => { const u = codeUses(c), cu = c.customer_id && state.customers.find(x => x.id === c.customer_id); const expired = c.valid_to && new Date(c.valid_to) < new Date(); const used = c.max_uses && u.n >= c.max_uses;
+      return `<tr class="code-row" data-code="${c.id}"><td><span class="cc">${esc(c.code)}</span>${c.note ? `<div class="page-sub">${esc(c.note)}</div>` : ''}</td><td>${KIND[c.kind]}${cu ? `<div class="page-sub">${esc(cu.name)}</div>` : ''}</td>
+        <td class="num">${c.pct ? c.pct + '%' : ''}${c.rsd ? rsd(c.rsd) : ''}${c.min_order ? `<div class="page-sub">min ${rsd(c.min_order)}</div>` : ''}</td><td class="date-cell">${fmtDate(c.valid_from)} → ${c.valid_to ? fmtDate(c.valid_to) : '∞'}</td>
+        <td class="num">${u.n}${c.max_uses ? ` / ${c.max_uses}` : ''}</td><td class="num">${rsd(u.rev)}</td><td>${!c.active ? pill('cancelled').replace('Otkazana', 'Isključen') : expired ? pill('ended') : used ? pill('ended').replace('Završena', 'Iskorišćen') : pill('active')}</td></tr>`; }).join('')
+      || `<tr><td colspan="7" class="empty">Nema kodova.</td></tr>`}</tbody></table></div>`;
+}
+const CDF = ['code', 'kind', 'customer_id', 'pct', 'rsd', 'min_order', 'max_uses', 'note'];
+function openCodeModal(id, custId) {
+  const c = id ? state.codes.find(x => x.id === id) : null;
+  state.editCodeId = id || null;
+  $('cdTitle').textContent = c ? c.code : 'Novi kod za popust';
+  $('cd_customer_id').innerHTML = '<option value="">—</option>' + state.customers.slice().sort((a, b) => a.name.localeCompare(b.name)).map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+  CDF.forEach(f => $('cd_' + f).value = c ? (c[f] ?? '') : (f === 'kind' ? (custId ? 'personal' : 'general') : f === 'customer_id' ? (custId || '') : ''));
+  $('cd_valid_from').value = c ? String(c.valid_from).slice(0, 10) : dayStr(new Date());
+  $('cd_valid_to').value = c && c.valid_to ? String(c.valid_to).slice(0, 10) : '';
+  $('cd_active').checked = c ? c.active : true;
+  $('cdDelete').style.display = c ? '' : 'none';
+  $('codeModal').classList.add('open'); $('cd_code').focus();
+}
+async function saveCode(e) {
+  e.preventDefault();
+  const f = {}; CDF.forEach(k => { const v = $('cd_' + k).value.trim(); f[k] = v === '' ? null : v; });
+  f.code = f.code.toUpperCase().replace(/\s+/g, '');
+  ['pct', 'rsd', 'min_order'].forEach(k => f[k] = f[k] === null ? null : n(f[k])); f.max_uses = f.max_uses === null ? null : parseInt(f.max_uses);
+  f.valid_from = new Date($('cd_valid_from').value + 'T00:00:00').toISOString(); f.valid_to = $('cd_valid_to').value ? new Date($('cd_valid_to').value + 'T23:59:59').toISOString() : null;
+  f.active = $('cd_active').checked;
+  try {
+    if (state.editCodeId) { const r = await q(sb.from('h_discount_codes').update(f).eq('id', state.editCodeId).select().single()); Object.assign(state.codes.find(x => x.id === r.id), r); }
+    else { f.created_by = state.user.display; state.codes.push(await q(sb.from('h_discount_codes').insert(f).select().single())); }
+    $('codeModal').classList.remove('open'); renderAll(); if (state.editCustId) renderCustBody(); toast('Kod sačuvan ✓');
+  } catch (err) { fail(err.message?.includes('duplicate') ? new Error('Taj kod već postoji') : err); }
+}
+async function deleteCode() {
+  if (!confirm('Kod ide u arhivu. Nastaviti?')) return;
+  try { await softDelete('h_discount_codes', state.editCodeId); state.codes = state.codes.filter(x => x.id !== state.editCodeId); $('codeModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
+}
+/* kupac: modal */
+const CUF = ['name', 'phone', 'email', 'instagram', 'city', 'address', 'postal_code', 'birthday', 'source', 'note'];
+function openCustModal(id) {
+  state.editCustId = id || null; state.custTab = 'profile';
+  renderCustHead(); renderCustBody();
+  $('custModal').classList.add('open');
+}
+function renderCustHead() {
+  const c = state.editCustId ? state.customers.find(x => x.id === state.editCustId) : null;
+  if (!c) { $('custHead').innerHTML = `<div class="cust-av">+</div><div><div class="cust-name">Novi kupac</div><div class="cust-sub">Ručni unos. Kupci iz porudžbina se prave sami.</div></div>`; $('custTabs').style.display = 'none'; return; }
+  const s = custStats(c);
+  $('custTabs').style.display = '';
+  $('custHead').innerHTML = `<div class="cust-av ${s.tier.key === 'vip' ? 'vip' : ''}">${esc(c.name.charAt(0).toUpperCase())}</div>
+    <div><div class="cust-name">${esc(c.name)}</div><div class="cust-sub">${tierBadge(s.tier)}<span>${s.count} porudžbina · ${rsd(s.spend)} · ${s.points} poena</span>${s.first ? `<span>· kupac od ${fmtDate(s.first)}</span>` : ''}${(c.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div></div>
+    <div class="cust-quick">${c.phone ? `<a class="mini-btn" href="tel:${esc(c.phone)}">📞 Pozovi</a><a class="mini-btn" href="sms:${esc(c.phone)}">✉ SMS</a><a class="mini-btn" href="viber://chat?number=${esc(c.phone.replace(/\D/g, '').replace(/^0/, '381'))}">Viber</a>` : ''}${c.instagram ? `<a class="mini-btn" href="https://instagram.com/${esc(c.instagram.replace('@', ''))}" target="_blank" rel="noopener">IG ↗</a>` : ''}<button class="mini-btn" data-newordercust="${c.id}">+ Porudžbina</button></div>`;
+  document.querySelectorAll('#custTabs button').forEach(b => b.classList.toggle('active', b.dataset.ct === state.custTab));
+}
+function renderCustBody() {
+  const c = state.editCustId ? state.customers.find(x => x.id === state.editCustId) : null;
+  const t = c ? state.custTab : 'profile';
+  document.querySelectorAll('#custTabs button').forEach(b => b.classList.toggle('active', b.dataset.ct === t));
+  if (t === 'profile') {
+    $('custBody').innerHTML = `<form id="custForm">
+      <div class="frow"><div class="field"><label>Ime i prezime *</label><input id="cu_name" required></div><div class="field"><label>Telefon</label><input id="cu_phone"></div></div>
+      <div class="frow"><div class="field"><label>Instagram</label><input id="cu_instagram" placeholder="@"></div><div class="field"><label>Email</label><input id="cu_email"></div></div>
+      <div class="field"><label>Adresa</label><input id="cu_address"></div>
+      <div class="frow3"><div class="field"><label>Grad</label><input id="cu_city"></div><div class="field"><label>Poštanski broj</label><input id="cu_postal_code"></div><div class="field"><label>Rođendan</label><input id="cu_birthday" type="date"></div></div>
+      <div class="frow"><div class="field"><label>Odakle je došla</label><input id="cu_source" list="sources" placeholder="Instagram, preporuka, reklama…"><datalist id="sources"><option>Instagram</option><option>Shopify</option><option>Preporuka</option><option>Meta reklama</option><option>Influenser</option></datalist></div>
+        <div class="field"><label>Oznake (zarezom)</label><input id="cu_tags" placeholder="influenser, drugarica, problematična…"></div></div>
+      <div class="field"><label>Beleška o kupcu</label><textarea id="cu_note" placeholder="Šta voli, koje veličine nosi, kako da joj priđemo"></textarea></div>
+      <label class="check" style="font-size:13px;display:flex;gap:8px;align-items:center"><input type="checkbox" id="cu_vip"> VIP (ručno, bez obzira na pravila kluba)</label>
+      <div class="modal-actions">${c ? '<button type="button" class="fu-remove" id="cuDelete">Obriši (arhiva)</button>' : ''}<button type="button" class="btn-ghost" data-close>Zatvori</button><button class="btn-gold" type="submit">Sačuvaj</button></div></form>`;
+    CUF.forEach(f => $('cu_' + f).value = c ? (c[f] ?? '') : '');
+    $('cu_tags').value = c ? (c.tags || []).join(', ') : ''; $('cu_vip').checked = !!c?.vip;
+    $('custForm').addEventListener('submit', saveCust);
+    if (c) $('cuDelete').addEventListener('click', deleteCust);
+    if (!c) $('cu_name').focus();
+  } else if (t === 'orders') {
+    const s = custStats(c);
+    const rets = state.rets.filter(r => r.customer_id === c.id);
+    $('custBody').innerHTML = `<div class="cust-nums"><div><b>${s.count}</b><span>porudžbina</span></div><div><b>${rsd(s.spend)}</b><span>potrošeno</span></div><div><b>${s.count ? rsd(s.spend / s.count) : '—'}</b><span>prosečna korpa</span></div><div><b>${s.rets}</b><span>povrata i prijava</span></div></div>
+      ${s.all.slice().sort((a, b) => b.created_at.localeCompare(a.created_at)).map(o => `<div class="list-row" data-order="${o.id}"><span><b>${esc(o.order_no || '')}</b> · ${fmtDate(o.created_at)} · ${itemsSummary(o)}</span><span>${pill(o.status)} <b class="num">${rsd(totals(o).revenue)}</b></span></div>`).join('') || '<div class="kb-empty">Još nema porudžbina.</div>'}
+      ${rets.length ? `<div class="sec-title">Povrati i prijave</div>${rets.map(r => `<div class="list-row" data-ret="${r.id}"><span><b>${esc(r.case_no)}</b> · ${RT[r.type]} · ${esc(r.item || '')} ${esc(r.reason || '')}</span>${pill(r.status)}</div>`).join('')}` : ''}`;
+  } else if (t === 'loyalty') {
+    const s = custStats(c), L = loy();
+    const ev = state.levents.filter(e => e.customer_id === c.id).sort((a, b) => b.created_at.localeCompare(a.created_at));
+    const codes = state.codes.filter(x => x.customer_id === c.id);
+    const toReward = Math.max(0, n(L.reward_points) - s.points);
+    $('custBody').innerHTML = `<div class="cust-nums"><div><b>${tierBadge(s.tier)}</b><span>nivo · popust ${s.tier.discount}%</span></div><div><b>${s.points}</b><span>poena</span></div><div><b>${s.next ? rsd(Math.max(0, n(s.next.min_spend) - s.spend)) : '—'}</b><span>${s.next ? 'do nivoa ' + esc(s.next.name) : 'najviši nivo'}</span></div><div><b>${toReward === 0 ? '🎁' : toReward}</b><span>${toReward === 0 ? 'nagrada čeka' : 'poena do nagrade'}</span></div></div>
+      <div class="pts-bar"><div style="width:${Math.min(100, s.points / n(L.reward_points) * 100)}%"></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 16px"><button class="btn-gold" data-reward="${c.id}" ${s.points < n(L.reward_points) ? 'disabled style="opacity:.5"' : ''}>🎁 Dodeli nagradu</button><button class="mini-btn" id="cuNewCode">+ Lični kod</button>
+        <span style="display:inline-flex;gap:6px;align-items:center;margin-left:auto"><input class="inline-input" id="cuPts" type="number" placeholder="± poeni" style="width:90px"><input class="inline-input" id="cuPtsWhy" placeholder="razlog (rođendan, izvinjenje…)" style="width:200px"><button class="mini-btn" id="cuPtsAdd">Upiši</button></span></div>
+      ${codes.length ? `<div class="sec-title">Lični kodovi</div>${codes.map(x => { const u = codeUses(x); return `<div class="list-row" data-code="${x.id}"><span><span class="cc" style="font-family:ui-monospace,Menlo,monospace;font-weight:700">${esc(x.code)}</span> · ${x.pct ? x.pct + '%' : rsd(x.rsd)} · do ${x.valid_to ? fmtDate(x.valid_to) : '∞'}</span><span>${u.n} upotreba ${x.active ? '' : '· isključen'}</span></div>`; }).join('')}` : ''}
+      <div class="sec-title">Istorija poena</div>
+      ${ev.map(e => `<div class="led"><span>${esc(e.reason || '')} <span class="page-sub">· ${esc(e.author || '')} · ${fmtDT(e.created_at)}</span></span><b class="${e.points >= 0 ? 'plus' : 'minus'}">${e.points >= 0 ? '+' : ''}${e.points}</b></div>`).join('')}
+      <div class="led"><span>Iz kupovina (${rsd(s.spend)} × ${L.points_per_100} poen/100 RSD)</span><b class="plus">+${Math.floor(s.spend / 100) * n(L.points_per_100)}</b></div>${c.points_adj ? `<div class="led"><span>Ručna korekcija na profilu</span><b>${c.points_adj > 0 ? '+' : ''}${c.points_adj}</b></div>` : ''}`;
+    $('cuNewCode').addEventListener('click', () => openCodeModal(null, c.id));
+    $('cuPtsAdd').addEventListener('click', async () => {
+      const pts = parseInt($('cuPts').value); if (!pts) return toast('Upiši broj poena');
+      try { state.levents.push(await q(sb.from('h_loyalty_events').insert({ customer_id: c.id, points: pts, reason: $('cuPtsWhy').value.trim() || 'Ručno', author: state.user.display }).select().single())); await log({ customer_id: c.id, type: 'system', body: `${pts > 0 ? '+' : ''}${pts} poena: ${$('cuPtsWhy').value.trim() || 'ručno'}` }); renderCustHead(); renderCustBody(); renderAll(); } catch (e) { fail(e); }
+    });
+  } else {
+    $('custBody').innerHTML = commentsBlock('customer_id', c.id).replace('<div class="sec-title">Komentari</div>', '<div class="sec-title">Beleške i istorija</div>');
+  }
+}
+async function saveCust(e) {
+  e.preventDefault();
+  const f = {}; CUF.forEach(k => { const v = $('cu_' + k).value.trim(); f[k] = v === '' ? null : v; });
+  f.tags = $('cu_tags').value.split(',').map(x => x.trim()).filter(Boolean); f.vip = $('cu_vip').checked;
+  try {
+    if (state.editCustId) { const r = await q(sb.from('h_customers').update(f).eq('id', state.editCustId).select().single()); Object.assign(state.customers.find(x => x.id === r.id), r); }
+    else { f.source = f.source || 'ručno'; const r = await q(sb.from('h_customers').insert(f).select().single()); state.customers.push(r); state.editCustId = r.id; await log({ customer_id: r.id, type: 'system', body: 'Kupac dodat ručno' }); }
+    renderAll(); renderCustHead(); renderCustBody(); toast('Kupac sačuvan ✓');
+  } catch (err) { fail(err); }
+}
+async function deleteCust() {
+  if (!confirm('Kupac ide u arhivu (porudžbine ostaju). Nastaviti?')) return;
+  try { await softDelete('h_customers', state.editCustId); state.customers = state.customers.filter(x => x.id !== state.editCustId); $('custModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
+}
 
 /* ---------------- shell ---------------- */
 function renderAll() {
@@ -1556,7 +1894,7 @@ function renderAll() {
   document.querySelectorAll('#periodSeg button').forEach(b => b.classList.toggle('active', b.dataset.p === String(state.period)));
   $('rangeWrap').style.display = state.period === 'custom' ? '' : 'none';
   renderOverview(); renderOrders(); renderProducts(); renderAds();
-  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes(); renderReturns(); renderPromos();
+  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes(); renderReturns(); renderPromos(); renderCustomers();
   if (state.tab === 'history') renderHistory();
 }
 function setTab(t) {
@@ -1578,11 +1916,37 @@ function bindEvents() {
   $('tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
   $('periodSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.period = b.dataset.p; LS.set('crm_period', b.dataset.p); if (b.dataset.p === 'custom' && !state.range.from) { const d = new Date(); d.setDate(1); state.range.from = dayStr(d); state.range.to = dayStr(new Date()); } $('rangeFrom').value = state.range.from; $('rangeTo').value = state.range.to; renderAll(); });
   ['rangeFrom', 'rangeTo'].forEach(id => $(id).addEventListener('change', () => { state.range = { from: $('rangeFrom').value, to: $('rangeTo').value }; LS.set('crm_rfrom', state.range.from); LS.set('crm_rto', state.range.to); renderAll(); }));
-  $('search').addEventListener('input', (e) => {
-    state.q = e.target.value.trim();
-    if (state.q && state.tab === 'overview') state.tab = 'orders';
-    renderAll();
+  $('cmdBtn').addEventListener('click', openCmd); $('cmdBtnM').addEventListener('click', openCmd);
+  $('cmdBg').addEventListener('click', closeCmd);
+  $('cmdFilter').addEventListener('click', () => setQuery(''));
+  $('cmdInput').addEventListener('input', () => { cmdSel = 0; renderCmd(); });
+  $('cmdInput').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); cmdSel = Math.min(cmdCur.length - 1, cmdSel + 1); renderCmd(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); cmdSel = Math.max(0, cmdSel - 1); renderCmd(); }
+    else if (e.key === 'Enter') { e.preventDefault(); runCmd(cmdCur[cmdSel]); }
   });
+  $('cmdList').addEventListener('click', (e) => { const it = e.target.closest('[data-ci]'); if (it) runCmd(cmdCur[+it.dataset.ci]); });
+  $('cmdList').addEventListener('mousemove', (e) => { const it = e.target.closest('[data-ci]'); if (it && +it.dataset.ci !== cmdSel) { cmdSel = +it.dataset.ci; document.querySelectorAll('.cmd-item').forEach(x => x.classList.toggle('sel', +x.dataset.ci === cmdSel)); } });
+  document.addEventListener('keydown', (e) => {
+    if (!state.user) return;
+    const typing = /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || e.target.isContentEditable;
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('cmdWrap').classList.contains('open') ? closeCmd() : openCmd(); return; }
+    if (typing) return;
+    if (e.key === '/') { e.preventDefault(); openCmd(); }
+    else if (/^[1-9]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) { const sct = SECTIONS[+e.key - 1]; if (sct) setTab(sct.tab); }
+    else if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey) { openOrderModal(); }
+  });
+  if (!/Mac|iPhone|iPad/.test(navigator.platform)) $('cmdKbd').textContent = 'Ctrl K';
+  // kupci
+  $('newCustBtn').addEventListener('click', () => openCustModal());
+  $('newCodeBtn').addEventListener('click', () => openCodeModal());
+  $('codeForm').addEventListener('submit', saveCode);
+  $('cdDelete').addEventListener('click', deleteCode);
+  $('cd_kind').addEventListener('change', () => { $('cd_custWrap').style.display = ['personal', 'loyalty'].includes($('cd_kind').value) ? '' : 'none'; });
+  $('custViewSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.custView = b.dataset.view; LS.set('crm_cview', b.dataset.view); renderCustomers(); });
+  $('custSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.custSeg = b.dataset.s; renderCustomers(); });
+  $('custSort').addEventListener('change', (e) => { state.custSort = e.target.value; renderCustomers(); });
+  $('custTabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.custTab = b.dataset.ct; renderCustBody(); document.querySelectorAll('#custTabs button').forEach(x => x.classList.toggle('active', x === b)); });
   $('orderViewSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.orderView = b.dataset.view; LS.set('crm_oview', b.dataset.view); renderOrders(); });
   $('chSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.ch = b.dataset.ch; document.querySelectorAll('#chSeg button').forEach(x => x.classList.toggle('active', x === b)); renderOrders(); });
   $('orderStatusFilter').innerHTML = `<option value="all">Svi statusi</option>` + STATUSES.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
@@ -1600,13 +1964,18 @@ function bindEvents() {
     const cm = e.target.closest('[data-cal]'); if (cm) { const m = state.calMonth; state.calMonth = new Date(m.getFullYear(), m.getMonth() + +cm.dataset.cal, 1); return renderPosts(); }
     if (e.target.closest('a')) return;
     const pp = e.target.closest('[data-post]'); if (pp) return openPostModal(pp.dataset.post);
+    if (e.target.id === 'loySave') return saveLoyalty();
+    const rw = e.target.closest('[data-reward]'); if (rw) { e.stopPropagation(); return giveReward(rw.dataset.reward); }
+    const noc = e.target.closest('[data-newordercust]'); if (noc) { const c = state.customers.find(x => x.id === noc.dataset.newordercust); $('custModal').classList.remove('open'); openOrderModal(); if (c) { $('o_name').value = c.name; $('o_phone').value = c.phone || ''; $('o_ig').value = c.instagram || ''; $('o_email').value = c.email || ''; $('o_addr').value = c.address || ''; $('o_city').value = c.city || ''; $('o_zip').value = c.postal_code || ''; } return; }
+    const cdl = e.target.closest('[data-code]'); if (cdl && !e.target.closest('#codeModal')) return openCodeModal(cdl.dataset.code);
+    const cst = e.target.closest('[data-cust]'); if (cst && !e.target.closest('#custModal')) return openCustModal(cst.dataset.cust);
     const rs = e.target.closest('[data-restore]'); if (rs) { const [t, id] = rs.dataset.restore.split(':'); return restoreRow(t, id); }
     const pw = e.target.closest('[data-pwriter]'); if (pw) { state.writer = pw.dataset.pwriter; renderPromoNotes(state.editPromoId); return; }
     if (e.target.id === 'histMore') { state.histLimit += 200; return renderHistory(); }
     const op = e.target.closest('[data-open]'); if (op && !e.target.closest('.modal-wrap')) return openRef(op.dataset.open);
     const pm = e.target.closest('[data-promo]'); if (pm && !e.target.closest('#promoModal')) return openPromoModal(pm.dataset.promo);
     const ti = e.target.closest('[data-toidea]'); if (ti) { e.stopPropagation(); return retToIdea(ti.dataset.toidea); }
-    const rr = e.target.closest('[data-ret]'); if (rr && !e.target.closest('#retModal')) return openRetModal(rr.dataset.ret);
+    const rr = e.target.closest('[data-ret]'); if (rr && !e.target.closest('#retModal')) { if (e.target.closest('#custModal')) $('custModal').classList.remove('open'); return openRetModal(rr.dataset.ret); }
     const ii = e.target.closest('[data-idea]'); if (ii) return openIdeaModal(ii.dataset.idea);
     const pk = e.target.closest('[data-pack]'); if (pk) return openPackModal(pk.dataset.pack);
     const sb_ = e.target.closest('[data-stock]');
@@ -1616,7 +1985,7 @@ function bindEvents() {
     const zoom = e.target.closest('[data-zoom]');
     if (zoom) { $('lightboxImg').src = zoom.src; $('lightbox').classList.add('open'); return; }
     const go = e.target.closest('[data-goto]'); if (go) return setTab(go.dataset.goto);
-    const oe = e.target.closest('[data-order]'); if (oe && !e.target.closest('.drawer')) return openDrawer(oe.dataset.order);
+    const oe = e.target.closest('[data-order]'); if (oe && !e.target.closest('.drawer')) { if (e.target.closest('#custModal')) $('custModal').classList.remove('open'); return openDrawer(oe.dataset.order); }
     const pe = e.target.closest('[data-product]'); if (pe) return openProductModal(pe.dataset.product);
     if (e.target.matches('[data-close]')) e.target.closest('.modal-wrap').classList.remove('open');
   });
@@ -1644,6 +2013,7 @@ function bindEvents() {
   $('addItemBtn').addEventListener('click', () => addItemRow());
   $('orderForm').addEventListener('submit', saveOrder);
   $('orderForm').addEventListener('input', orderSum);
+  $('o_name').addEventListener('change', () => { if (state.editOrderId) return; const c = state.customers.find(x => x.name.toLowerCase() === $('o_name').value.trim().toLowerCase()); if (!c) return; [['o_phone', 'phone'], ['o_ig', 'instagram'], ['o_email', 'email'], ['o_addr', 'address'], ['o_city', 'city'], ['o_zip', 'postal_code']].forEach(([el, f]) => { if (!$(el).value && c[f]) $(el).value = c[f]; }); toast(`Poznat kupac: ${c.name} (${custStats(c).count} porudžbina)`); });
   $('o_channel').addEventListener('change', () => { if (!state.editOrderId) $('o_no').placeholder = nextOrderNo($('o_channel').value); });
 
   $('newProductBtn').addEventListener('click', () => openProductModal());
@@ -1715,7 +2085,7 @@ function bindEvents() {
     } catch (err) { fail(err); }
   });
 
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeDrawer(); document.querySelectorAll('.modal-wrap').forEach(m => m.classList.remove('open')); $('lightbox').classList.remove('open'); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeCmd(); closeDrawer(); document.querySelectorAll('.modal-wrap').forEach(m => m.classList.remove('open')); $('lightbox').classList.remove('open'); } });
 }
 
 async function enterApp(user) {
