@@ -977,6 +977,87 @@ body.nav-open{overflow:hidden}
 .chg-when{font-size:11px;color:var(--muted);white-space:nowrap;margin-top:3px}
 .chg-more{border:none;background:none;color:#2f4a3a;font-weight:700;font-size:12.5px;text-decoration:underline;text-underline-offset:2px;padding:6px 6px 0}
 @media (max-width:980px){.chg-panel{padding:12px 44px 10px 12px;margin-top:0}.chg-when{display:none}}
+/* ===== ASISTENT ===== */
+.bot-fab{position:fixed;right:18px;bottom:18px;z-index:68;width:54px;height:54px;border-radius:50%;border:0;cursor:pointer;display:none;align-items:center;justify-content:center;color:#E8E4D9;background:radial-gradient(circle at 30% 25%,#3a4d41,#1B2620 62%,#111814);box-shadow:0 12px 30px -8px rgba(17,24,20,.55),inset 0 0 0 1px rgba(232,228,217,.14);transition:transform .25s var(--ease),box-shadow .25s;animation:botIn .6s .4s var(--ease) both}
+body.bot-ready .bot-fab{display:flex}
+.bot-fab:hover{transform:translateY(-2px) scale(1.04);box-shadow:0 16px 36px -8px rgba(17,24,20,.6),inset 0 0 0 1px rgba(232,228,217,.25)}
+.bot-fab::before{content:"";position:absolute;inset:-5px;border-radius:50%;border:1.5px solid rgba(126,140,116,.55);animation:botRing 2.8s ease-out 1.2s 2}
+.bot-fab svg{transition:transform .35s var(--ease),opacity .2s}
+.bot-fab .ic-x{position:absolute;opacity:0;transform:rotate(-90deg) scale(.6)}
+body.bot-open .bot-fab .ic-chat{opacity:0;transform:rotate(90deg) scale(.6)}
+body.bot-open .bot-fab .ic-x{opacity:1;transform:none}
+body.nav-open .bot-fab,body:has(.drawer.open) .bot-fab{display:none}
+@keyframes botIn{from{opacity:0;transform:translateY(20px) scale(.6)}to{opacity:1;transform:none}}
+@keyframes botRing{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(1.45)}}
+.ntray{bottom:84px;max-height:calc(100vh - 170px)}
+.bot-panel{position:fixed;right:18px;bottom:84px;z-index:70;width:392px;height:min(600px,calc(100vh - 110px));background:var(--surface);border-radius:20px;box-shadow:0 30px 80px -20px rgba(17,24,20,.45),0 0 0 1px rgba(27,38,32,.08);display:flex;flex-direction:column;overflow:hidden;opacity:0;transform:translateY(16px) scale(.97);transform-origin:bottom right;pointer-events:none;transition:opacity .22s var(--ease),transform .3s var(--ease)}
+body.bot-open .bot-panel{opacity:1;transform:none;pointer-events:auto}
+body.bot-open .ntray{opacity:0;pointer-events:none}
+.bot-head{display:flex;align-items:center;gap:11px;padding:14px 14px 13px 16px;background:linear-gradient(135deg,#26352c,#1B2620 60%,#141c17);color:#E8E4D9}
+.bot-head .bt-av{width:34px;height:34px;font-size:19px}
+.bot-head b{font-family:var(--font-display);font-size:21px;font-weight:700;letter-spacing:.02em;display:block;line-height:1}
+.bot-head small{font-size:11.5px;color:#aab8a6;display:flex;align-items:center;gap:6px;margin-top:3px}
+.bot-head small::before{content:"";width:7px;height:7px;border-radius:50%;background:#8fbf7a;box-shadow:0 0 0 3px rgba(143,191,122,.2)}
+.bot-head .bh-btn{margin-left:auto;background:rgba(232,228,217,.08);border:0;color:#E8E4D9;width:32px;height:32px;border-radius:10px;cursor:pointer;font-size:15px;transition:background .2s}
+.bot-head .bh-btn+.bh-btn{margin-left:6px}
+.bot-head .bh-btn:hover{background:rgba(232,228,217,.18)}
+.bot-msgs{flex:1;overflow-y:auto;padding:16px 14px 8px;display:flex;flex-direction:column;gap:10px;background:linear-gradient(180deg,#f7f4ec,var(--surface) 140px);overscroll-behavior:contain}
+.bt-msg{display:flex;gap:8px;align-items:flex-end;max-width:100%}
+.bt-msg[data-last]{animation:fadeUp .35s var(--ease) both}
+.bt-msg.me{justify-content:flex-end}
+.bt-av{flex:none;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 25%,#3a4d41,#1B2620);color:#E8E4D9;font-family:var(--font-display);font-weight:700;font-size:15px}
+.bt-bub{background:#fff;border:1px solid var(--line);border-radius:16px 16px 16px 5px;padding:10px 12px;font-size:13.5px;line-height:1.5;color:var(--ink);min-width:0;max-width:calc(100% - 34px);overflow-wrap:anywhere;box-shadow:var(--shadow-sm)}
+.bt-msg.me .bt-bub{background:#1B2620;color:#E8E4D9;border-color:#1B2620;border-radius:16px 16px 5px 16px;max-width:82%}
+.bt-bub a{color:var(--gold-text);font-weight:600}
+.bt-bub kbd{font-family:var(--font-ui);font-size:11px;background:var(--gold-wash);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px}
+.bt-bub i{color:var(--ink-2)}
+.bt-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.bt-btn{border:1px solid #cfd6c8;background:#f1f3ec;color:#1B2620;font:600 12.5px var(--font-ui);padding:6px 11px;border-radius:99px;cursor:pointer;transition:background .15s,transform .15s,border-color .15s}
+.bt-btn:hover{background:#1B2620;color:#E8E4D9;border-color:#1B2620;transform:translateY(-1px)}
+.bt-list{display:flex;flex-direction:column;gap:5px}
+.bt-item{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:1px solid var(--line-soft);background:#faf8f2;border-radius:11px;padding:7px 9px;cursor:pointer;font-family:var(--font-ui);color:var(--ink);transition:border-color .15s,background .15s,transform .15s}
+.bt-item:hover{border-color:var(--sage);background:#fff;transform:translateX(2px)}
+.bt-item .bi-ic{flex:none;min-width:24px;height:24px;border-radius:8px;background:#e2e6dc;color:#1B2620;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.bt-item .bi-ic .n-av{width:24px;height:24px;font-size:11px}
+.bt-item .bi-t{min-width:0;display:flex;flex-direction:column}
+.bt-item b{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bt-item small{font-size:11.5px;color:var(--muted);line-height:1.35}
+.bt-item small .ref{font-weight:600;color:var(--ink-2)}
+.bt-cap{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--sage)}
+.bt-big{font-family:var(--font-display);font-size:30px;font-weight:700;line-height:1.1;color:#1B2620}
+.bt-kvs{margin-top:8px;border-top:1px dashed var(--line);padding-top:6px}
+.bt-kv{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:2px 0}
+.bt-kv span{color:var(--ink-2)}
+.bt-d{font-size:11px;font-weight:700;margin-left:4px}
+.bt-d.up{color:#2e7d32}.bt-d.down{color:#c62828}
+.bt-note{font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.45}
+.bt-red{color:#c62828;font-weight:600}.bt-amber{color:#b7791f;font-weight:600}
+.bt-quote{margin-top:7px;padding:6px 10px;border-left:3px solid var(--sage);background:#fbf7ea;border-radius:0 8px 8px 0;font-family:'Caveat',cursive;font-size:19px;line-height:1.2}
+.bt-code{display:inline-block;margin-top:4px;font-size:11.5px;background:var(--gold-wash);padding:2px 7px;border-radius:6px;word-break:break-all}
+.bt-ul{margin:4px 0 0 16px;display:flex;flex-direction:column;gap:4px}
+.bt-typing{display:flex;gap:4px;padding:12px 14px}
+.bt-typing i{width:6px;height:6px;border-radius:50%;background:var(--sage);animation:btDot 1s infinite}
+.bt-typing i:nth-child(2){animation-delay:.15s}.bt-typing i:nth-child(3){animation-delay:.3s}
+@keyframes btDot{0%,60%,100%{opacity:.3;transform:none}30%{opacity:1;transform:translateY(-3px)}}
+.bot-chips{display:flex;gap:6px;padding:8px 12px 2px;overflow-x:auto;scrollbar-width:none}
+.bot-chips::-webkit-scrollbar{display:none}
+.bot-chips button{flex:none;border:1px solid var(--line);background:#fff;color:var(--ink-2);font:500 12px var(--font-ui);padding:5px 10px;border-radius:99px;cursor:pointer;transition:all .15s}
+.bot-chips button:hover{border-color:var(--sage);color:#1B2620;background:#f1f3ec}
+.bot-form{display:flex;gap:8px;padding:10px 12px 12px;border-top:1px solid var(--line-soft);background:var(--surface)}
+.bot-form input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;font:14px var(--font-ui);background:#fff;color:var(--ink);transition:border-color .2s,box-shadow .2s}
+.bot-form input:focus{outline:none;border-color:var(--sage);box-shadow:0 0 0 3px rgba(126,140,116,.2)}
+.bot-form button{flex:none;width:42px;border:0;border-radius:12px;background:#1B2620;color:#E8E4D9;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s}
+.bot-form button:hover{transform:scale(1.05)}
+@media (max-width:980px){
+  .bot-fab{right:14px;bottom:14px;width:52px;height:52px}
+  .ntray{bottom:76px}
+  .bot-panel{right:0;left:0;bottom:0;width:auto;height:86vh;height:86dvh;border-radius:22px 22px 0 0;transform:translateY(100%);transition:transform .35s cubic-bezier(.2,.9,.2,1),opacity .2s}
+  body.bot-open .bot-fab{display:none}
+  .bot-form input{font-size:16px}
+  .bot-form{padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+}
+.bot-ov{display:none}
+@media (max-width:980px){.bot-ov{display:block;position:fixed;inset:0;z-index:69;background:rgba(15,20,17,.45);opacity:0;pointer-events:none;transition:opacity .3s}body.bot-open .bot-ov{opacity:1;pointer-events:auto}}
 </style>
 </head>
 <body>
@@ -1757,11 +1838,25 @@ body.nav-open{overflow:hidden}
 </div>
 
 <div class="lightbox" id="lightbox"><img id="lightboxImg"></div>
+<!-- ASISTENT -->
+<button class="bot-fab" id="botFab" type="button" title="Asistent (taster ?)" aria-label="Asistent">
+  <svg class="ic-chat" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12Z"/><path d="M12 8.2l.9 2 2 .9-2 .9-.9 2-.9-2-2-.9 2-.9z" fill="currentColor" stroke="none"/></svg>
+  <svg class="ic-x" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+</button>
+<div class="bot-ov" id="botOv"></div>
+<section class="bot-panel" id="botPanel" aria-label="Asistent">
+  <div class="bot-head"><span class="bt-av">H</span><div><b>Asistent</b><small>prečice i pomoć za CRM</small></div>
+    <button class="bh-btn" id="botClear" type="button" title="Nov razgovor">↺</button><button class="bh-btn" id="botClose" type="button" title="Zatvori">✕</button></div>
+  <div class="bot-msgs" id="botMsgs"></div>
+  <div class="bot-chips" id="botChips"></div>
+  <form class="bot-form" id="botForm" autocomplete="off"><input id="botInput" placeholder="Gde ideš ili šta ti treba…" enterkeyhint="send"><button type="submit" title="Pošalji"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg></button></form>
+</section>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202609162147"></script>
-<script>window.HTML_BUILD="202609162147";</script>
-<script src="app.js?v=202609162147"></script>
+<script src="config.js?v=202609162222"></script>
+<script>window.HTML_BUILD="202609162222";</script>
+<script src="app.js?v=202609162222"></script>
 </body>
 </html>

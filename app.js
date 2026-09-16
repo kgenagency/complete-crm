@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609162147';
+const APP_BUILD = '202609162222';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -2761,6 +2761,367 @@ function bindEvents() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeNav(); if ($('notifModal').classList.contains('open')) { state.trayHidden = false; setTimeout(renderTray, 50); } closeCmd(); closeDrawer(); document.querySelectorAll('.modal-wrap').forEach(m => m.classList.remove('open')); $('lightbox').classList.remove('open'); } });
 }
 
+/* ---------- ASISTENT (chat u aplikaciji) ---------- */
+const BOT = { open: false, msgs: [], typing: false };
+const botKey = () => 'crm_bot_' + (state.user?.username || 'x');
+function botLoad() { try { BOT.msgs = JSON.parse(LS.get(botKey(), '[]')).slice(-40); } catch (e) { BOT.msgs = []; } }
+function botSave() { LS.set(botKey(), JSON.stringify(BOT.msgs.slice(-40))); }
+const BOT_TAB_FOR = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' };
+const BOT_TIPS = {
+  overview: 'Brojke za izabrani period (gore biraš danas, 7 ili 30 dana ili svoje datume). Klik na karticu <b>Prihod, Profit, Reklame…</b> otvara grafikon sa istorijom, a klik na stubić pokazuje taj dan. Beleške tima su odmah ispod.',
+  notes: 'Ovde su beleške celog tima, svi vide sve. Pišeš gore i biraš ko piše i gde beleška ide. Klik na tekst je menja, 📌 je kači na vrh, ✓ je označava kao urađenu. Iznad liste su filteri po osobi, mestu i statusu.',
+  orders: 'Porudžbine vidiš kao <b>Tabelu</b> ili <b>Pipeline</b> (kartice prevlačiš kroz faze). Klik na porudžbinu otvara detalje, aktivnost i komentare. Taster <kbd>N</kbd> otvara novu porudžbinu.',
+  customers: 'Tri pogleda: <b>Kupci</b> (potrošnja i broj kupovina), <b>Loyalty klub</b> (nivoi i poeni) i <b>Popusti</b> (kodovi i koliko su korišćeni). Kupac se sam pravi i povezuje kad uneseš porudžbinu (po telefonu, Instagramu, mejlu ili imenu).',
+  products: 'Na vrhu su upozorenja za zalihe, ispod tabela sa veličinama. Dugmići <b>−</b> i <b>+</b> odmah menjaju stanje. Granicu za upozorenje („upozori kad ostane ≤ X“) menjaš desno gore.',
+  returns: 'Ovde stižu prijave sa forme za kupce. Svaka kartica ima rok: 8 dana za odgovor na reklamaciju, 14 dana za povrat novca ili zamenu. Pogled <b>Šta da popravimo</b> skuplja razloge i utiske.',
+  promos: 'Svaka akcija ima trajanje od-do, kod i budžet. CRM sam računa porudžbine i prihod u tom periodu i koliko je to iznad proseka. Svako može da doda beleške uz promociju.',
+  posts: 'Ideje za objave sa konceptom, datumom objave i Drive linkom za video. Pogledi: <b>Tabla</b> (faze), <b>Kalendar</b> i <b>Lista</b>. Karticu prevučeš u sledeću fazu.',
+  packaging: 'Stanje ambalaže (dugme <b>+50</b> kad stigne nova tura, upozorenje kad padne ispod minimuma) i predlozi za dizajn i promenu pakovanja.',
+  site: 'Link sajta stoji gore. Ispod su predlozi za sajt po kategorijama (dizajn, tekst, funkcija…), sa statusom i komentarima.',
+  story: 'Priča brenda po poglavljima, a desno je papir sa beleškama gde biraš čije beleške gledaš (Staša, Konstantin, Marjan).',
+  ads: 'Ovde unosiš dnevnu potrošnju sa Meta naloga (datum, iznos, kupovine). Dok ne povežemo Meta nalog, unos je ručni. Brojke odmah ulaze u profit i neto na Pregledu.',
+  history: 'Vremenska linija svega što se desilo, sa filterima po vrsti i mesecu. <b>Arhiva obrisanog</b> vraća bilo šta što je obrisano.',
+};
+const BOT_FAQ = [
+  { g: [['status', 'faz', 'pomer', 'prevuc', 'poslat', 'isporuc', 'spakov', 'potvrd']], a: 'Otvori porudžbinu i promeni status (Nova → Potvrđena → Spakovana → Poslata → Isporučena). U pogledu <b>Pipeline</b> samo prevučeš karticu u sledeću kolonu.', b: [['Porudžbine', 'tab:orders'], ['Pipeline pogled', 'oview:pipeline']] },
+  { g: [['porudzbin', 'narudzbin', 'order'], ['dodam', 'dodaj', 'unes', 'napravi', 'nov', 'kreir', 'ubac', 'upis']], a: 'Klikni <b>+ Nova porudžbina</b> (ili taster <kbd>N</kbd>). Upišeš kupca, dodaš komade i veličine, a cena, profit i zalihe se računaju sami. Kupac se sam pravi ili povezuje sa postojećim.', b: [['Nova porudžbina', 'act:Nova porudžbina'], ['Porudžbine', 'tab:orders']] },
+  { g: [['otkaz', 'storn', 'ponist']], a: 'Otvori porudžbinu i stavi status <b>Otkazana</b>. Roba se sama vraća na stanje, a porudžbina se više ne računa u prihod.', b: [['Porudžbine', 'tab:orders']] },
+  { g: [['velicin', 'zalih', 'stanj', 'komad', 'proizvod', 'garderob', 'artik'], ['dodam', 'dodaj', 'menjam', 'menja', 'promen', 'unes', 'azurir', 'smanj', 'povec', 'nov', 'upis', 'skin', 'kako da', 'kako se']], a: 'Garderoba → <b>Novi komad</b> ili klik na postojeći → <b>+ Veličina</b> i količina. Stanje menjaš i direktno u tabeli dugmićima − i +. Porudžbine same skidaju robu sa stanja.', b: [['Novi komad', 'act:Novi komad'], ['Garderoba', 'tab:products']] },
+  { g: [['upozoren', 'granic']], a: 'U Garderobi desno gore piše „Upozori kad ostane ≤ X kom“. Promeni broj i upozorenja se odmah preračunaju. Za pakovanje svaka stavka ima svoj minimum.', b: [['Garderoba', 'tab:products']] },
+  { g: [['obris', 'vratim', 'vratis', 'arhiv', 'izgub', 'nestal', 'slucajno']], a: 'Ništa se ne briše zauvek. Idi na <b>Istorija → Arhiva obrisanog</b> i klikni <b>Vrati</b> pored stavke.', b: [['Otvori arhivu', 'archive']] },
+  { g: [['notifikac', 'obavesten', 'zvonc', 'utisa']], a: 'Kartice dole desno su promene koje su napravili drugi. <b>X</b> ih sklanja. Na zvoncu gore imaš <b>Istoriju svih promena</b> (sa filterima), „Skloni sve“ i utišavanje na 1 h, 3 h ili do sutra.', b: [['Istorija promena', 'bell:history']] },
+  { g: [['crven', 'zut', 'broj', 'bedz', 'badge', 'oznak', 'brojev']], a: '<span class="bt-red">Crveni broj</span> znači koliko je promena neko drugi napravio u toj sekciji od tvog poslednjeg ulaska. Kad uđeš, vidiš karticu „Šta je novo ovde“ i broj nestaje. <span class="bt-amber">Žuti broj</span> je upozorenje: zalihe, pakovanje, povrati koji čekaju, aktivne promocije.', b: [] },
+  { g: [['beles', 'note', 'zabelez']], a: 'Beleške su zajedničke i svi vide sve. Brzo pišeš preko dugmeta <b>Zabeleži</b> na Pregledu, tastera <kbd>B</kbd> ili ovde: napiši <i>zabeleži …</i> i sačuvaću odmah. Na stranici Beleške klik na tekst menja belešku.', b: [['Beleške', 'tab:notes'], ['Nova beleška', 'act:Nova beleška']] },
+  { g: [['reklam', 'potros', 'spend', 'meta', 'ads', 'roas']], a: 'Reklame → <b>Unesi potrošnju</b>: datum, iznos u RSD, po želji kampanja, kupovine i prihod iz Meta. Potrošnja odmah ulazi u neto na Pregledu i u grafikon.', b: [['Reklame', 'tab:ads'], ['Grafikon potrošnje', 'metric:ads:30']] },
+  { g: [['loyalty', 'klub', 'poen', 'nivo', 'vip']], a: 'Kupci → <b>Loyalty klub</b>. Tu podešavaš nivoe (Nova, Stalna, HARIZMA klub, VIP), koliko poena donosi 100 RSD i nagradu. Poeni se računaju sami iz porudžbina.', b: [['Loyalty klub', 'cview:club']] },
+  { g: [['kod', 'kupon', 'popust']], a: 'Kupci → <b>Popusti</b> → <b>+ Kod za popust</b>. Kod može da bude u % ili RSD, a CRM broji koliko puta je iskorišćen i koliki je prihod doneo.', b: [['Novi kod', 'act:Novi kod za popust'], ['Popusti', 'cview:codes']] },
+  { g: [['povrat', 'reklamac', 'zamen', 'forma', 'zalb'], ['form', 'funkcion', 'radi', 'rok', 'prijav', 'link', 'salj', 'posalj', 'kako da', 'kako se', 'obrad']], a: 'Kupci popunjavaju formu za povrat (link možeš da kopiraš ispod). Prijava stiže u <b>Povrati</b> sa rokom: 8 dana za odgovor na reklamaciju, 14 dana za povrat novca ili zamenu. Karticu pomeraš kroz statuse.', b: [['Kopiraj link forme', 'copyform'], ['Povrati', 'tab:returns']] },
+  { g: [['grafik', 'chart', 'datum', 'period', 'statistik', 'istoriju prihod']], a: 'Na Pregledu klikni karticu <b>Prihod, Profit, Reklame</b> ili neku drugu. Otvara se grafikon: biraš period (7, 30, 90 dana, mesec ili svoje datume), prikaz po danu, nedelji ili mesecu, i klikom na stubić vidiš tačno taj dan.', b: [['Grafikon prihoda', 'metric:revenue:30']] },
+  { g: [['pretrag', 'nadj', 'trazi', 'search', 'precic', 'tastat']], a: 'Pretraga: <kbd>Ctrl</kbd>+<kbd>K</kbd> ili <kbd>/</kbd> (na telefonu lupa gore desno). Nalazi kupce, porudžbine, komade i sekcije. Prečice: brojevi <kbd>1</kbd>–<kbd>9</kbd> menjaju sekciju, <kbd>N</kbd> nova porudžbina, <kbd>B</kbd> nova beleška, <kbd>?</kbd> otvara mene.', b: [['Otvori pretragu', 'cmd']] },
+  { g: [['objav', 'reel', 'video', 'drive', 'kalendar', 'snima'], ['dodam', 'dodaj', 'nov', 'unes', 'napravi', 'upis', 'drive', 'link', 'pomer', 'faz', 'promen', 'datum', 'kako da', 'kako se', 'funkcion']], a: 'Objave → <b>+ Nova ideja</b>: naslov, koncept, datum objave i Google Drive link za video. Karticu pomeraš kroz faze (Ideja → Scenario → Snimanje → Montaža → Zakazano → Objavljeno), a u Kalendaru vidiš ceo mesec.', b: [['Nova ideja za objavu', 'act:Nova ideja za objavu'], ['Objave', 'tab:posts']] },
+  { g: [['promocij', 'akcij', 'kampanj'], ['dodam', 'dodaj', 'nov', 'napravi', 'unes', 'kako da', 'kako se', 'racun', 'funkcion', 'pokren']], a: 'Promocije → <b>+ Nova promocija</b>: ime, od-do, kod i budžet. CRM sam pokazuje koliko je porudžbina i prihoda donela, a svako može da doda beleške.', b: [['Nova promocija', 'act:Nova promocija'], ['Promocije', 'tab:promos']] },
+  { g: [['sajt', 'shopify', 'domen']], a: 'Link sajta stoji na vrhu sekcije <b>Sajt</b>. Ispod dodaješ predloge šta da se promeni ili doda na sajtu.', b: [['Sajt', 'tab:site'], ['Otvori HARIZMA sajt', 'site']] },
+  { g: [['pakovanj', 'ambalaz', 'kutij', 'stiker']], a: 'Pakovanje: menjaš stanje (−, +, +50) i dodaješ predloge za novo pakovanje. Kad nešto padne ispod minimuma, dobiješ žuto upozorenje.', b: [['Pakovanje', 'tab:packaging'], ['Novi predlog', 'act:Novi predlog za pakovanje']] },
+  { g: [['story', 'pric', 'brend']], a: 'Brand story: levo pišeš poglavlja priče, desno je papir sa beleškama gde biraš čije beleške gledaš.', b: [['Brand story', 'tab:story']] },
+  { g: [['telefon', 'mobiln', 'crtic']], a: 'Na telefonu su sve sekcije u meniju sa <b>tri crtice</b> gore levo (crveni brojevi pokazuju promene), a pretraga je lupa gore desno. Ja sam uvek dole desno.', b: [] },
+  { g: [['ne radi', 'ne mogu', 'ne ucitav', 'zablok', 'zapel', 'zaglav', 'gresk', 'bug', 'ne otvar', 'ne cuva', 'ne sacuv', 'ne pokaz', 'ne vidim']], a: 'Prvo probaj osvežavanje: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> (na telefonu zatvori i ponovo otvori stranicu). Ako i dalje ne radi, pošalji timu kratak opis dugmetom ispod, pa će neko da pogleda.', b: [['Pošalji timu', 'teamlast']] },
+  { g: [['backup', 'rezerv', 'sigurn', 'bezbed']], a: 'Podaci se čuvaju zauvek: obrisano ide u arhivu, svaka promena se beleži, a svake noći u 03:30 pravi se rezervna kopija cele baze na GitHub-u.', b: [['Istorija', 'tab:history']] },
+  { g: [['istorij', 'prekretnic', 'dogadja', 'vremensk']], a: 'Istorija je vremenska linija svega. Važan događaj (lansiranje, nova kolekcija…) dodaješ dugmetom <b>Zabeleži događaj</b>.', b: [['Zabeleži događaj', 'act:Zabeleži događaj u istoriji'], ['Istorija', 'tab:history']] },
+  { g: [['kupac', 'kupc', 'klijent'], ['dodam', 'dodaj', 'nov', 'napravi', 'unes', 'pravi', 'povez', 'spaja', 'kako da', 'kako se']], a: 'Kupac se sam pravi kad uneseš porudžbinu i povezuje se sa postojećim po telefonu, Instagramu, mejlu ili imenu. Ručno ga dodaješ preko <b>Novi kupac</b>.', b: [['Kupci', 'tab:customers'], ['Novi kupac', 'act:Novi kupac']] },
+  { g: [['lozink', 'sifr', 'prijav', 'login', 'odjav']], a: 'Korisnička imena su konstantin, stasa i marjan. Odjava je dugme gore desno (na telefonu u meniju sa tri crtice). Za promenu lozinke javi Konstantinu.', b: [] },
+];
+const BOT_CHIPS = { overview: ['Šta je hitno?', 'Prihod ovog meseca', 'Šta fali na stanju?'], orders: ['Šta čeka obradu?', 'Nova porudžbina', 'Prihod ove nedelje'], products: ['Šta fali na stanju?', 'Najprodavanije', 'Novi komad'], returns: ['Koji povrati kasne?', 'Link forme za povrat'], customers: ['Najbolji kupci', 'Novi kod za popust'], posts: ['Objave ove nedelje', 'Nova ideja za objavu'], promos: ['Aktivne promocije', 'Nova promocija'], packaging: ['Šta fali od pakovanja?'], notes: ['Nova beleška'], ads: ['Potrošnja ovog meseca'], history: ['Vrati obrisano'] };
+const bfold = (s) => ' ' + fold(s).replace(/[^a-z0-9#\s]/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+const bhas = (t, arr) => arr.some(w => t.includes(' ' + w));
+const bstem = (w) => w.length > 6 ? w.slice(0, -2) : w.length > 4 ? w.slice(0, -1) : w;
+const BOT_STOP = new Set('idi otvori otvoris vodi odvedi prebaci me mi na u do gde su je sekcija sekciju sekcije stranica stranicu prikazi pokazi hocu zelim daj molim te da vidim vidi pogledaj ajde hajde odi mozes li bi pa i a the'.split(' '));
+
+const bpl = (n, one, few, many) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };
+function botBtn(label, go) { return `<button class="bt-btn" data-bgo="${esc(go)}">${esc(label)}</button>`; }
+function botItem(title, sub, go, ic) { return `<button class="bt-item" data-bgo="${esc(go)}"><span class="bi-ic">${ic || '›'}</span><span class="bi-t"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span></button>`; }
+function botPush(from, html, btns) { BOT.msgs.push({ from, html, btns: btns || [], at: Date.now() }); botSave(); renderBot(); }
+function botSay(html, btns) { botPush('bot', html, btns); }
+
+function renderBot() {
+  const box = $('botMsgs'); if (!box) return;
+  box.innerHTML = BOT.msgs.map((m, i) => `<div class="bt-msg ${m.from}" ${i === BOT.msgs.length - 1 ? 'data-last="1"' : ''}>
+      ${m.from === 'bot' ? '<span class="bt-av">H</span>' : ''}
+      <div class="bt-bub">${m.html}${m.btns?.length ? `<div class="bt-btns">${m.btns.map(b => botBtn(b[0], b[1])).join('')}</div>` : ''}</div></div>`).join('')
+    + (BOT.typing ? '<div class="bt-msg bot"><span class="bt-av">H</span><div class="bt-bub bt-typing"><i></i><i></i><i></i></div></div>' : '');
+  box.scrollTop = box.scrollHeight;
+  const chips = (BOT_CHIPS[state.tab] || []).concat(['Kako radi ova sekcija?', 'Zapelo mi je']);
+  $('botChips').innerHTML = [...new Set(chips)].slice(0, 5).map(c => `<button data-bsay="${esc(c)}">${esc(c)}</button>`).join('');
+}
+function openBot() {
+  if (!state.user) return;
+  closeNav(); closeCmd();
+  if (!BOT.msgs.length) botGreet();
+  BOT.open = true; document.body.classList.add('bot-open'); renderBot();
+  if (window.matchMedia('(min-width: 981px)').matches) setTimeout(() => $('botInput').focus(), 60);
+}
+function closeBot() { BOT.open = false; document.body.classList.remove('bot-open'); $('botInput').blur(); }
+function botGreet() {
+  const u = PEOPLE[who()], h = new Date().getHours();
+  const hi = h < 11 ? 'Dobro jutro' : h < 18 ? 'Zdravo' : 'Dobro veče';
+  botSay(`${hi}, ${esc(u ? u.voc : state.user.display)}! Ja sam asistent za CRM. Napiši gde hoćeš da odeš ili šta ti treba, npr. <i>„porudžbine“</i>, <i>„šta fali na stanju“</i>, <i>„prihod ove nedelje“</i>, <i>„zabeleži pozvati dobavljača“</i> ili <i>„kako da vratim obrisano“</i>.`,
+    [['Šta je hitno?', 'say:Šta je hitno?'], ['Šta umeš?', 'say:Šta umeš?']]);
+}
+async function botAsk(raw) {
+  raw = String(raw || '').trim(); if (!raw) return;
+  botPush('me', esc(raw));
+  BOT.typing = true; renderBot();
+  await new Promise(r => setTimeout(r, 280 + Math.min(500, raw.length * 8)));
+  BOT.typing = false;
+  try { await botAnswer(raw); } catch (e) { console.error(e); botSay('Ups, nešto je puklo kod mene. Probaj ponovo ili pošalji pitanje timu.', [['Pošalji timu', 'team:' + raw]]); }
+}
+
+/* ---- odgovori iz podataka ---- */
+function botPeriod(t) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const D = (d) => { const x = new Date(today); x.setDate(x.getDate() + d); return x; };
+  const end = new Date(today.getTime() + 864e5 - 1), wd = (today.getDay() + 6) % 7;
+  let m;
+  if (bhas(t, ['juce', 'jucer'])) return { from: D(-1), to: new Date(today.getTime() - 1), label: 'juče', preset: '7' };
+  if (bhas(t, ['danas'])) return { from: today, to: end, label: 'danas', preset: '7' };
+  if (/prosl\w* (nedelj|sedmic)/.test(t)) return { from: D(-wd - 7), to: new Date(D(-wd).getTime() - 1), label: 'prošle nedelje', preset: '30' };
+  if (/ (ove|ova|ovu|ovoj|ova) (nedelj|sedmic)|nedeljn/.test(t)) return { from: D(-wd), to: end, label: 'ove nedelje', preset: '7' };
+  if (/prosl\w* mesec/.test(t)) return { from: new Date(today.getFullYear(), today.getMonth() - 1, 1), to: new Date(new Date(today.getFullYear(), today.getMonth(), 1).getTime() - 1), label: 'prošlog meseca', preset: 'lastmonth' };
+  if (/ (ovog|ovaj|ovom|ovo) mesec|mesecn/.test(t)) return { from: new Date(today.getFullYear(), today.getMonth(), 1), to: end, label: 'ovog meseca', preset: 'month' };
+  if ((m = t.match(/ (\d{1,3}) ?(dan|d )/))) { const N = Math.max(1, +m[1]); return { from: D(-(N - 1)), to: end, label: `u poslednjih ${N} dana`, preset: N <= 7 ? '7' : N <= 30 ? '30' : '90' }; }
+  if (bhas(t, ['godin'])) return { from: new Date(today.getFullYear(), 0, 1), to: end, label: 'ove godine', preset: '0' };
+  if (bhas(t, ['ukupno', 'sve vreme', 'od pocetka', 'ikad', 'otkad'])) return { from: new Date(2000, 0, 1), to: end, label: 'od početka', preset: '0', all: true };
+  return { from: D(-29), to: end, label: 'u poslednjih 30 dana', preset: '30' };
+}
+function botStats(from, to) {
+  const inR = (iso) => { const d = new Date(iso); return d >= from && d <= to; };
+  const os = state.orders.filter(o => !NO_REVENUE.includes(o.status) && inR(o.created_at));
+  const T = os.map(totals);
+  const rev = T.reduce((a, x) => a + x.revenue, 0), profit = T.reduce((a, x) => a + x.profit, 0), pieces = T.reduce((a, x) => a + x.pieces, 0);
+  const ads = state.ads.filter(a => inR(a.day + 'T12:00:00')).reduce((a, x) => a + n(x.spend), 0);
+  return { n: os.length, rev, profit, pieces, ads, net: profit - ads, basket: os.length ? rev / os.length : 0, rets: state.rets.filter(r => r.type !== 'feedback' && inR(r.created_at)).length };
+}
+function botDelta(cur, prev) { if (!prev) return ''; const d = cur / prev - 1; if (!isFinite(d)) return ''; const p = Math.round(d * 100); return ` <span class="bt-d ${p >= 0 ? 'up' : 'down'}">${p >= 0 ? '▲' : '▼'} ${Math.abs(p)}%</span>`; }
+function botMetric(t) {
+  const P = botPeriod(t), S = botStats(P.from, P.to);
+  const len = P.to - P.from + 1, prev = P.all ? null : botStats(new Date(P.from.getTime() - len), new Date(P.from.getTime() - 1));
+  const M = bhas(t, ['neto']) ? 'net' : bhas(t, ['profit', 'zarad', 'dobit', 'marz']) ? 'profit' : bhas(t, ['reklam', 'potros', 'spend', 'budzet', 'roas']) ? 'ads' : bhas(t, ['korp', 'prosec']) ? 'basket' : bhas(t, ['komad', 'komada']) && bhas(t, ['prodat', 'prodal', 'prodaj']) ? 'sold' : bhas(t, ['porudzbin', 'narudzbin', 'koliko smo prodal', 'prodaj']) ? 'orders' : bhas(t, ['prihod', 'promet', 'uprihod', 'zaradil', 'para', 'novac', 'keš', 'kes']) ? 'revenue' : 'all';
+  const row = (lbl, v, pv, isMoney) => `<div class="bt-kv"><span>${lbl}</span><b>${isMoney ? rsd(v) : v}${prev ? botDelta(v, pv) : ''}</b></div>`;
+  const map = { revenue: ['Prihod', S.rev, prev?.rev, 1], profit: ['Bruto profit', S.profit, prev?.profit, 1], ads: ['Reklame', S.ads, prev?.ads, 1], net: ['Neto posle reklama', S.net, prev?.net, 1], basket: ['Prosečna korpa', S.basket, prev?.basket, 1], orders: ['Porudžbine', S.n, prev?.n, 0], sold: ['Prodato komada', S.pieces, prev?.pieces, 0] };
+  const head = M !== 'all' ? `<div class="bt-big">${map[M][3] ? rsd(map[M][1]) : map[M][1]}${prev ? botDelta(map[M][1], map[M][2]) : ''}</div><div class="bt-cap">${map[M][0]} ${P.label}</div>` : `<div class="bt-cap" style="margin-bottom:6px">Brojke ${P.label}</div>`;
+  const rest = ['revenue', 'orders', 'profit', 'ads', 'net'].filter(k => k !== M).map(k => row(...map[k])).join('');
+  const roas = S.ads ? `<div class="bt-kv"><span>ROAS</span><b>${(S.rev / S.ads).toFixed(2).replace('.', ',')}</b></div>` : '';
+  const key = M === 'all' ? 'revenue' : M === 'sold' ? 'sold' : M;
+  botSay(`${head}<div class="bt-kvs">${rest}${roas}</div>${prev && /bt-d/.test(head + rest) ? '<div class="bt-note">▲▼ u odnosu na isti broj dana pre toga</div>' : ''}${!S.n && !S.ads ? '<div class="bt-note">Za ovaj period još nema unetih porudžbina.</div>' : ''}`,
+    [['Otvori grafikon', `metric:${key}:${P.preset}`], ['Pregled', 'tab:overview']]);
+}
+function botUrgent() {
+  const lines = [];
+  const todo = state.orders.filter(o => TODO.includes(o.status));
+  if (todo.length) { const c = (s) => todo.filter(o => o.status === s).length; lines.push(botItem(`${todo.length} ${bpl(todo.length, 'porudžbina čeka', 'porudžbine čekaju', 'porudžbina čeka')} obradu`, [c('new') && `nove: ${c('new')}`, c('confirmed') && `potvrđene: ${c('confirmed')}`, c('packed') && `spakovane, za slanje: ${c('packed')}`].filter(Boolean).join(' · '), 'oview:pipeline', '◫')); }
+  const open = state.rets.filter(r => !retClosed(r) && r.type !== 'feedback');
+  const late = open.filter(r => retDue(r)?.level === 'late'), soon = open.filter(r => retDue(r)?.level === 'soon'), fresh = state.rets.filter(r => r.status === 'new');
+  if (late.length || soon.length || fresh.length) lines.push(botItem(`Povrati: ${[late.length && `${late.length} kasni`, soon.length && `${soon.length} ističe uskoro`, fresh.length && `${fresh.length} ${bpl(fresh.length, 'nova prijava', 'nove prijave', 'novih prijava')}`].filter(Boolean).join(', ')}`, 'Zakonski rok: 8 dana odgovor, 14 dana povrat novca', late.length ? 'say:Koji povrati kasne?' : 'tab:returns', '↩'));
+  const al = stockAlerts();
+  if (al.length) { const out = al.filter(x => x.v.stock <= 0).length; lines.push(botItem(`${al.length} ${bpl(al.length, 'veličina', 'veličine', 'veličina')} pri kraju zaliha`, out ? `${out} rasprodato` : 'vreme za dopunu', 'say:Šta fali na stanju?', '▤')); }
+  const pa = packAlerts();
+  if (pa.length) lines.push(botItem(`Pakovanje: ${pa.length} ispod minimuma`, pa.slice(0, 3).map(x => esc(x.name)).join(', '), 'say:Šta fali od pakovanja?', '▣'));
+  const tom = new Date(); tom.setHours(23, 59, 59, 999); tom.setDate(tom.getDate() + 1);
+  const pl = state.posts.filter(p => p.publish_at && p.status !== 'published');
+  const lateP = pl.filter(p => new Date(p.publish_at) < new Date(new Date().setHours(0, 0, 0, 0))), nextP = pl.filter(p => { const d = new Date(p.publish_at); return d >= new Date(new Date().setHours(0, 0, 0, 0)) && d <= tom; });
+  if (lateP.length || nextP.length) lines.push(botItem(`Objave: ${[nextP.length && `${nextP.length} danas/sutra`, lateP.length && `${lateP.length} kasni`].filter(Boolean).join(', ')}`, nextP.slice(0, 2).map(p => esc(p.title)).join(', '), 'say:Objave ove nedelje', '▶'));
+  const pins = state.notes.filter(x => x.pinned && !x.done);
+  if (pins.length) lines.push(botItem(`${pins.length} ${bpl(pins.length, 'zakačena beleška', 'zakačene beleške', 'zakačenih beleški')}`, esc(pins[0].body.slice(0, 60)), 'tab:notes', '📌'));
+  const chg = state.nfState ? CHG_TABS.reduce((a, t) => a + chgUnread(t), 0) : 0;
+  if (chg) lines.push(botItem(`${chg} ${bpl(chg, 'tuđa promena koju', 'tuđe promene koje', 'tuđih promena koje')} nisi ${PEOPLE[who()]?.f ? 'videla' : 'video'}`, 'crveni brojevi u meniju', 'say:Šta je novo?', '●'));
+  if (!lines.length) return botSay('Sve je čisto. Nema porudžbina za obradu, povrata sa rokom ni upozorenja za zalihe. ✨', [['Prihod ovog meseca', 'say:Prihod ovog meseca']]);
+  botSay(`<div class="bt-cap" style="margin-bottom:6px">Ovo traži pažnju:</div><div class="bt-list">${lines.join('')}</div>`);
+}
+function botStock() {
+  const al = stockAlerts();
+  if (!al.length) return botSay(`Sve veličine imaju više od ${lowT()} kom. Nema upozorenja.`, [['Garderoba', 'tab:products']]);
+  botSay(`<div class="bt-cap" style="margin-bottom:6px">${al.length} ${bpl(al.length, 'veličina', 'veličine', 'veličina')} pri kraju (granica ≤ ${lowT()} kom):</div><div class="bt-list">${al.slice(0, 8).map(({ p, v }) => botItem(`${esc(p.name)} · ${esc(v.size)}${v.color ? ' ' + esc(v.color) : ''}`, v.stock <= 0 ? '<span class="bt-red">rasprodato</span>' : `ostalo ${v.stock} kom${p.supplier ? ' · ' + esc(p.supplier) : ''}`, 'ref:product:' + p.id, v.stock <= 0 ? '!' : v.stock)).join('')}</div>${al.length > 8 ? `<div class="bt-note">i još ${al.length - 8}…</div>` : ''}`, [['Sva upozorenja', 'tab:products']]);
+}
+function botPack() {
+  const pa = packAlerts();
+  if (!pa.length) return botSay('Pakovanja ima dovoljno, ništa nije ispod minimuma.', [['Pakovanje', 'tab:packaging']]);
+  botSay(`<div class="bt-list">${pa.map(x => botItem(esc(x.name), x.stock <= 0 ? '<span class="bt-red">nema na stanju</span>' : `ostalo ${x.stock} (min ${x.min_stock})${x.supplier ? ' · ' + esc(x.supplier) : ''}`, 'ref:pack:' + x.id, '▣')).join('')}</div>`, [['Pakovanje', 'tab:packaging']]);
+}
+function botReturns(t) {
+  const open = state.rets.filter(r => !retClosed(r) && r.type !== 'feedback').sort((a, b) => (retDue(a)?.days ?? 99) - (retDue(b)?.days ?? 99));
+  if (!open.length) return botSay('Nema otvorenih povrata ni reklamacija. 👌', [['Povrati', 'tab:returns'], ['Kopiraj link forme', 'copyform']]);
+  const late = open.filter(r => retDue(r)?.level === 'late').length;
+  botSay(`${t && bhas(t, ['kasn']) && !late ? '<div style="margin-bottom:8px">Nijedan povrat ne kasni ✓</div>' : ''}<div class="bt-cap" style="margin-bottom:6px">${open.length} ${bpl(open.length, 'otvoren slučaj', 'otvorena slučaja', 'otvorenih slučajeva')}${late ? `, <span class="bt-red">${late} kasni</span>` : ''}:</div><div class="bt-list">${open.slice(0, 7).map(r => { const d = retDue(r); return botItem(`${esc(r.case_no)} · ${esc(r.customer_name)}`, `${RT[r.type]} · ${ST[r.status] || r.status}${d ? ` · <span class="${d.level === 'late' ? 'bt-red' : d.level === 'soon' ? 'bt-amber' : ''}">${dueText(d)}</span>` : ''}`, 'ref:ret:' + r.id, '↩'); }).join('')}</div>`, [['Povrati', 'tab:returns']]);
+}
+function botPosts(t) {
+  const P = bhas(t, ['danas']) ? botPeriod(t) : (() => { const f = new Date(); f.setHours(0, 0, 0, 0); const e = new Date(f); e.setDate(e.getDate() + 7); e.setMilliseconds(-1); return { from: f, to: e, label: 'u narednih 7 dana' }; })();
+  const list = state.posts.filter(p => p.publish_at && new Date(p.publish_at) >= P.from && new Date(p.publish_at) <= P.to).sort((a, b) => a.publish_at.localeCompare(b.publish_at));
+  const late = state.posts.filter(p => p.publish_at && p.status !== 'published' && new Date(p.publish_at) < new Date(new Date().setHours(0, 0, 0, 0)));
+  const noDate = state.posts.filter(p => !p.publish_at && p.status !== 'published').length;
+  const items = late.map(p => botItem(esc(p.title), `<span class="bt-red">kasni · ${fmtDate(p.publish_at)}</span> · ${ST[p.status]}`, 'ref:post:' + p.id, '!')).concat(list.map(p => botItem(esc(p.title), `${fmtDT(p.publish_at)} · ${ST[p.status]}${p.format ? ' · ' + (FMT[p.format] || '') : ''}`, 'ref:post:' + p.id, '▶')));
+  if (!items.length) return botSay(`Nema zakazanih objava ${P.label}.${noDate ? ` Imaš ${noDate} ideja bez datuma.` : ''}`, [['Nova ideja za objavu', 'act:Nova ideja za objavu'], ['Kalendar', 'pview:calendar']]);
+  botSay(`${bhas(t, ['kasn']) && !late.length ? '<div style="margin-bottom:8px">Nijedna objava ne kasni ✓</div>' : ''}<div class="bt-cap" style="margin-bottom:6px">Objave ${P.label}:</div><div class="bt-list">${items.slice(0, 8).join('')}</div>${noDate ? `<div class="bt-note">${noDate} ${bpl(noDate, 'ideja još nema', 'ideje još nemaju', 'ideja još nema')} datum.</div>` : ''}`, [['Kalendar', 'pview:calendar']]);
+}
+function botPromos() {
+  const act = state.promos.filter(p => promoStatus(p) === 'active'), plan = state.promos.filter(p => promoStatus(p) === 'planned');
+  if (!act.length && !plan.length) return botSay('Trenutno nema aktivnih ni zakazanih promocija.', [['Nova promocija', 'act:Nova promocija'], ['Istorija promocija', 'tab:promos']]);
+  botSay(`<div class="bt-list">${act.map(p => botItem(esc(p.name), `aktivna do ${p.ends_at ? fmtDate(p.ends_at) : 'daljnjeg'}${p.code ? ' · kod ' + esc(p.code) : ''}`, 'ref:promo:' + p.id, '％')).concat(plan.map(p => botItem(esc(p.name), `počinje ${fmtDate(p.starts_at)}${p.code ? ' · kod ' + esc(p.code) : ''}`, 'ref:promo:' + p.id, '◷'))).join('')}</div>`, [['Promocije', 'tab:promos']]);
+}
+function botTopCustomers() {
+  const list = state.customers.map(c => ({ c, s: custStats(c) })).filter(x => x.s.count > 0).sort((a, b) => b.s.spend - a.s.spend).slice(0, 6);
+  if (!list.length) return botSay('Još nema kupaca sa porudžbinama.', [['Kupci', 'tab:customers']]);
+  botSay(`<div class="bt-cap" style="margin-bottom:6px">Najbolji kupci po potrošnji:</div><div class="bt-list">${list.map((x, i) => botItem(esc(x.c.name), `${rsd(x.s.spend)} · ${x.s.count} ${bpl(x.s.count, 'kupovina', 'kupovine', 'kupovina')}${x.s.tier ? ' · ' + esc(x.s.tier.name) : ''}`, 'ref:cust:' + x.c.id, i + 1)).join('')}</div>`, [['Loyalty klub', 'cview:club']]);
+}
+function botBest(t) {
+  const P = botPeriod(t), agg = {};
+  state.items.forEach(i => { const o = order(i.order_id); if (!o || NO_REVENUE.includes(o.status)) return; const d = new Date(o.created_at); if (d < P.from || d > P.to) return; const pid = i.product_id || variant(i.variant_id)?.product_id; if (!pid) return; (agg[pid] = agg[pid] || { q: 0, r: 0 }); agg[pid].q += i.qty; agg[pid].r += i.qty * n(i.unit_price); });
+  const list = Object.entries(agg).sort((a, b) => b[1].q - a[1].q).slice(0, 6);
+  if (!list.length) return botSay(`Nema prodaje ${P.label}.`, [['Garderoba', 'tab:products']]);
+  botSay(`<div class="bt-cap" style="margin-bottom:6px">Najprodavanije ${P.label}:</div><div class="bt-list">${list.map(([pid, v], i) => botItem(esc(product(pid)?.name || 'komad'), `${v.q} kom · ${rsd(v.r)}`, 'ref:product:' + pid, i + 1)).join('')}</div>`);
+}
+function botChanges() {
+  const rows = state.audit.filter(a => chgCounts(a)).sort((a, b) => b.id - a.id).map(a => ({ a, d: describeAudit(a) })).filter(x => x.d).slice(0, 8);
+  if (!rows.length) return botSay('Niko drugi još nije ništa menjao u poslednje vreme.', [['Istorija promena', 'bell:history']]);
+  botSay(`<div class="bt-cap" style="margin-bottom:6px">Poslednje tuđe promene:</div><div class="bt-list">${rows.map(x => { const p = PEOPLE[x.a.actor]; return botItem(`${esc(p ? p.name : 'Forma')}`, `${x.d.text} · ${relTime(x.a.at)}`, x.d.open ? 'open:' + x.d.open : 'bell:history', `<span class="n-av ${p ? x.a.actor : 'system'}">${esc((p ? p.name : 'F').charAt(0))}</span>`); }).join('')}</div>`, [['Sve promene', 'bell:history']]);
+}
+function botSections(t) {
+  const words = t.trim().split(' ').filter(w => w.length >= 3 && !BOT_STOP.has(w));
+  let best = null;
+  SECTIONS.forEach(s => {
+    const nm = fold(s.name).split(/\s+/), kw = fold(s.kw).split(/\s+/);
+    let sc = 0;
+    words.forEach(w => { const st = bstem(w); const hit = (x) => x === w || (st.length >= 4 && (x.startsWith(st) || (x.length >= 4 && st.startsWith(x)))); if (nm.some(hit)) sc += 3; else if (kw.some(hit)) sc += 1; });
+    if (sc && (!best || sc > best.sc)) best = { s, sc };
+  });
+  return best;
+}
+function botFaq(t) {
+  let best = null;
+  BOT_FAQ.forEach((f, i) => { if (f.g.every(gr => bhas(t, gr))) { const sc = f.g.length * 10 - i * 0.01; if (!best || sc > best.sc) best = { f, sc }; } });
+  return best?.f;
+}
+function botSearch(raw) {
+  const qs = fold(raw).replace(/\b(nadji|pronadji|trazi|potrazi|gde je|gde su|pokazi|otvori|kupca|kupac|kupcu|porudzbinu|porudzbina|porudzbine|komad|proizvod|mi|molim)\b/g, ' ').replace(/[?!.,:#]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (qs.length < 2) return [];
+  let res = cmdItems(qs).filter(x => !['Sekcije', 'Akcije', 'Filter', 'Nedavno'].includes(x.grp) && x.score >= 20);
+  if (!res.length) qs.split(' ').filter(w => w.length >= 3).forEach(w => { res = res.concat(cmdItems(w).filter(x => !['Sekcije', 'Akcije', 'Filter', 'Nedavno'].includes(x.grp) && x.score >= 40)); });
+  const seen = new Set(); return res.filter(x => { const k = x.k + x.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 6);
+}
+const BOT_NEW = [
+  [['porudzbin', 'narudzbin', 'order'], 'Nova porudžbina'], [['kupc', 'kupac', 'klijent'], 'Novi kupac'], [['kod', 'kupon', 'popust'], 'Novi kod za popust'],
+  [['komad', 'proizvod', 'artik', 'garderob', 'haljin', 'majic', 'suknj', 'pantalon'], 'Novi komad'], [['objav', 'reel', 'post', 'video', 'tiktok'], 'Nova ideja za objavu'],
+  [['promocij', 'akcij', 'kampanj'], 'Nova promocija'], [['povrat', 'reklamac', 'zamen'], 'Nova prijava povrata (ručno)'], [['predlog za sajt', 'sajt'], 'Novi predlog za sajt'],
+  [['pakovanj', 'ambalaz', 'kutij'], 'Novi predlog za pakovanje'], [['dogadja', 'istorij', 'prekretnic', 'milestone'], 'Zabeleži događaj u istoriji'], [['beles', 'note'], 'Nova beleška'],
+];
+async function botAnswer(raw) {
+  const t = bfold(raw);
+  const isHow = /^ (kako|gde|sta znac\w*|zasto|objasni|uputstv|help|pomoc za|mogu li|moze li|jel moze|jel mogu|je l) /.test(t) || / (kako da|kako se|kako mogu|ne mogu|ne znam|ne radi|zapel|zaglav|gde se|gde da) /.test(t) || /\?\s*$/.test(raw) && / (kako|gde|zasto) /.test(t);
+  let m;
+  // pozdrav / zahvalnost
+  if (/^ (cao|zdravo|hej|pozdrav|dobro jutro|dobar dan|dobro vece|hello|hi|e) $/.test(t)) return botGreet();
+  if (/^ (hvala|hvala ti|super|top|odlicno|ok|okej|u redu|vazi|bravo)( puno| ti)? $/.test(t)) return botSay('Nema na čemu! Tu sam kad zatreba. 🙂');
+  // brza beleška
+  if ((m = raw.match(/^\s*(zabele[zž]i|zapi[sš]i|podseti( nas| me)?|bele[sš]ka\s*:|note\s*:)\s*[:\-–]?\s*([\s\S]{2,})$/i))) return botNote(m[3].trim());
+  if (/^ (zabelezi|zapisi|beleska|nova beleska) $/.test(t)) return botRun('act:Nova beleška', 'Otvorio sam brzu belešku.');
+  // pitanje timu
+  if ((m = raw.match(/^\s*(pitaj tim|poruka timu|javi timu|pitanje za tim|pitaj ostale)\s*[:\-–]?\s*([\s\S]{2,})$/i))) return botTeam(m[2].trim());
+  if (/^ (zapelo mi je|zapeo sam|zapela sam|zaglavio sam|zaglavila sam|treba mi pomoc|pomozi|ne znam sta da radim) $/.test(t)) return botSay('Nema frke. Napiši mi šta pokušavaš da uradiš (npr. <i>„kako da vratim obrisano“</i> ili <i>„ne radi dugme sačuvaj“</i>) i vodiću te. Ako je nešto pokvareno, napiši <i>„pitaj tim: …“</i> i poslaću poruku svima kao belešku.', [['Kako radi ova sekcija?', 'say:Kako radi ova sekcija?'], ['Ne radi mi nešto', 'say:Ne radi mi nešto']]);
+  // šta umeš
+  if (/^ (pomoc|help|sta umes|sta znas|sta mozes|sta sve umes|sta sve mozes|komande|\?) $/.test(t)) return botSay(`<div class="bt-cap" style="margin-bottom:6px">Evo šta umem:</div><ul class="bt-ul"><li><b>Vodim te</b> bilo gde: <i>„povrati“, „loyalty klub“, „arhiva“</i></li><li><b>Otvaram forme</b>: <i>„nova porudžbina“, „dodaj kupca“, „nova promocija“</i></li><li><b>Pišem beleške odmah</b>: <i>„zabeleži naručiti kutije“</i></li><li><b>Brojke</b>: <i>„prihod ove nedelje“, „profit prošlog meseca“, „koliko porudžbina danas“</i></li><li><b>Stanje</b>: <i>„šta je hitno“, „šta fali na stanju“, „koji povrati kasne“, „objave ove nedelje“, „najbolji kupci“, „najprodavanije“, „šta je novo“</i></li><li><b>Tražim</b>: ime kupca, broj porudžbine, naziv komada</li><li><b>Pomoć</b>: <i>„kako da…“</i>, a ako zapne, <i>„pitaj tim: …“</i></li></ul>`);
+  // pomoć za sekciju
+  if (bhas(t, ['kako radi ova', 'ova sekcija', 'ovoj sekciji', 'ovde radi', 'sta je ovo', 'sta ovde'])) { const s = SECTIONS.find(x => x.tab === state.tab); return botSay(`<div class="bt-cap">${esc(s?.name || '')}</div>${BOT_TIPS[state.tab] || ''}`, (BOT_CHIPS[state.tab] || []).slice(0, 2).map(c => [c, 'say:' + c])); }
+  // linkovi
+  if (bhas(t, ['link'])) { if (bhas(t, ['povrat', 'form', 'reklamac'])) return botRun('copyform', `Link forme za povrate je kopiran:<br><span class="bt-code">${esc(FORM_URL())}</span>`, [['Otvori formu', 'openform']]); if (bhas(t, ['sajt', 'shop'])) return botSay(`Link sajta: <a href="${esc(siteUrl())}" target="_blank" rel="noopener">${esc(siteUrl().replace(/^https?:\/\//, ''))}</a>`, [['Sajt sekcija', 'tab:site']]); }
+  // uputstva
+  if (isHow) { const f = botFaq(t); if (f) return botSay(f.a, f.b.map(b => b[1] === 'teamlast' ? [b[0], 'team:' + raw] : b)); }
+  // podaci
+  const metricWords = ['prihod', 'promet', 'profit', 'zarad', 'dobit', 'neto', 'roas', 'korp', 'koliko smo', 'kako idemo', 'kako stojimo', 'brojk', 'statistik', 'prodali', 'prodaja', 'potrosil', 'potrosnj', 'spend', 'budzet'];
+  const newVerb = /^ (nov|nova|novi|novu|dodaj|dodati|unesi|napravi|kreiraj|ubaci|upisi) /.test(t) || / (hocu da dodam|da dodam|da unesem|da napravim) /.test(t);
+  if (!newVerb && (bhas(t, metricWords) || (bhas(t, ['koliko']) && bhas(t, ['porudzbin', 'narudzbin', 'komada', 'prodat', 'reklam'])))) return botMetric(t);
+  if (bhas(t, ['sta je novo', 'ima novo', 'nesto novo', 'novosti', 'ko je menja', 'ko je sta', 'sta se desilo'])) return botChanges();
+  if (bhas(t, ['hitno', 'sta treba da', 'sta imam', 'sta ima', 'obavez', 'todo', 'to do', 'plan za danas', 'pregled dana', 'rezime', 'sazetak', 'sta ceka', 'ceka obradu', 'za obradu', 'sta je danas'])) return botUrgent();
+  if (!newVerb && bhas(t, ['pakovanj', 'ambalaz', 'kutij', 'stiker']) && bhas(t, ['fali', 'nestaj', 'nema', 'malo', 'ostalo', 'zalih', 'stanj', 'minimum', 'naruc'])) return botPack();
+  if (!newVerb && bhas(t, ['fali', 'nestaj', 'pri kraju', 'rasprod', 'dopun', 'zalih', 'stanje', 'na stanju', 'nema na', 'malo robe'])) return botStock();
+  if (!newVerb && bhas(t, ['povrat', 'reklamac', 'zamen', 'zalb']) && bhas(t, ['kasn', 'otvor', 'koliko', 'ima', 'status', 'rok', 'koji', 'koje', 'sta je sa', 'cek'])) return botReturns(t);
+  if (!newVerb && bhas(t, ['objav', 'reel', 'post', 'sadrzaj', 'snimanj', 'tiktok']) && bhas(t, ['danas', 'sutra', 'nedelj', 'zakazan', 'kasn', 'sledec', 'koje', 'sta ', 'kad', 'uskoro', 'narednih'])) return botPosts(t);
+  if (!newVerb && bhas(t, ['promocij', 'akcij']) && bhas(t, ['aktivn', 'traje', 'koje', 'sta ', 'ima', 'trenutn', 'sad'])) return botPromos();
+  if (bhas(t, ['najbolj', 'top ', 'najvis', 'najvern', 'najcesc']) && bhas(t, ['kupc', 'kupac', 'kupil', 'klijent', 'musterij'])) return botTopCustomers();
+  if (bhas(t, ['najprodavan', 'najvise prod', 'sta se prodaje', 'sta se najvise', 'bestseler', 'hit ', 'top komad', 'top proizvod'])) return botBest(t);
+  if (bhas(t, ['sta je novo', 'promen', 'ko je menja', 'ko je sta', 'izmen', 'novosti', 'sta se desava', 'sta se desilo'])) return botChanges();
+  // arhiva, pretraga, odjava
+  if (bhas(t, ['arhiv', 'vrati obrisan', 'obrisan'])) return botRun('archive', 'Otvorio sam arhivu obrisanog. Klikni <b>Vrati</b> pored stavke.');
+  if (/^ (pretraga|trazi|search|ctrl k) $/.test(t)) return botRun('cmd', 'Otvorio sam pretragu.');
+  if (/^ (odjavi me|odjava|logout|izloguj me) $/.test(t)) return botSay('Sigurno hoćeš da se odjaviš?', [['Da, odjavi me', 'logout']]);
+  if (bhas(t, ['otvori sajt', 'shopify'])) return botRun('site', 'Otvorio sam HARIZMA sajt u novom tabu.');
+  // nova stavka
+  if (newVerb) { const hit = BOT_NEW.find(([ws]) => bhas(t, ws)); if (hit) return botRun('act:' + hit[1], `Otvorio sam: <b>${esc(hit[1])}</b>.`); }
+  // posebni pogledi
+  if (bhas(t, ['loyalty', 'klub', 'poeni', 'nivoi'])) return botRun('cview:club', 'Evo Loyalty kluba.');
+  if (bhas(t, ['popusti', 'kodovi', 'kupon'])) return botRun('cview:codes', 'Evo kodova za popust.');
+  if (bhas(t, ['kalendar'])) return botRun('pview:calendar', 'Evo kalendara objava.');
+  if (bhas(t, ['pipeline'])) return botRun('oview:pipeline', 'Evo pipeline pogleda porudžbina.');
+  if (bhas(t, ['sta da popravimo', 'utisci', 'feedback'])) return botRun('rview:insights', 'Evo šta kupci kažu i šta da popravimo.');
+  // broj porudžbine / slučaja
+  if ((m = raw.match(/#?\s*([A-Za-z]{0,3}-?\d{3,})/))) { const r = botSearch(m[1]); if (r.length === 1) return botRun(`ref:${r[0].k}:${r[0].id}`, `Otvaram <b>${esc(r[0].title)}</b>.`); if (r.length) return botSay(`<div class="bt-list">${r.map(x => botItem(esc(x.title), esc(x.sub || ''), `ref:${x.k}:${x.id}`, x.ic)).join('')}</div>`); }
+  // sekcije
+  const sec = botSections(t);
+  const res = botSearch(raw);
+  if (sec && (sec.sc >= 3 || !res.length)) {
+    const tip = BOT_TIPS[sec.s.tab];
+    botRun('tab:' + sec.s.tab, null);
+    return botSay(`Otvorio sam sekciju <b>${esc(sec.s.name)}</b>.${tip ? `<div class="bt-note">${tip}</div>` : ''}`, (BOT_CHIPS[sec.s.tab] || []).slice(0, 2).map(c => [c, 'say:' + c]));
+  }
+  if (res.length) return botSay(`<div class="bt-cap" style="margin-bottom:6px">Našao sam:</div><div class="bt-list">${res.map(x => botItem(esc(x.title), esc(x.sub || ''), `ref:${x.k}:${x.id}`, x.ic)).join('')}</div>`);
+  const f = botFaq(t); if (f) return botSay(f.a, f.b.map(b => b[1] === 'teamlast' ? [b[0], 'team:' + raw] : b));
+  botSay('Nisam siguran šta tražiš. Probaj ime sekcije, ime kupca, broj porudžbine ili pitanje tipa <i>„kako da…“</i>. Ako je nešto zapelo, pošalji pitanje timu.', [['Šta umeš?', 'say:Šta umeš?'], ['Pošalji pitanje timu', 'team:' + raw]]);
+}
+
+/* ---- akcije ---- */
+async function botNote(body) {
+  try {
+    const r = await q(sb.from('h_notes').insert({ area: 'general', author: who(), body, pinned: false }).select().single());
+    state.notes.push(r); renderAll();
+    botSay(`Zabeleženo za ceo tim ✓<div class="bt-quote">${esc(body)}</div>`, [['Poništi', 'undonote:' + r.id], ['Zakači 📌', 'pinnote:' + r.id], ['Beleške', 'tab:notes']]);
+  } catch (e) { botSay('Nisam uspeo da sačuvam belešku: ' + esc(e.message || e)); }
+}
+async function botTeam(text) {
+  try {
+    const r = await q(sb.from('h_notes').insert({ area: 'general', author: who(), body: '❓ Zapelo: ' + text, pinned: true }).select().single());
+    state.notes.push(r); renderAll();
+    botSay('Poslato timu ✓ Pitanje je zakačeno u Beleškama i svi dobijaju obaveštenje.', [['Beleške', 'tab:notes'], ['Poništi', 'undonote:' + r.id]]);
+  } catch (e) { botSay('Nisam uspeo da pošaljem: ' + esc(e.message || e)); }
+}
+const botMobile = () => window.matchMedia('(max-width: 980px)').matches;
+function botView(segId, view, tab) { if (state.tab !== tab) setTab(tab); const b = document.querySelector(`#${segId} [data-view="${view}"]`); if (b) b.click(); }
+async function botRun(go, reply, btns) {
+  const [k, ...rest] = go.split(':'); const arg = rest.join(':');
+  if (k === 'say') { if (!BOT.open) openBot(); return botAsk(arg); }
+  const modal = ['act', 'ref', 'open', 'metric', 'bell', 'cmd', 'logout'].includes(k);
+  const nav = ['tab', 'cview', 'oview', 'pview', 'rview', 'archive'].includes(k);
+  if (modal || (nav && botMobile())) closeBot();
+  if (k === 'tab') setTab(arg);
+  else if (k === 'act') { const a = ACTIONS.find(x => x.name === arg); if (a) await a.run(); }
+  else if (k === 'ref' || k === 'open') {
+    if (arg.startsWith('tab:')) setTab(arg.slice(4));
+    else { const [rk, id] = arg.split(':'); if (BOT_TAB_FOR[rk] && state.tab !== BOT_TAB_FOR[rk]) setTab(BOT_TAB_FOR[rk]); if (rk === 'cust') openCustModal(id); else if (rk === 'code') openCodeModal(id); else openRef(arg); }
+  }
+  else if (k === 'metric') { const [mk, pr] = arg.split(':'); openMetric(mk, pr); }
+  else if (k === 'cview') botView('custViewSeg', arg, 'customers');
+  else if (k === 'oview') botView('orderViewSeg', arg, 'orders');
+  else if (k === 'pview') botView('postViewSeg', arg, 'posts');
+  else if (k === 'rview') botView('retViewSeg', arg, 'returns');
+  else if (k === 'archive') { setTab('history'); showArchive(); }
+  else if (k === 'bell') nfMenu(arg);
+  else if (k === 'cmd') openCmd();
+  else if (k === 'site') window.open(siteUrl(), '_blank');
+  else if (k === 'openform') window.open(FORM_URL(), '_blank');
+  else if (k === 'copyform') { try { await navigator.clipboard.writeText(FORM_URL()); toast('Link kopiran ✓'); } catch (e) { prompt('Kopiraj:', FORM_URL()); } }
+  else if (k === 'logout') { await sb.auth.signOut(); location.reload(); }
+  else if (k === 'team') return botTeam(arg);
+  else if (k === 'undonote') { try { await softDelete('h_notes', arg); state.notes = state.notes.filter(x => x.id !== arg); renderAll(); botSay('Beleška je povučena.'); } catch (e) { fail(e); } return; }
+  else if (k === 'pinnote') { try { await q(sb.from('h_notes').update({ pinned: true }).eq('id', arg)); const x = state.notes.find(y => y.id === arg); if (x) x.pinned = true; renderAll(); botSay('Zakačeno na vrh 📌'); } catch (e) { fail(e); } return; }
+  if (reply) botSay(reply, btns);
+}
+function botBind() {
+  $('botFab').addEventListener('click', () => BOT.open ? closeBot() : openBot());
+  $('botClose').addEventListener('click', closeBot);
+  $('botOv').addEventListener('click', closeBot);
+  $('botClear').addEventListener('click', () => { BOT.msgs = []; botGreet(); });
+  $('botForm').addEventListener('submit', (e) => { e.preventDefault(); const v = $('botInput').value; $('botInput').value = ''; botAsk(v); });
+  $('botPanel').addEventListener('click', (e) => {
+    const g = e.target.closest('[data-bgo]'); if (g) { e.stopPropagation(); return botRun(g.dataset.bgo); }
+    const s = e.target.closest('[data-bsay]'); if (s) { e.stopPropagation(); return botAsk(s.dataset.bsay); }
+  });
+  $('botInput').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeBot(); } });
+  document.addEventListener('keydown', (e) => {
+    if (!state.user || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || e.target.isContentEditable) return;
+    if (e.key === '?') { e.preventDefault(); BOT.open ? closeBot() : openBot(); }
+    else if (e.key === 'Escape' && BOT.open) closeBot();
+  });
+  ACTIONS.push({ name: 'Asistent (pomoć i prečice)', kw: 'chat bot pomoc help asistent', ic: '✦', run: () => openBot() });
+}
+function botStart() { botLoad(); document.body.classList.add('bot-ready'); }
+
 async function enterApp(user) {
   state.user = user;
   $('userName').textContent = user.display;
@@ -2775,6 +3136,7 @@ async function enterApp(user) {
   $('loginPage').style.display = 'none';
   $('app').style.display = 'block';
   chgInit(); renderTray(); chgEnter(state.tab); renderChgBadges(); startLive();
+  botStart();
   setInterval(renderTray, 60000);
   countUp($('v-' + state.tab));
   setInterval(async () => {
@@ -2784,7 +3146,7 @@ async function enterApp(user) {
 }
 
 (async function init() {
-  bindEvents();
+  bindEvents(); botBind();
   const { data } = await sb.auth.getSession();
   if (data.session) { try { await enterApp(userFrom(data.session.user)); } catch (e) { console.error(e); } }
 })();
