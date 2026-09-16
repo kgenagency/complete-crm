@@ -19,7 +19,21 @@ const NO_REVENUE = ['cancelled', 'returned'];
 const TODO = ['new', 'confirmed', 'packed'];
 const CH = { shopify: 'Shopify', instagram: 'Instagram', other: 'Drugo' };
 const PAY = { cod: 'Pouzeće', card: 'Kartica', bank: 'Uplata' };
-const LOW_STOCK = 1;
+const POST_ST = [
+  { key: 'idea', label: 'Ideja' }, { key: 'scripting', label: 'Scenario' }, { key: 'filming', label: 'Snimanje' },
+  { key: 'editing', label: 'Montaža' }, { key: 'scheduled', label: 'Zakazano' }, { key: 'published', label: 'Objavljeno' },
+];
+const IDEA_ST = [
+  { key: 'proposed', label: 'Predlog' }, { key: 'approved', label: 'Odobreno' }, { key: 'in_progress', label: 'U radu' },
+  { key: 'done', label: 'Gotovo' }, { key: 'rejected', label: 'Odbijeno' },
+];
+const FMT = { reel: 'Reel', carousel: 'Carousel', story: 'Story', post: 'Post', tiktok: 'TikTok' };
+const PRIO = { high: 'Visok', medium: 'Srednji', low: 'Nizak' };
+const CAT = { dizajn: 'Dizajn', tekst: 'Tekst', funkcija: 'Funkcija', proizvod: 'Proizvod', materijal: 'Materijal', ostalo: 'Ostalo' };
+const PEOPLE = { konstantin: { name: 'Konstantin', voc: 'Konstantine', f: false }, stasa: { name: 'Staša', voc: 'Staša', f: true }, marjan: { name: 'Marjan', voc: 'Marjane', f: false } };
+const SHOP_URL = 'https://wegmk4-wf.myshopify.com';
+Object.assign(ST, Object.fromEntries(POST_ST.map(s => [s.key, s.label])), Object.fromEntries(IDEA_ST.map(s => [s.key, s.label])));
+const lowT = () => +LS.get('crm_low', '2');
 
 const LS = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } },
@@ -29,6 +43,10 @@ const LS = {
 let state = {
   user: null,
   products: [], variants: [], orders: [], items: [], ads: [], acts: [],
+  posts: [], ideas: [], story: [], notes: [], pack: [],
+  postView: LS.get('crm_pview', 'board'), postFmt: 'all', siteCat: 'all', who: 'all',
+  calMonth: (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(),
+  editPostId: null, editIdeaId: null, ideaArea: 'site', editPackId: null,
   tab: LS.get('crm_tab', 'overview'),
   period: +LS.get('crm_period', '30'),
   orderView: LS.get('crm_oview', 'table'),
@@ -85,15 +103,20 @@ function userFrom(u) { const un = u.email.split('@')[0]; return { username: un, 
 
 /* ---------------- data ---------------- */
 async function loadData() {
-  const [products, variants, orders, items, ads, acts] = await Promise.all([
+  const [products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack] = await Promise.all([
     q(sb.from('h_products').select('*').order('created_at', { ascending: false })),
     q(sb.from('h_variants').select('*')),
     q(sb.from('h_orders').select('*').order('created_at', { ascending: false })),
     q(sb.from('h_order_items').select('*')),
     q(sb.from('h_ad_spend').select('*').order('day', { ascending: false })),
     q(sb.from('h_activities').select('*').order('created_at', { ascending: true })),
+    q(sb.from('h_posts').select('*').order('publish_at', { ascending: true, nullsFirst: false })),
+    q(sb.from('h_site_ideas').select('*').order('created_at', { ascending: false })),
+    q(sb.from('h_story_sections').select('*').order('position')),
+    q(sb.from('h_notes').select('*').order('created_at', { ascending: true })),
+    q(sb.from('h_packaging').select('*').order('created_at')),
   ]);
-  Object.assign(state, { products, variants, orders, items, ads, acts });
+  Object.assign(state, { products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack });
 }
 
 async function log(fields) {
@@ -108,8 +131,15 @@ async function adjustStock(orderItems, sign) {
     if (!v) continue;
     const ns = v.stock + sign * it.qty;
     await q(sb.from('h_variants').update({ stock: ns }).eq('id', v.id));
+    await stockAlert(v, v.stock, ns);
     v.stock = ns;
   }
+}
+async function stockAlert(v, from, to) {
+  const t = lowT(), p = product(v.product_id);
+  if (!p) return;
+  if (to <= 0 && from > 0) await log({ product_id: p.id, type: 'alert', body: `${p.name} ${v.size} je rasprodat` });
+  else if (to <= t && from > t) await log({ product_id: p.id, type: 'alert', body: `${p.name} ${v.size}: ostalo još ${to} kom` });
 }
 
 async function setOrderStatus(o, ns) {
@@ -174,7 +204,7 @@ function renderOverview() {
   $('todoList').innerHTML = todo.slice().reverse().map(o => `<div class="list-row" data-order="${o.id}"><span><b>${esc(o.order_no)}</b> · ${esc(o.customer_name)}</span>${pill(o.status)}</div>`).join('') || '<div class="kb-empty">Sve je obrađeno.</div>';
 
   const low = [];
-  state.products.filter(p => p.status === 'active').forEach(p => variantsOf(p.id).forEach(v => { if (v.stock <= LOW_STOCK) low.push({ p, v }); }));
+  state.products.filter(p => p.status === 'active').forEach(p => variantsOf(p.id).forEach(v => { if (v.stock <= lowT()) low.push({ p, v }); }));
   $('lowCount').textContent = low.length;
   $('lowList').innerHTML = low.map(({ p, v }) => `<div class="list-row" data-goto="products"><span><b>${esc(p.name)}</b> · ${esc(v.size)}${v.color ? ' · ' + esc(v.color) : ''}</span><span class="num ${v.stock <= 0 ? 'neg' : ''}">${v.stock} kom</span></div>`).join('') || '<div class="kb-empty">Sve veličine imaju zalihu.</div>';
 
@@ -225,7 +255,7 @@ function renderOrders() {
   } else {
     $('kanban').innerHTML = STATUSES.map(s => {
       const col = list.filter(o => o.status === s.key);
-      return `<div class="kb-col" data-status="${s.key}">
+      return `<div class="kb-col" data-status="${s.key}" data-drop="order">
         <div class="kb-col-head"><span class="kb-col-title">${s.label}</span><span class="kb-col-count">${col.length}</span></div>
         <div class="kb-cards">${col.map(o => `<div class="kb-card is-organic" data-id="${o.id}" data-order="${o.id}">
           <div class="kb-card-head"><div class="kb-name">${esc(o.customer_name)}</div><b class="page-sub">${esc(o.order_no || '')}</b></div>
@@ -235,13 +265,15 @@ function renderOrders() {
   }
 }
 
-/* kanban drag (preuzeto iz KGEN CRM) */
+/* drag & drop (preuzeto iz KGEN CRM, uopšteno za sve table i kalendar) */
 let drag = null, justDragged = false;
+const DRAGGABLE = '.kb-card[data-id], .post-card, .idea-card, .cal-chip';
 function kbPointerDown(e) {
   if (e.button && e.button !== 0) return;
-  const card = e.target.closest('.kb-card'); if (!card) return;
+  const card = e.target.closest(DRAGGABLE); if (!card) return;
+  if (e.target.closest('button, a, input')) return;
   const isTouch = e.pointerType === 'touch';
-  drag = { id: card.dataset.id, card, sx: e.clientX, sy: e.clientY, moved: false, ready: !isTouch, ghost: null };
+  drag = { id: card.dataset.id, kind: card.dataset.kind || 'order', card, sx: e.clientX, sy: e.clientY, moved: false, ready: !isTouch, ghost: null };
   if (isTouch) drag.hold = setTimeout(() => { if (drag) { drag.ready = true; if (navigator.vibrate) navigator.vibrate(12); } }, 240);
   window.addEventListener('pointermove', kbPointerMove, { passive: false });
   window.addEventListener('pointerup', kbPointerUp);
@@ -263,11 +295,12 @@ function kbPointerMove(e) {
   drag.ghost.style.left = (e.clientX - drag.ox) + 'px';
   drag.ghost.style.top = (e.clientY - drag.oy) + 'px';
   const under = document.elementFromPoint(e.clientX, e.clientY);
-  const col = under && under.closest('.kb-col');
-  document.querySelectorAll('.kb-col').forEach(c => c.classList.toggle('drop-target', c === col));
-  drag.overCol = col;
-  const kb = $('kanban'), kr = kb.getBoundingClientRect();
-  if (e.clientX > kr.right - 60) kb.scrollLeft += 14; else if (e.clientX < kr.left + 60) kb.scrollLeft -= 14;
+  let zone = under && under.closest('[data-drop]');
+  if (zone && zone.dataset.drop !== drag.kind) zone = null;
+  document.querySelectorAll('[data-drop]').forEach(c => c.classList.toggle('drop-target', c === zone));
+  drag.over = zone;
+  const kb = drag.card.closest('.kanban');
+  if (kb) { const kr = kb.getBoundingClientRect(); if (e.clientX > kr.right - 60) kb.scrollLeft += 14; else if (e.clientX < kr.left + 60) kb.scrollLeft -= 14; }
   e.preventDefault();
 }
 function kbPointerUp() {
@@ -275,7 +308,10 @@ function kbPointerUp() {
   const d = drag; kbCleanup();
   if (!d.moved) return;
   justDragged = true; setTimeout(() => { justDragged = false; }, 80);
-  if (d.overCol && d.overCol.dataset.status) { const o = order(d.id); if (o) setOrderStatus(o, d.overCol.dataset.status); }
+  const z = d.over; if (!z) return;
+  if (d.kind === 'order') { const o = order(d.id); if (o) setOrderStatus(o, z.dataset.status); }
+  else if (d.kind === 'post') movePost(d.id, z);
+  else if (d.kind === 'idea') moveIdea(d.id, z.dataset.status);
 }
 function kbCleanup() {
   window.removeEventListener('pointermove', kbPointerMove);
@@ -283,7 +319,7 @@ function kbCleanup() {
   window.removeEventListener('pointercancel', kbPointerUp);
   if (drag) { if (drag.hold) clearTimeout(drag.hold); if (drag.ghost) drag.ghost.remove(); if (drag.card) drag.card.classList.remove('dragging'); }
   document.body.classList.remove('kb-dragging');
-  document.querySelectorAll('.kb-col').forEach(c => c.classList.remove('drop-target'));
+  document.querySelectorAll('.drop-target').forEach(c => c.classList.remove('drop-target'));
   drag = null;
 }
 
@@ -306,7 +342,7 @@ function renderProducts() {
     const vs = variantsOf(p.id);
     return `<tr data-product="${p.id}">
       <td><div class="prod-cell">${p.image_url ? `<img class="prod-thumb" src="${esc(p.image_url)}" alt="">` : '<div class="prod-thumb"></div>'}<div><div class="lead-name">${esc(p.name)}</div><div class="lead-social">${esc(p.category || '')}${p.supplier ? ' · ' + esc(p.supplier) : ''}</div></div></div></td>
-      <td><div class="sizes">${vs.map(v => `<span class="size-chip ${v.stock <= LOW_STOCK ? 'low' : ''}"><span class="sz">${esc(v.size)}${v.color ? ' ' + esc(v.color) : ''}</span><button data-stock="${v.id}" data-d="-1">−</button><span class="qty">${v.stock}</span><button data-stock="${v.id}" data-d="1">+</button></span>`).join('') || '<span class="page-sub">Dodaj veličine</span>'}</div></td>
+      <td><div class="sizes">${vs.map(v => `<span class="size-chip ${v.stock <= lowT() ? 'low' : ''}"><span class="sz">${esc(v.size)}${v.color ? ' ' + esc(v.color) : ''}</span><button data-stock="${v.id}" data-d="-1">−</button><span class="qty">${v.stock}</span><button data-stock="${v.id}" data-d="1">+</button></span>`).join('') || '<span class="page-sub">Dodaj veličine</span>'}</div></td>
       <td class="num">${rsd(p.buy_price)}</td>
       <td class="num">${rsd(p.sell_price)}${p.compare_price ? `<div class="page-sub"><s>${rsd(p.compare_price)}</s></div>` : ''}</td>
       <td class="num">${rsd(m)}<div class="page-sub">${n(p.sell_price) ? pct(m / n(p.sell_price)) : '—'} · ${n(p.buy_price) ? (n(p.sell_price) / n(p.buy_price)).toFixed(1) + 'x' : ''}</div></td>
@@ -320,6 +356,7 @@ async function bumpStock(vid, d) {
   try {
     await q(sb.from('h_variants').update({ stock: ns }).eq('id', vid));
     await log({ product_id: v.product_id, type: 'stock', body: `${product(v.product_id)?.name} ${v.size}: ${v.stock} → ${ns}` });
+    await stockAlert(v, v.stock, ns);
     v.stock = ns; renderAll();
   } catch (e) { fail(e); }
 }
@@ -477,7 +514,7 @@ function openOrderModal(id) {
   const o = id ? order(id) : null;
   state.editOrderId = id || null;
   $('omTitle').textContent = o ? `Izmena ${o.order_no}` : 'Nova porudžbina';
-  const def = { channel: 'instagram', payment: 'cod', shipping_price: LS.get('crm_ship_price', 0), shipping_cost: LS.get('crm_ship_cost', 0), packaging_cost: LS.get('crm_pack', 0), discount: 0 };
+  const def = { channel: 'instagram', payment: 'cod', shipping_price: LS.get('crm_ship_price', 0), shipping_cost: LS.get('crm_ship_cost', 0), packaging_cost: packCostPerOrder() || LS.get('crm_pack', 0), discount: 0 };
   Object.entries(OF).forEach(([el, f]) => { $(el).value = (o ? o[f] : def[f]) ?? ''; });
   $('itemRows').innerHTML = '';
   (o ? itemsOf(o.id) : [{}]).forEach(addItemRow);
@@ -515,6 +552,7 @@ async function saveOrder(e) {
       const rows = await q(sb.from('h_order_items').insert(its.map(i => ({ ...i, order_id: o.id }))).select());
       state.items.push(...rows);
       await adjustStock(rows, -1);
+      await usePackaging(o);
       await log({ order_id: o.id, type: 'system', body: `Porudžbina kreirana (${CH[o.channel]})` });
       LS.set('crm_ship_price', f.shipping_price); LS.set('crm_ship_cost', f.shipping_cost); LS.set('crm_pack', f.packaging_cost);
     }
@@ -605,20 +643,439 @@ async function deleteProduct() {
   $('prodModal').classList.remove('open'); renderAll();
 }
 
+/* ================= v2 sekcije ================= */
+const who = () => state.user.username;
+const personName = (k) => PEOPLE[k]?.name || k;
+function autosize(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
+function toLocalInput(iso) { if (!iso) return ''; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
+function boardCols(list, statuses, kind, cardFn, extraAttr = '') {
+  return statuses.map(st => {
+    const col = list.filter(x => x.status === st.key);
+    return `<div class="kb-col" data-status="${st.key}" data-drop="${kind}" ${extraAttr}>
+      <div class="kb-col-head"><span class="kb-col-title">${st.label}</span><span class="kb-col-count">${col.length}</span></div>
+      <div class="kb-cards">${col.map(cardFn).join('') || '<div class="kb-empty">Prevuci ovde</div>'}</div></div>`;
+  }).join('');
+}
+function commentsBlock(field, id) {
+  if (!id) return '';
+  const acts = state.acts.filter(a => a[field] === id);
+  return `<div class="sec-title">Komentari</div><div class="timeline">${acts.map(a => `<div class="t-item"><div class="t-icon ${a.type === 'comment' ? 'comment' : 'status'}">${a.type === 'comment' ? '✎' : '•'}</div>
+    <div class="t-content"><div class="t-meta"><b>${esc(a.author)}</b> · ${fmtDT(a.created_at)}</div>${a.type === 'comment' ? `<div class="t-body">${linkify(a.body)}</div>` : `<div class="t-status-line">${esc(a.body)}</div>`}</div></div>`).join('')}</div>
+    <div style="display:flex;gap:8px"><input class="inline-input" style="flex:1;width:auto" data-cfield="${field}" data-cid="${id}" placeholder="Napiši komentar i pritisni Enter"></div>`;
+}
+async function addComment(input) {
+  const body = input.value.trim(); if (!body) return;
+  try { await log({ [input.dataset.cfield]: input.dataset.cid, type: 'comment', body }); input.value = '';
+    if (input.dataset.cfield === 'post_id') $('poComments').innerHTML = commentsBlock('post_id', state.editPostId);
+    else $('siComments').innerHTML = commentsBlock('site_id', state.editIdeaId);
+  } catch (e) { fail(e); }
+}
+
+/* ---------- GARDEROBA: upozorenja + feed ---------- */
+function stockAlerts() {
+  const out = [];
+  state.products.filter(p => p.status === 'active').forEach(p => variantsOf(p.id).forEach(v => { if (v.stock <= lowT()) out.push({ p, v }); }));
+  return out.sort((a, b) => a.v.stock - b.v.stock);
+}
+function packAlerts() { return state.pack.filter(x => x.stock <= x.min_stock); }
+function renderGarderoba() {
+  const al = stockAlerts();
+  $('alertCount').textContent = al.length;
+  if (document.activeElement !== $('lowInput')) $('lowInput').value = lowT();
+  $('alerts').innerHTML = al.map(({ p, v }) => `<div class="alert ${v.stock <= 0 ? 'out' : ''}" data-product="${p.id}">
+    <div class="a-ic">${v.stock <= 0 ? '!' : v.stock}</div>
+    <div><div class="a-t">${esc(p.name)} · ${esc(v.size)}${v.color ? ' · ' + esc(v.color) : ''}</div>
+    <div class="a-s">${v.stock <= 0 ? 'Rasprodato. Dopuni ili sakrij sa sajta.' : `Ostalo još ${v.stock} kom. Vreme za dopunu.`}${p.supplier ? ' Dobavljač: ' + esc(p.supplier) : ''}</div></div></div>`).join('')
+    || '<div class="panel" style="grid-column:1/-1"><span class="page-sub">Nema upozorenja. Sve veličine imaju dovoljno robe.</span></div>';
+  const b = $('alertBadge'); b.style.display = al.length ? '' : 'none'; b.textContent = al.length;
+  const pb = $('packBadge'), pa = packAlerts().length; pb.style.display = pa ? '' : 'none'; pb.textContent = pa;
+
+  const rel = state.acts.filter(a => a.product_id || (a.order_id && (a.type === 'system' || (a.type === 'status' && a.body?.includes('roba'))))).slice(-40).reverse();
+  $('feed').innerHTML = rel.map((a, i) => {
+    const o = a.order_id ? order(a.order_id) : null;
+    const cls = a.type === 'alert' ? 'alert' : a.type === 'stock' ? 'stock' : o ? 'order' : '';
+    const txt = o ? `${esc(o.order_no || '')} ${esc(o.customer_name)}: ${esc(a.body)} <span class="page-sub">(${itemsSummary(o)})</span>` : esc(a.body);
+    return `<div class="f-row" style="animation-delay:${Math.min(i, 12) * 25}ms" ${o ? `data-order="${o.id}"` : a.product_id ? `data-product="${a.product_id}"` : ''}><span class="f-dot ${cls}"></span><div style="flex:1">${txt}</div><span class="page-sub" style="white-space:nowrap">${esc(a.author)} · ${fmtDT(a.created_at)}</span></div>`;
+  }).join('') || '<div class="kb-empty">Još ništa. Ovde se vidi svaka promena zaliha, prodaja i upozorenje.</div>';
+}
+
+/* ---------- OBJAVE ---------- */
+function filteredPosts() {
+  const qq = state.q.toLowerCase();
+  return state.posts.filter(p => (state.postFmt === 'all' || p.format === state.postFmt) &&
+    (!qq || [p.title, p.concept, p.hook, p.caption, p.assignee].join(' ').toLowerCase().includes(qq)));
+}
+function postDate(p, short) {
+  if (!p.publish_at) return '<span class="p-date">bez datuma</span>';
+  const d = new Date(p.publish_at), late = d < new Date() && p.status !== 'published';
+  return `<span class="p-date ${late ? 'late' : ''}">📅 ${d.toLocaleDateString('sr-Latn-RS', { weekday: short ? undefined : 'short', day: 'numeric', month: 'short' })} ${d.toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' })}${late ? ' · kasni' : ''}</span>`;
+}
+function postCard(p) {
+  const pr = p.product_id ? product(p.product_id) : null;
+  return `<div class="post-card" data-kind="post" data-id="${p.id}" data-post="${p.id}">
+    <div class="kb-card-head"><div class="kb-name">${esc(p.title)}</div><span class="fmt ${p.format}">${FMT[p.format] || p.format}</span></div>
+    ${p.hook ? `<div class="kb-social">„${esc(p.hook)}“</div>` : ''}
+    <div class="kb-meta">${postDate(p)}${p.assignee ? `<span class="by ${Object.keys(PEOPLE).find(k => PEOPLE[k].name === p.assignee) || 'other'}" style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700">${esc(p.assignee)}</span>` : ''}${pr ? `<span class="cat">${esc(pr.name)}</span>` : ''}</div>
+    ${(p.drive_link || p.post_url) ? `<div class="p-links">${p.drive_link ? `<a class="drive" href="${esc(p.drive_link)}" target="_blank" rel="noopener">▲ Drive snimak</a>` : ''}${p.post_url ? `<a href="${esc(p.post_url)}" target="_blank" rel="noopener">↗ Objava</a>` : ''}</div>` : ''}
+  </div>`;
+}
+function renderPosts() {
+  const list = filteredPosts();
+  $('postCount').textContent = `${list.length} objava`;
+  document.querySelectorAll('#postViewSeg button').forEach(b => b.classList.toggle('active', b.dataset.view === state.postView));
+  $('postBoard').style.display = state.postView === 'board' ? 'flex' : 'none';
+  $('postCal').style.display = state.postView === 'calendar' ? '' : 'none';
+  $('postList').style.display = state.postView === 'list' ? '' : 'none';
+  // sledećih 7 dana
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  $('weekStrip').innerHTML = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(t0); d.setDate(d.getDate() + i);
+    const ds = dayStr(d), ps = state.posts.filter(p => p.publish_at && dayStr(new Date(p.publish_at)) === ds);
+    return `<div class="ws-day ${i === 0 ? 'today' : ''}" data-drop="post" data-date="${ds}"><div class="ws-d">${i === 0 ? 'Danas' : d.toLocaleDateString('sr-Latn-RS', { weekday: 'short', day: 'numeric' })}</div>
+      ${ps.map(p => `<div class="cal-chip ${p.status === 'published' ? 'published' : ''}" data-kind="post" data-id="${p.id}" data-post="${p.id}" style="margin-top:6px">${esc(p.title)}</div>`).join('') || '<div class="ws-empty">Ništa zakazano</div>'}</div>`;
+  }).join('');
+  if (state.postView === 'board') $('postBoard').innerHTML = boardCols(list, POST_ST, 'post', postCard);
+  if (state.postView === 'calendar') renderCalendar(list);
+  if (state.postView === 'list') {
+    const sorted = list.slice().sort((a, b) => (a.publish_at || '9') < (b.publish_at || '9') ? -1 : 1);
+    $('postTbody').innerHTML = sorted.map(p => `<tr data-post="${p.id}"><td>${postDate(p)}</td><td><div class="lead-name">${esc(p.title)}</div><div class="lead-social">${esc(p.concept || '')}</div></td><td><span class="fmt ${p.format}">${FMT[p.format]}</span></td><td>${pill(p.status)}</td><td>${esc(p.assignee || '—')}</td><td>${p.drive_link ? `<a href="${esc(p.drive_link)}" target="_blank" rel="noopener">Drive ↗</a>` : '<span class="page-sub">nema</span>'}</td></tr>`).join('')
+      || `<tr><td colspan="6" class="empty">Još nema ideja. Klikni „Nova ideja“.</td></tr>`;
+  }
+}
+function renderCalendar(list) {
+  const m = state.calMonth, first = new Date(m), start = new Date(first);
+  start.setDate(1 - ((first.getDay() + 6) % 7));
+  const today = dayStr(new Date());
+  let cells = '';
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const ds = dayStr(d), ps = list.filter(p => p.publish_at && dayStr(new Date(p.publish_at)) === ds);
+    cells += `<div class="cal-day ${d.getMonth() !== m.getMonth() ? 'other' : ''} ${ds === today ? 'today' : ''}" data-drop="post" data-date="${ds}">
+      <div class="cal-n">${d.getDate()}</div>
+      ${ps.map(p => `<div class="cal-chip ${p.status === 'published' ? 'published' : ''}" data-kind="post" data-id="${p.id}" data-post="${p.id}" title="${esc(p.title)}">${FMT[p.format]?.[0] || ''} · ${esc(p.title)}</div>`).join('')}
+      <button class="cal-add" data-newpost="${ds}" title="Dodaj za ovaj dan">+</button></div>`;
+  }
+  const noDate = list.filter(p => !p.publish_at && p.status !== 'published');
+  $('postCal').innerHTML = `<div class="cal-head"><button class="icon-btn" data-cal="-1">‹</button><b>${m.toLocaleDateString('sr-Latn-RS', { month: 'long', year: 'numeric' })}</b><button class="icon-btn" data-cal="1">›</button></div>
+    <div class="cal-grid">${['pon', 'uto', 'sre', 'čet', 'pet', 'sub', 'ned'].map(x => `<div class="cal-dow">${x}</div>`).join('')}${cells}</div>
+    ${noDate.length ? `<div style="padding:12px 16px;border-top:1px solid var(--line)"><div class="sec-title" style="margin-top:0">Bez datuma, prevuci na dan</div><div style="display:flex;gap:6px;flex-wrap:wrap">${noDate.map(p => `<div class="cal-chip" data-kind="post" data-id="${p.id}" data-post="${p.id}">${esc(p.title)}</div>`).join('')}</div></div>` : ''}`;
+}
+async function movePost(id, zone) {
+  const p = state.posts.find(x => x.id === id); if (!p) return;
+  const patch = {};
+  if (zone.dataset.date) {
+    const old = p.publish_at ? new Date(p.publish_at) : null;
+    const [y, mo, d] = zone.dataset.date.split('-').map(Number);
+    const nd = new Date(y, mo - 1, d, old ? old.getHours() : 18, old ? old.getMinutes() : 0);
+    patch.publish_at = nd.toISOString();
+    if (p.status === 'idea' || p.status === 'scripting') { /* datum ne menja fazu */ }
+  } else if (zone.dataset.status) patch.status = zone.dataset.status;
+  try {
+    await q(sb.from('h_posts').update(patch).eq('id', id));
+    const body = patch.status ? `Status: ${ST[p.status]} → ${ST[patch.status]}` : `Datum objave: ${fmtDT(patch.publish_at)}`;
+    Object.assign(p, patch);
+    await log({ post_id: id, type: 'status', body });
+    renderAll(); toast(`${p.title}: ${patch.status ? ST[patch.status] : fmtDate(patch.publish_at)}`);
+  } catch (e) { fail(e); }
+}
+const POF = { po_title: 'title', po_concept: 'concept', po_hook: 'hook', po_format: 'format', po_status: 'status', po_assignee: 'assignee', po_product: 'product_id', po_drive: 'drive_link', po_caption: 'caption', po_url: 'post_url', po_views: 'views', po_likes: 'likes', po_saves: 'saves' };
+function openPostModal(id, dateStr) {
+  const p = id ? state.posts.find(x => x.id === id) : null;
+  state.editPostId = id || null;
+  $('poTitle').textContent = p ? p.title : 'Nova ideja za objavu';
+  $('po_status').innerHTML = POST_ST.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
+  $('po_product').innerHTML = '<option value="">—</option>' + state.products.filter(x => x.status !== 'archived').map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+  Object.entries(POF).forEach(([el, f]) => { $(el).value = p ? (p[f] ?? '') : ({ format: 'reel', status: 'idea', assignee: state.user.display }[f] ?? ''); });
+  $('po_date').value = p ? toLocalInput(p.publish_at) : (dateStr ? dateStr + 'T18:00' : '');
+  $('poDelete').style.display = p ? '' : 'none';
+  $('poComments').innerHTML = commentsBlock('post_id', state.editPostId);
+  $('postModal').classList.add('open');
+  $('po_title').focus();
+}
+async function savePost(e) {
+  e.preventDefault();
+  const f = {};
+  Object.entries(POF).forEach(([el, k]) => { const v = $(el).value.trim(); f[k] = v === '' ? null : v; });
+  ['views', 'likes', 'saves'].forEach(k => f[k] = f[k] === null ? null : +f[k]);
+  f.publish_at = $('po_date').value ? new Date($('po_date').value).toISOString() : null;
+  if (f.drive_link && !/^https?:\/\//.test(f.drive_link)) return toast('Drive link mora da počinje sa https://');
+  try {
+    if (state.editPostId) {
+      const old = state.posts.find(x => x.id === state.editPostId);
+      const r = await q(sb.from('h_posts').update(f).eq('id', old.id).select().single());
+      if (old.status !== r.status) await log({ post_id: r.id, type: 'status', body: `Status: ${ST[old.status]} → ${ST[r.status]}` });
+      Object.assign(old, r);
+    } else {
+      f.created_by = state.user.display;
+      const r = await q(sb.from('h_posts').insert(f).select().single());
+      state.posts.push(r);
+      await log({ post_id: r.id, type: 'system', body: 'Ideja dodata' });
+    }
+    $('postModal').classList.remove('open'); renderAll(); toast('Objava sačuvana ✓');
+  } catch (err) { fail(err); }
+}
+async function deletePost() {
+  if (!confirm('Obrisati ovu objavu?')) return;
+  try { await q(sb.from('h_posts').delete().eq('id', state.editPostId)); state.posts = state.posts.filter(x => x.id !== state.editPostId); $('postModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
+}
+
+/* ---------- SAJT i predlozi za pakovanje ---------- */
+function ideaCard(i) {
+  const voted = (i.votes || []).includes(who());
+  return `<div class="idea-card" data-kind="idea" data-id="${i.id}" data-idea="${i.id}">
+    <div class="kb-card-head"><div class="kb-name">${esc(i.title)}</div><span class="prio ${i.priority}">${PRIO[i.priority]}</span></div>
+    ${i.description ? `<div class="kb-social" style="white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(i.description)}</div>` : ''}
+    ${i.image_url ? `<img src="${esc(i.image_url)}" alt="">` : ''}
+    <div class="kb-meta"><span class="cat">${CAT[i.category] || i.category}</span><span class="cat">· ${esc(i.created_by || '')}</span>
+      <button class="vote ${voted ? 'on' : ''}" data-vote="${i.id}" style="margin-left:auto" title="${(i.votes || []).map(personName).join(', ')}">▲ ${(i.votes || []).length}</button></div>
+  </div>`;
+}
+function ideasFor(area) {
+  const qq = state.q.toLowerCase();
+  return state.ideas.filter(i => i.area === area && (area !== 'site' || state.siteCat === 'all' || i.category === state.siteCat) &&
+    (!qq || [i.title, i.description].join(' ').toLowerCase().includes(qq)))
+    .sort((a, b) => ({ high: 0, medium: 1, low: 2 }[a.priority] - { high: 0, medium: 1, low: 2 }[b.priority]) || (b.votes || []).length - (a.votes || []).length);
+}
+function renderSite() {
+  const l = ideasFor('site');
+  $('siteCount').textContent = `${l.length} predloga`;
+  $('siteLink').href = SHOP_URL;
+  $('siteBoard').innerHTML = boardCols(l, IDEA_ST, 'idea', ideaCard);
+}
+async function moveIdea(id, status) {
+  const i = state.ideas.find(x => x.id === id); if (!i || i.status === status) return;
+  try {
+    await q(sb.from('h_site_ideas').update({ status }).eq('id', id));
+    await log({ site_id: id, type: 'status', body: `Status: ${ST[i.status]} → ${ST[status]}` });
+    i.status = status; renderAll(); toast(`${i.title} → ${ST[status]}`);
+  } catch (e) { fail(e); }
+}
+async function vote(id) {
+  const i = state.ideas.find(x => x.id === id); if (!i) return;
+  const v = new Set(i.votes || []); v.has(who()) ? v.delete(who()) : v.add(who());
+  try { const votes = [...v]; await q(sb.from('h_site_ideas').update({ votes }).eq('id', id)); i.votes = votes; renderAll(); } catch (e) { fail(e); }
+}
+const SIF = { si_title: 'title', si_desc: 'description', si_cat: 'category', si_prio: 'priority', si_status: 'status', si_link: 'link' };
+function openIdeaModal(id, area) {
+  const i = id ? state.ideas.find(x => x.id === id) : null;
+  state.editIdeaId = id || null; state.ideaArea = i ? i.area : area;
+  $('siTitle').textContent = i ? i.title : (state.ideaArea === 'packaging' ? 'Novi predlog za pakovanje' : 'Novi predlog za sajt');
+  $('si_status').innerHTML = IDEA_ST.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
+  Object.entries(SIF).forEach(([el, f]) => { $(el).value = i ? (i[f] ?? '') : ({ category: state.ideaArea === 'packaging' ? 'dizajn' : (state.siteCat !== 'all' ? state.siteCat : 'dizajn'), priority: 'medium', status: 'proposed' }[f] ?? ''); });
+  $('si_file').value = '';
+  $('siDelete').style.display = i ? '' : 'none';
+  $('siComments').innerHTML = commentsBlock('site_id', state.editIdeaId);
+  $('siteModal').classList.add('open');
+  $('si_title').focus();
+}
+async function saveIdea(e) {
+  e.preventDefault();
+  const f = {};
+  Object.entries(SIF).forEach(([el, k]) => { const v = $(el).value.trim(); f[k] = v === '' ? null : v; });
+  try {
+    const file = $('si_file').files[0];
+    if (file) f.image_url = await uploadImage(file, 'ideas');
+    if (state.editIdeaId) {
+      const old = state.ideas.find(x => x.id === state.editIdeaId);
+      const r = await q(sb.from('h_site_ideas').update(f).eq('id', old.id).select().single());
+      if (old.status !== r.status) await log({ site_id: r.id, type: 'status', body: `Status: ${ST[old.status]} → ${ST[r.status]}` });
+      Object.assign(old, r);
+    } else {
+      Object.assign(f, { area: state.ideaArea, created_by: state.user.display, votes: [who()] });
+      const r = await q(sb.from('h_site_ideas').insert(f).select().single());
+      state.ideas.unshift(r);
+    }
+    $('siteModal').classList.remove('open'); renderAll(); toast('Predlog sačuvan ✓');
+  } catch (err) { fail(err); }
+}
+async function deleteIdea() {
+  if (!confirm('Obrisati predlog?')) return;
+  try { await q(sb.from('h_site_ideas').delete().eq('id', state.editIdeaId)); state.ideas = state.ideas.filter(x => x.id !== state.editIdeaId); $('siteModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
+}
+
+/* ---------- PAKOVANJE ---------- */
+const packCostPerOrder = () => state.pack.reduce((a, x) => a + x.per_order * n(x.unit_price), 0);
+function renderPackaging() {
+  const per = state.pack.filter(x => x.per_order > 0);
+  const missing = per.filter(x => x.unit_price == null).length;
+  const canShip = per.length ? Math.max(0, Math.min(...per.map(x => Math.floor(x.stock / x.per_order)))) : 0;
+  const worth = state.pack.reduce((a, x) => a + x.stock * n(x.unit_price), 0);
+  $('kpiPack').innerHTML = stat('Trošak pakovanja po paketu', rsd(packCostPerOrder()), missing ? `<b>${missing}</b> stavki bez cene` : 'sve stavke imaju cenu') +
+    stat('Paketa možemo da spakujemo', canShip, 'sa trenutnim materijalom') +
+    stat('Materijal na stanju', rsd(worth), `${state.pack.length} stavki`) +
+    stat('Predlozi', ideasFor('packaging').filter(i => !['done', 'rejected'].includes(i.status)).length, 'otvoreni');
+  const al = packAlerts();
+  $('packAlerts').innerHTML = al.map(x => `<div class="alert ${x.stock <= 0 ? 'out' : ''}" data-pack="${x.id}"><div class="a-ic">${x.stock <= 0 ? '!' : x.stock}</div>
+    <div><div class="a-t">${esc(x.name)}</div><div class="a-s">${x.stock <= 0 ? 'Nema na stanju.' : `Ostalo ${x.stock} kom (granica ${x.min_stock}).`} ${x.supplier ? 'Poruči kod: ' + esc(x.supplier) : ''}</div></div></div>`).join('');
+  $('packTbody').innerHTML = state.pack.map(x => `<tr data-pack="${x.id}">
+    <td><div class="lead-name">${esc(x.name)}</div><div class="lead-social">${esc(x.kind)}${x.note ? ' · ' + esc(x.note) : ''}</div></td>
+    <td>${x.link ? `<a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.supplier || 'link')}</a>` : esc(x.supplier || '—')}</td>
+    <td class="num">${x.unit_price != null ? rsd(x.unit_price) : '<span class="hint warn">upiši cenu</span>'}</td>
+    <td class="num">${x.per_order || '—'}</td>
+    <td><span class="size-chip ${x.stock <= x.min_stock ? 'low' : ''}"><button data-pstock="${x.id}" data-d="-1">−</button><span class="qty">${x.stock}</span><button data-pstock="${x.id}" data-d="1">+</button><button data-pstock="${x.id}" data-d="50" title="Stigla nova tura">+50</button></span></td>
+    <td class="num page-sub">min ${x.min_stock}</td></tr>`).join('');
+  const l = ideasFor('packaging');
+  $('packIdeaCount').textContent = `${l.length} predloga`;
+  $('packBoard').innerHTML = boardCols(l, IDEA_ST, 'idea', ideaCard);
+}
+async function bumpPack(id, d) {
+  const x = state.pack.find(p => p.id === id); if (!x) return;
+  const ns = Math.max(0, x.stock + d);
+  try {
+    await q(sb.from('h_packaging').update({ stock: ns }).eq('id', id));
+    await log({ packaging_id: id, type: 'stock', body: `${x.name}: ${x.stock} → ${ns}` });
+    x.stock = ns; renderAll();
+  } catch (e) { fail(e); }
+}
+async function usePackaging(o) {
+  for (const x of state.pack.filter(p => p.per_order > 0)) {
+    const ns = Math.max(0, x.stock - x.per_order);
+    await q(sb.from('h_packaging').update({ stock: ns }).eq('id', x.id));
+    if (ns <= x.min_stock && x.stock > x.min_stock) await log({ packaging_id: x.id, type: 'alert', body: `${x.name}: ostalo još ${ns}` });
+    x.stock = ns;
+  }
+}
+const PAF = { pa_name: 'name', pa_kind: 'kind', pa_sup: 'supplier', pa_link: 'link', pa_price: 'unit_price', pa_stock: 'stock', pa_min: 'min_stock', pa_per: 'per_order', pa_note: 'note' };
+function openPackModal(id) {
+  const x = id ? state.pack.find(p => p.id === id) : null;
+  state.editPackId = id || null;
+  $('paTitle').textContent = x ? x.name : 'Novi materijal';
+  Object.entries(PAF).forEach(([el, f]) => { $(el).value = x ? (x[f] ?? '') : ({ kind: 'kutija', stock: 0, min_stock: 10, per_order: 1 }[f] ?? ''); });
+  $('paDelete').style.display = x ? '' : 'none';
+  $('packModal').classList.add('open');
+}
+async function savePack(e) {
+  e.preventDefault();
+  const f = {};
+  Object.entries(PAF).forEach(([el, k]) => { const v = $(el).value.trim(); f[k] = v === '' ? null : v; });
+  f.unit_price = f.unit_price === null ? null : n(f.unit_price);
+  ['stock', 'min_stock', 'per_order'].forEach(k => f[k] = parseInt(f[k]) || 0);
+  try {
+    if (state.editPackId) { const r = await q(sb.from('h_packaging').update(f).eq('id', state.editPackId).select().single()); Object.assign(state.pack.find(p => p.id === r.id), r); }
+    else state.pack.push(await q(sb.from('h_packaging').insert(f).select().single()));
+    $('packModal').classList.remove('open'); renderAll(); toast('Sačuvano ✓');
+  } catch (err) { fail(err); }
+}
+async function deletePack() {
+  if (!confirm('Obrisati materijal?')) return;
+  try { await q(sb.from('h_packaging').delete().eq('id', state.editPackId)); state.pack = state.pack.filter(p => p.id !== state.editPackId); $('packModal').classList.remove('open'); renderAll(); } catch (e) { fail(e); }
+}
+
+/* ---------- BRAND STORY ---------- */
+const storyTimers = {};
+function renderStory() {
+  const doc = $('storyDoc');
+  if (doc.contains(document.activeElement) && doc.children.length === state.story.length) return; // ne diraj dok neko kuca
+  doc.innerHTML = state.story.map((s, i) => `<div class="story-sec" data-sec="${s.id}" style="animation-delay:${i * 60}ms">
+    <input class="st-title" value="${esc(s.title)}" data-f="title">
+    <textarea data-f="body" rows="2" placeholder="Piši ovde…">${esc(s.body)}</textarea>
+    <div class="story-meta">${s.updated_by ? `izmenio/la ${esc(s.updated_by)} · ${fmtDT(s.updated_at)}` : ''}<button data-delsec="${s.id}">obriši poglavlje</button></div></div>`).join('')
+    || '<div class="page-sub">Dodaj prvo poglavlje.</div>';
+  doc.querySelectorAll('textarea').forEach(autosize);
+}
+function storyInput(e) {
+  const sec = e.target.closest('[data-sec]'); if (!sec) return;
+  if (e.target.tagName === 'TEXTAREA') autosize(e.target);
+  const id = sec.dataset.sec, s = state.story.find(x => x.id === id);
+  s[e.target.dataset.f] = e.target.value;
+  $('saving').textContent = 'Čuvam…'; $('saving').classList.add('on');
+  clearTimeout(storyTimers[id]);
+  storyTimers[id] = setTimeout(async () => {
+    try {
+      const patch = { title: s.title, body: s.body, updated_at: new Date().toISOString(), updated_by: state.user.display };
+      await q(sb.from('h_story_sections').update(patch).eq('id', id));
+      Object.assign(s, patch);
+      $('saving').textContent = 'Sačuvano ✓';
+      setTimeout(() => $('saving').classList.remove('on'), 1500);
+    } catch (err) { fail(err); }
+  }, 700);
+}
+async function addSection() {
+  try {
+    const r = await q(sb.from('h_story_sections').insert({ title: 'Novo poglavlje', body: '', position: (state.story.at(-1)?.position || 0) + 1, updated_by: state.user.display }).select().single());
+    state.story.push(r); document.activeElement?.blur(); renderStory();
+    const el = document.querySelector(`[data-sec="${r.id}"] .st-title`); el.focus(); el.select(); el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (e) { fail(e); }
+}
+async function deleteSection(id) {
+  if (!confirm('Obrisati ovo poglavlje?')) return;
+  try { await q(sb.from('h_story_sections').delete().eq('id', id)); state.story = state.story.filter(s => s.id !== id); renderStory(); } catch (e) { fail(e); }
+}
+function renderNotes() {
+  document.querySelectorAll('#whoSeg button').forEach(b => b.classList.toggle('active', b.dataset.who === state.who));
+  const list = state.notes.filter(x => x.area === 'story' && (state.who === 'all' || x.author === state.who))
+    .sort((a, b) => (b.pinned - a.pinned) || (a.done - b.done) || a.created_at.localeCompare(b.created_at));
+  $('notes').innerHTML = list.map((x, i) => `<div class="note ${x.done ? 'done' : ''} ${x.pinned ? 'pinned' : ''}" style="animation-delay:${i * 30}ms">
+    <span class="by ${PEOPLE[x.author] ? x.author : 'other'}">${esc(personName(x.author))}</span><span class="txt">${esc(x.body).replace(/\n/g, '<br>')}</span>
+    <span class="n-act"><button data-note="${x.id}" data-act="pin" title="Zakači">📌</button><button data-note="${x.id}" data-act="done" title="Završeno">✓</button><button data-note="${x.id}" data-act="del" title="Obriši">✕</button></span></div>`).join('')
+    || `<div class="note" style="color:#9a957f">${state.who === 'all' ? 'Još nema beleški.' : personName(state.who) + ' još nema beleške.'}</div>`;
+  $('noteInput').placeholder = `Beleška kao ${state.user.display}… (Enter za čuvanje)`;
+}
+async function addNote() {
+  const body = $('noteInput').value.trim(); if (!body) return;
+  try { state.notes.push(await q(sb.from('h_notes').insert({ area: 'story', author: who(), body }).select().single())); $('noteInput').value = ''; renderNotes(); } catch (e) { fail(e); }
+}
+async function noteAction(id, act) {
+  const x = state.notes.find(z => z.id === id); if (!x) return;
+  try {
+    if (act === 'del') { if (!confirm('Obrisati belešku?')) return; await q(sb.from('h_notes').delete().eq('id', id)); state.notes = state.notes.filter(z => z.id !== id); }
+    else { const f = act === 'pin' ? 'pinned' : 'done'; await q(sb.from('h_notes').update({ [f]: !x[f] }).eq('id', id)); x[f] = !x[f]; }
+    renderNotes();
+  } catch (e) { fail(e); }
+}
+
+/* ---------- animacije: uvod + brojevi ---------- */
+function greet(u) {
+  const p = PEOPLE[u.username];
+  if (!p) return `Dobrodošli, ${u.display}`;
+  return `${p.f ? 'Dobrodošla' : 'Dobrodošao'}, ${p.voc}`;
+}
+function playSplash(u) {
+  return new Promise(res => {
+    const sp = $('splash');
+    $('splashHello').textContent = greet(u);
+    const clone = sp.cloneNode(true); sp.replaceWith(clone); // restart animacija
+    clone.classList.remove('hide');
+    setTimeout(() => { clone.classList.add('hide'); res(); }, 2300);
+  });
+}
+function countUp(root) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  root.querySelectorAll('.stat-value').forEach(el => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node; while ((node = walker.nextNode())) {
+      const m = node.nodeValue.match(/^(-?)([\d.]+)( RSD)?$/);
+      if (!m || node.nodeValue.includes('x')) continue;
+      const target = parseInt(m[2].replace(/\./g, ''), 10); if (!target) continue;
+      const tn = node, t0 = performance.now(), dur = 800;
+      const step = (t) => {
+        const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+        tn.nodeValue = m[1] + Math.round(target * e).toLocaleString('sr-Latn-RS') + (m[3] || '');
+        if (k < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
+  });
+}
+
 /* ---------------- shell ---------------- */
 function renderAll() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'v-' + state.tab));
   document.querySelectorAll('#periodSeg button').forEach(b => b.classList.toggle('active', +b.dataset.p === state.period));
   renderOverview(); renderOrders(); renderProducts(); renderAds();
+  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes();
 }
-function setTab(t) { state.tab = t; LS.set('crm_tab', t); renderAll(); window.scrollTo(0, 0); }
+function setTab(t) {
+  state.tab = t; LS.set('crm_tab', t); renderAll(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  countUp($('v-' + t));
+}
 
 function bindEvents() {
   $('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault(); $('loginErr').style.display = 'none';
     try { await enterApp(await signIn($('loginUser').value, $('loginPass').value)); }
-    catch (err) { $('loginErr').style.display = 'block'; }
+    catch (err) { console.error('login', err); $('loginErr').style.display = 'block'; }
   });
   $('logoutBtn').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
   $('projSel').addEventListener('change', (e) => {
@@ -636,11 +1093,21 @@ function bindEvents() {
   $('chSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.ch = b.dataset.ch; document.querySelectorAll('#chSeg button').forEach(x => x.classList.toggle('active', x === b)); renderOrders(); });
   $('orderStatusFilter').innerHTML = `<option value="all">Svi statusi</option>` + STATUSES.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
   $('orderStatusFilter').addEventListener('change', (e) => { state.status = e.target.value; renderOrders(); });
-  $('kanban').addEventListener('pointerdown', kbPointerDown);
+  document.addEventListener('pointerdown', kbPointerDown);
 
   // otvaranje porudžbine / proizvoda (delegirano)
   document.addEventListener('click', (e) => {
     if (justDragged) return;
+    const vt = e.target.closest('[data-vote]'); if (vt) { e.stopPropagation(); return vote(vt.dataset.vote); }
+    const ps = e.target.closest('[data-pstock]'); if (ps) { e.stopPropagation(); return bumpPack(ps.dataset.pstock, +ps.dataset.d); }
+    const nt = e.target.closest('[data-note]'); if (nt) return noteAction(nt.dataset.note, nt.dataset.act);
+    const ds = e.target.closest('[data-delsec]'); if (ds) return deleteSection(ds.dataset.delsec);
+    const np = e.target.closest('[data-newpost]'); if (np) return openPostModal(null, np.dataset.newpost);
+    const cm = e.target.closest('[data-cal]'); if (cm) { const m = state.calMonth; state.calMonth = new Date(m.getFullYear(), m.getMonth() + +cm.dataset.cal, 1); return renderPosts(); }
+    if (e.target.closest('a')) return;
+    const pp = e.target.closest('[data-post]'); if (pp) return openPostModal(pp.dataset.post);
+    const ii = e.target.closest('[data-idea]'); if (ii) return openIdeaModal(ii.dataset.idea);
+    const pk = e.target.closest('[data-pack]'); if (pk) return openPackModal(pk.dataset.pack);
     const sb_ = e.target.closest('[data-stock]');
     if (sb_) { e.stopPropagation(); return bumpStock(sb_.dataset.stock, +sb_.dataset.d); }
     const del = e.target.closest('[data-delad]');
@@ -684,6 +1151,28 @@ function bindEvents() {
   ['p_buy', 'p_sell'].forEach(id => $(id).addEventListener('input', priceHint));
   $('pmDelete').addEventListener('click', () => deleteProduct().catch(fail));
 
+  // v2 sekcije
+  $('lowInput').addEventListener('change', (e) => { LS.set('crm_low', Math.max(0, parseInt(e.target.value) || 0)); renderAll(); });
+  $('newPostBtn').addEventListener('click', () => openPostModal());
+  $('postForm').addEventListener('submit', savePost);
+  $('poDelete').addEventListener('click', deletePost);
+  $('postViewSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.postView = b.dataset.view; LS.set('crm_pview', b.dataset.view); renderPosts(); });
+  $('postFmtFilter').addEventListener('change', (e) => { state.postFmt = e.target.value; renderPosts(); });
+  $('newSiteBtn').addEventListener('click', () => openIdeaModal(null, 'site'));
+  $('newPackIdeaBtn').addEventListener('click', () => openIdeaModal(null, 'packaging'));
+  $('siteForm').addEventListener('submit', saveIdea);
+  $('siDelete').addEventListener('click', deleteIdea);
+  $('siteCatSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.siteCat = b.dataset.cat; document.querySelectorAll('#siteCatSeg button').forEach(x => x.classList.toggle('active', x === b)); renderSite(); });
+  $('newPackBtn').addEventListener('click', () => openPackModal());
+  $('packForm').addEventListener('submit', savePack);
+  $('paDelete').addEventListener('click', deletePack);
+  $('newSecBtn').addEventListener('click', addSection);
+  $('storyDoc').addEventListener('input', storyInput);
+  $('whoSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.who = b.dataset.who; renderNotes(); });
+  $('noteInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote(); } });
+  $('noteInput').addEventListener('input', (e) => autosize(e.target));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.dataset?.cfield) { e.preventDefault(); addComment(e.target); } });
+
   $('adDay').value = dayStr(new Date());
   $('adForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -703,10 +1192,13 @@ async function enterApp(user) {
   state.user = user;
   $('userName').textContent = user.display;
   $('avatar').textContent = user.display.charAt(0).toUpperCase();
+  const splash = playSplash(user);
   await loadData();
   renderAll();
+  await splash;
   $('loginPage').style.display = 'none';
   $('app').style.display = 'block';
+  countUp($('v-' + state.tab));
   setInterval(async () => {
     if (document.hidden || document.querySelector('.modal-wrap.open')) return;
     try { await loadData(); renderAll(); if (state.openOrderId && state.dTab === 'activity') renderDrawer(); } catch (e) {}
