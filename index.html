@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COMPLETE CRM</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23131313'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='%23d4af37' font-family='Arial' font-weight='bold'>C</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --page:#faf9f6;
+  --surface:#ffffff;
+  --ink:#141310;
+  --ink-2:#57544c;
+  --muted:#8b877c;
+  --line:#eae6dc;
+  --line-soft:#f1eee6;
+  --gold:#c99700;
+  --gold-deep:#8a6a00;
+  --gold-text:#7a5b00;
+  --gold-wash:#faf3df;
+  --gold-wash-2:#f5ead0;
+  --gold-grad:linear-gradient(135deg,#e6c14a 0%,#c99700 55%,#a67c00 100%);
+  --blue:#2a78d6;
+  --blue-text:#1c5cab;
+  --blue-wash:#e6eefb;
+  --shadow-sm:0 1px 2px rgba(20,19,16,.05);
+  --shadow-md:0 6px 24px -6px rgba(20,19,16,.10);
+  --shadow-lg:0 24px 60px -12px rgba(20,19,16,.18);
+  --radius:14px;
+  --font-ui:'Inter',system-ui,-apple-system,sans-serif;
+  --font-display:'Sora','Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-ui);background:var(--page);color:var(--ink);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:14px;color:var(--ink)}
+a{color:var(--blue-text)}
+::placeholder{color:var(--muted)}
+
+/* ---------- LOGIN ---------- */
+.login-page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(212,175,55,.14), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(212,175,55,.10), transparent 55%),
+    var(--page);}
+.login-card{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow-lg);padding:44px 40px 40px;position:relative;overflow:hidden}
+.login-card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;background:var(--gold-grad)}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:30px}
+.brand-mark{width:44px;height:44px;border-radius:12px;background:#141310;color:#e6c14a;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;font-size:22px;flex:none}
+.brand-name{font-family:var(--font-display);font-weight:700;font-size:19px;letter-spacing:-.02em}
+.brand-sub{font-size:12px;color:var(--muted);font-weight:500;letter-spacing:.06em;text-transform:uppercase}
+.login-title{font-family:var(--font-display);font-size:24px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+.login-sub{color:var(--ink-2);margin-bottom:28px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-2);margin-bottom:6px}
+.field input{width:100%;padding:11px 14px;border:1px solid var(--line);border-radius:10px;background:#fdfcfa;transition:border-color .15s, box-shadow .15s;font-size:14.5px}
+.field input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,151,0,.15)}
+.btn-primary{width:100%;padding:12px;border:none;border-radius:10px;background:#141310;color:#fff;font-weight:600;font-size:15px;transition:transform .1s, box-shadow .15s;box-shadow:var(--shadow-sm)}
+.btn-primary:hover{box-shadow:0 6px 18px -4px rgba(20,19,16,.35)}
+.btn-primary:active{transform:scale(.985)}
+.login-err{display:none;background:#fbe5e5;color:#a32c2c;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:16px}
+
+/* ---------- APP SHELL ---------- */
+.app{display:none;min-height:100vh}
+.topbar{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);}
+.topbar-inner{max-width:1280px;margin:0 auto;padding:0 24px;height:62px;display:flex;align-items:center;gap:18px}
+.topbar .brand{margin:0}
+.topbar .brand-mark{width:34px;height:34px;border-radius:9px;font-size:17px}
+.topbar .brand-name{font-size:16px}
+.top-search{flex:1;max-width:420px;position:relative}
+.top-search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.top-search input{width:100%;padding:9px 14px 9px 38px;border:1px solid var(--line);border-radius:99px;background:#f6f4ee;transition:all .15s}
+.top-search input:focus{outline:none;background:#fff;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,151,0,.13)}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.user-chip{display:flex;align-items:center;gap:9px;padding:5px 12px 5px 6px;border:1px solid var(--line);border-radius:99px;background:#fff}
+.avatar{width:26px;height:26px;border-radius:50%;background:var(--gold-grad);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.user-name{font-weight:600;font-size:13px}
+.icon-btn{border:1px solid var(--line);background:#fff;border-radius:99px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:var(--ink-2);transition:all .15s}
+.icon-btn:hover{border-color:#d8d3c6;background:#faf8f2}
+
+.main{max-width:1280px;margin:0 auto;padding:28px 24px 80px}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.page-title{font-family:var(--font-display);font-size:26px;font-weight:700;letter-spacing:-.03em}
+.page-sub{color:var(--muted);margin-top:2px;font-size:13.5px}
+.btn-gold{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border:none;border-radius:10px;background:var(--gold-grad);color:#fff;font-weight:600;font-size:14px;box-shadow:0 4px 14px -4px rgba(166,124,0,.5);transition:transform .1s, filter .15s}
+.btn-gold:hover{filter:brightness(1.05)}
+.btn-gold:active{transform:scale(.98)}
+
+/* ---------- STATS ---------- */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden}
+.stat-label{font-size:12.5px;font-weight:600;color:var(--muted);letter-spacing:.02em;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+.stat-dot{width:8px;height:8px;border-radius:3px;background:var(--gold-grad)}
+.stat-value{font-family:var(--font-display);font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.stat-note{font-size:12px;color:var(--muted);margin-top:7px}
+.stat-note b{color:var(--ink-2);font-weight:600}
+
+/* ---------- FILTERS ---------- */
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.seg{display:inline-flex;background:#f1eee6;border-radius:10px;padding:3px;gap:2px}
+.seg button{border:none;background:transparent;padding:7px 14px;border-radius:8px;font-weight:600;font-size:13px;color:var(--ink-2);transition:all .15s}
+.seg button.active{background:#fff;color:var(--ink);box-shadow:var(--shadow-sm)}
+.select-wrap{position:relative}
+.select-wrap select{appearance:none;padding:8px 32px 8px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;font-weight:500;font-size:13px;color:var(--ink-2)}
+.select-wrap::after{content:"";position:absolute;right:12px;top:50%;width:7px;height:7px;border-right:1.6px solid var(--muted);border-bottom:1.6px solid var(--muted);transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.toolbar .count{margin-left:auto;font-size:12.5px;color:var(--muted)}
+
+/* ---------- TABLE ---------- */
+.table-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead th{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;text-align:left;padding:12px 16px;border-bottom:1px solid var(--line);background:#fcfbf8;white-space:nowrap}
+tbody td{padding:14px 16px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+tbody tr{cursor:pointer;transition:background .12s;position:relative}
+tbody tr:hover{background:#fcfaf4}
+tbody tr:last-child td{border-bottom:none}
+td.lead-cell{min-width:190px}
+.accent{position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0}
+.accent.gold{background:var(--gold)}
+.accent.blue{background:var(--blue)}
+.lead-name{font-weight:600;font-size:14.5px}
+.lead-social{font-size:12.5px;color:var(--muted);margin-top:1px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.contact{font-size:13px;color:var(--ink-2);line-height:1.45}
+.contact .email{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
+.badge .bdot{width:7px;height:7px;border-radius:50%}
+.badge.src-gold{background:var(--gold-wash);color:var(--gold-text)}
+.badge.src-gold .bdot{background:var(--gold)}
+.badge.src-blue{background:var(--blue-wash);color:var(--blue-text)}
+.badge.src-blue .bdot{background:var(--blue)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600;border:none;white-space:nowrap}
+.pill .pdot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.75}
+.date-cell{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.activity-cell{font-size:12.5px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.activity-cell b{color:var(--ink-2);font-weight:600}
+.src-plain{font-size:13px;color:var(--ink-2)}
+.empty{padding:60px 20px;text-align:center;color:var(--muted)}
+
+/* status pill colors */
+.st-new{background:#eef1f4;color:#3f4a56}
+.st-contacted{background:#fdf1d8;color:#8a6100}
+.st-responded{background:#e2f3ee;color:#0d6b4f}
+.st-call_booked{background:#ece8fb;color:#4a3aa7}
+.st-call_held{background:#e3edfb;color:#1c5cab}
+.st-client{background:#e2f4e2;color:#067306}
+.st-lost{background:#fbe5e5;color:#a32c2c}
+.st-no_response{background:#f0efec;color:#6b6961}
+
+/* ---------- DRAWER ---------- */
+.overlay{position:fixed;inset:0;background:rgba(20,19,16,.35);opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
+.overlay.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:520px;max-width:100vw;background:var(--surface);z-index:60;transform:translateX(105%);transition:transform .25s cubic-bezier(.2,.8,.2,1);box-shadow:var(--shadow-lg);display:flex;flex-direction:column}
+.drawer.open{transform:translateX(0)}
+.drawer-head{padding:22px 26px 0;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fdfbf5, #fff)}
+.drawer-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}
+.drawer-title{font-family:var(--font-display);font-size:21px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.drawer-close{margin-left:auto;flex:none}
+.drawer-badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.drawer-tabs{display:flex;gap:22px}
+.drawer-tabs button{border:none;background:none;padding:0 2px 12px;font-weight:600;font-size:13.5px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.drawer-tabs button.active{color:var(--ink);border-color:var(--gold)}
+.drawer-body{flex:1;overflow-y:auto;padding:22px 26px}
+.info-grid{display:grid;grid-template-columns:1fr;gap:2px}
+.info-row{display:flex;gap:14px;padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:13.5px}
+.info-row .k{width:110px;flex:none;color:var(--muted);font-weight:500}
+.info-row .v{color:var(--ink);word-break:break-word}
+.status-select-row{display:flex;align-items:center;gap:10px;margin:16px 0 6px}
+.status-select-row label{font-size:12.5px;font-weight:600;color:var(--ink-2)}
+
+/* timeline */
+.timeline{display:flex;flex-direction:column;gap:0;margin-top:4px}
+.t-item{display:flex;gap:12px;position:relative;padding-bottom:18px}
+.t-item::before{content:"";position:absolute;left:13px;top:30px;bottom:0;width:2px;background:var(--line-soft)}
+.t-item:last-child::before{display:none}
+.t-icon{width:28px;height:28px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;z-index:1}
+.t-icon.comment{background:var(--gold-wash-2);color:var(--gold-deep)}
+.t-icon.status{background:#eef1f4;color:#3f4a56}
+.t-icon.fathom{background:#ece8fb;color:#4a3aa7}
+.t-icon.screenshot{background:var(--blue-wash);color:var(--blue-text)}
+.t-content{flex:1;min-width:0}
+.t-meta{font-size:12px;color:var(--muted);margin-bottom:3px}
+.t-meta b{color:var(--ink);font-weight:600}
+.t-body{background:#faf9f5;border:1px solid var(--line-soft);border-radius:10px;padding:10px 13px;font-size:13.5px;white-space:pre-wrap;word-break:break-word}
+.t-body a{font-weight:500}
+.t-img{margin-top:8px;max-width:100%;border-radius:10px;border:1px solid var(--line);cursor:zoom-in;max-height:220px;object-fit:cover;display:block}
+.t-status-line{font-size:13px;color:var(--ink-2);padding:2px 0}
+
+/* composer */
+.composer{border-top:1px solid var(--line);padding:16px 26px 18px;background:#fdfcf9}
+.composer textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 14px;min-height:70px;resize:vertical;background:#fff}
+.composer textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,151,0,.13)}
+.composer-actions{display:flex;align-items:center;gap:8px;margin-top:10px}
+.mini-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border:1px solid var(--line);border-radius:9px;background:#fff;font-weight:600;font-size:12.5px;color:var(--ink-2);transition:all .15s}
+.mini-btn:hover{border-color:#d8d3c6;background:#faf8f2}
+.composer .btn-gold{margin-left:auto;padding:8px 18px;font-size:13.5px}
+.attach-preview{display:none;align-items:center;gap:8px;margin-top:10px;font-size:12.5px;color:var(--ink-2);background:var(--blue-wash);border-radius:9px;padding:7px 12px}
+.attach-preview img{height:34px;border-radius:6px}
+.attach-preview button{border:none;background:none;color:var(--blue-text);font-weight:700}
+
+/* lightbox */
+.lightbox{position:fixed;inset:0;background:rgba(15,14,12,.88);z-index:100;display:none;align-items:center;justify-content:center;padding:30px;cursor:zoom-out}
+.lightbox.open{display:flex}
+.lightbox img{max-width:100%;max-height:100%;border-radius:12px}
+
+/* modal (new lead) */
+.modal-wrap{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-wrap.open{display:flex}
+.modal-bg{position:absolute;inset:0;background:rgba(20,19,16,.4)}
+.modal{position:relative;background:#fff;border-radius:18px;box-shadow:var(--shadow-lg);width:100%;max-width:460px;padding:28px;max-height:90vh;overflow-y:auto}
+.modal h3{font-family:var(--font-display);font-size:19px;margin-bottom:18px}
+.modal .field input,.modal .field select{width:100%;padding:10px 13px;border:1px solid var(--line);border-radius:10px;background:#fdfcfa}
+.modal .field input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,151,0,.13)}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.btn-ghost{padding:10px 16px;border:1px solid var(--line);border-radius:10px;background:#fff;font-weight:600;font-size:13.5px;color:var(--ink-2)}
+
+/* toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#141310;color:#fff;padding:11px 20px;border-radius:99px;font-size:13.5px;font-weight:500;z-index:120;transition:transform .25s;box-shadow:var(--shadow-lg)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* ---------- FOLLOW UP SECTION ---------- */
+.fu-section{margin-bottom:22px;display:none}
+.fu-head{display:flex;align-items:center;gap:9px;margin-bottom:11px}
+.fu-title{font-family:var(--font-display);font-size:15px;font-weight:700;letter-spacing:-.01em}
+.fu-count{background:var(--gold-grad);color:#fff;font-size:11.5px;font-weight:700;border-radius:99px;padding:2px 9px}
+.fu-cards{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px}
+.fu-card{flex:0 0 250px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:12px;padding:13px 15px;box-shadow:var(--shadow-sm);cursor:pointer;transition:box-shadow .15s}
+.fu-card:hover{box-shadow:var(--shadow-md)}
+.fu-card.overdue{border-left-color:#d03b3b;background:#fffafa}
+.fu-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.fu-name{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fu-date{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--gold-text);margin-top:3px}
+.fu-card.overdue .fu-date{color:#a32c2c}
+.fu-overdue-tag{font-size:10.5px;font-weight:700;letter-spacing:.04em;background:#fbe5e5;color:#a32c2c;border-radius:5px;padding:2px 6px;text-transform:uppercase}
+.fu-card-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:9px;gap:8px}
+.fu-done{border:1px solid var(--line);background:#fff;border-radius:8px;padding:4px 11px;font-size:12px;font-weight:600;color:#0d6b4f;transition:all .15s}
+.fu-done:hover{background:#e2f3ee;border-color:#bfe3d6}
+
+/* follow-up bell button */
+.fu-btn{border:none;background:none;padding:3px;border-radius:7px;color:#c9c4b6;display:inline-flex;align-items:center;transition:all .15s;vertical-align:-3px;margin-left:5px}
+.fu-btn:hover{background:var(--gold-wash-2);color:var(--gold-deep)}
+.fu-btn.on{color:var(--gold)}
+.fu-btn.overdue{color:#d03b3b}
+
+/* ---------- KANBAN ---------- */
+.kanban{display:none;gap:12px;overflow-x:auto;align-items:flex-start;padding-bottom:16px}
+.kb-col{flex:0 0 235px;background:#f4f1e9;border-radius:14px;padding:10px 10px 12px;max-height:calc(100vh - 300px);display:flex;flex-direction:column}
+.kb-col-head{display:flex;align-items:center;gap:8px;padding:3px 6px 10px;flex:none}
+.kb-col-title{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2)}
+.kb-col-count{font-size:11.5px;font-weight:700;color:var(--muted);background:#fff;border-radius:99px;padding:1px 8px;border:1px solid var(--line)}
+.kb-cards{display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:20px;padding:2px}
+.kb-card{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:13px 14px 12px;box-shadow:var(--shadow-sm);cursor:grab;position:relative;overflow:hidden;transition:box-shadow .18s, transform .12s, border-color .18s;border-left-width:4px;touch-action:pan-y}
+.kb-card.is-organic{border-left-color:var(--gold)}
+.kb-card.is-automate{border-left-color:var(--blue)}
+.kb-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.kb-card:active{cursor:grabbing}
+.kb-card.dragging{opacity:.32;box-shadow:none}
+.kb-drag-ghost{position:fixed;z-index:200;margin:0;pointer-events:none;box-shadow:var(--shadow-lg);transform:rotate(1.6deg) scale(1.03);opacity:.97;transition:none;left:0;top:0}
+body.kb-dragging{cursor:grabbing;-webkit-user-select:none;user-select:none}
+.kb-col{transition:background .15s, box-shadow .15s}
+.kb-col.drop-target{background:var(--gold-wash-2);box-shadow:inset 0 0 0 2px var(--gold)}
+.kb-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:6px}
+.kb-name{font-weight:650;font-size:14px;line-height:1.3;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.kb-social{font-size:12px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kb-meta{display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.kb-meta .badge{padding:3px 9px;font-size:10.5px}
+.kb-card .fu-btn{flex:none;margin-left:0;margin-top:-1px}
+.kb-fu{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:var(--gold-text);background:var(--gold-wash);border-radius:5px;padding:2px 6px}
+.kb-fu.overdue{color:#a32c2c;background:#fbe5e5}
+.kb-empty{font-size:12px;color:#b6b2a6;text-align:center;padding:14px 4px}
+
+/* followup modal */
+.fu-modal .field input[type="date"]{width:100%;padding:10px 13px;border:1px solid var(--line);border-radius:10px;background:#fdfcfa;font-size:14px}
+.fu-quick{display:flex;gap:8px;margin:4px 0 6px;flex-wrap:wrap}
+.fu-quick button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:5px 13px;font-size:12.5px;font-weight:600;color:var(--ink-2);transition:all .15s}
+.fu-quick button:hover{border-color:var(--gold);background:var(--gold-wash);color:var(--gold-deep)}
+.fu-remove{margin-right:auto;border:none;background:none;color:#a32c2c;font-weight:600;font-size:13px;padding:10px 0}
+
+/* mobile cards */
+.cards{display:none;flex-direction:column;gap:12px}
+.lead-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;cursor:pointer}
+.lead-card .accent{top:0;bottom:0;border-radius:0}
+.lead-card-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px}
+.lead-card .contact{margin:6px 0 10px}
+.lead-card-badges{display:flex;gap:8px;flex-wrap:wrap}
+
+@media (max-width: 980px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .table-card{display:none}
+  .cards{display:flex}
+  .kb-col{flex:0 0 82vw;max-height:none}
+  .fu-card{flex:0 0 78vw}
+  .drawer{width:100vw}
+  .topbar-inner{padding:0 16px;gap:10px}
+  .main{padding:20px 16px 60px}
+  .top-search{max-width:none}
+  .user-chip .user-name{display:none}
+  .brand-name{display:none}
+}
+/* ===== COMPLETE CRM additions ===== */
+.proj-select{position:relative}
+.proj-select select{appearance:none;padding:7px 30px 7px 12px;border:1px solid var(--line);border-radius:99px;background:#141310;color:#e6c14a;font-weight:700;font-size:12.5px;letter-spacing:.06em}
+.proj-select::after{content:"";position:absolute;right:12px;top:50%;width:6px;height:6px;border-right:1.6px solid #e6c14a;border-bottom:1.6px solid #e6c14a;transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:22px;overflow-x:auto}
+.tabs button{border:none;background:none;padding:10px 14px 12px;font-weight:600;font-size:14px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tabs button.active{color:var(--ink);border-color:var(--gold)}
+.view{display:none}.view.active{display:block}
+.stats.s3{grid-template-columns:repeat(3,1fr)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:18px 20px}
+.panel h4{font-family:var(--font-display);font-size:15px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.list-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:13.5px;cursor:pointer}
+.list-row:last-child{border-bottom:none}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.pos{color:#067306}.neg{color:#a32c2c}
+.st-confirmed{background:#fdf1d8;color:#8a6100}
+.st-packed{background:#ece8fb;color:#4a3aa7}
+.st-shipped{background:#e3edfb;color:#1c5cab}
+.st-delivered{background:#e2f4e2;color:#067306}
+.st-returned{background:#fbe5e5;color:#a32c2c}
+.st-cancelled{background:#f0efec;color:#6b6961}
+.ch-badge{display:inline-flex;padding:3px 9px;border-radius:99px;font-size:11.5px;font-weight:600}
+.ch-shopify{background:#e2f3ee;color:#0d6b4f}
+.ch-instagram{background:var(--gold-wash);color:var(--gold-text)}
+.ch-other{background:#eef1f4;color:#3f4a56}
+.sizes{display:flex;gap:6px;flex-wrap:wrap}
+.size-chip{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:9px;overflow:hidden;font-size:12.5px;background:#fff}
+.size-chip .sz{padding:4px 8px;font-weight:700;background:#f6f4ee}
+.size-chip .qty{padding:4px 8px;min-width:26px;text-align:center;font-weight:600}
+.size-chip.low .qty{color:#a32c2c;background:#fff4f4}
+.size-chip button{border:none;background:none;padding:4px 7px;color:var(--muted);font-weight:700}
+.size-chip button:hover{background:var(--gold-wash);color:var(--gold-deep)}
+.modal.wide{max-width:640px}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.frow3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.modal .field textarea{width:100%;padding:10px 13px;border:1px solid var(--line);border-radius:10px;background:#fdfcfa;min-height:60px}
+.modal .field select{appearance:auto}
+.sec-title{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;margin:18px 0 10px}
+.item-row{display:grid;grid-template-columns:2fr 1fr 70px 1fr 30px;gap:8px;align-items:center;margin-bottom:8px}
+.item-row select,.item-row input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fdfcfa;font-size:13px}
+.x-btn{border:none;background:none;color:#a32c2c;font-size:18px;font-weight:700}
+.hint{font-size:12px;color:var(--muted);margin-top:4px}
+.hint.warn{color:#a36a00}
+.sum-box{background:#faf9f5;border:1px solid var(--line-soft);border-radius:12px;padding:12px 14px;margin-top:12px;font-size:13.5px}
+.sum-box div{display:flex;justify-content:space-between;padding:2px 0}
+.sum-box .tot{font-weight:700;border-top:1px solid var(--line);margin-top:6px;padding-top:6px}
+.prod-thumb{width:38px;height:48px;border-radius:8px;object-fit:cover;background:#f1eee6;flex:none}
+.prod-cell{display:flex;align-items:center;gap:12px}
+.soon{padding:60px 20px;text-align:center;color:var(--muted)}
+.soon b{display:block;font-family:var(--font-display);font-size:20px;color:var(--ink);margin-bottom:6px}
+.inline-input{width:110px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fdfcfa}
+@media (max-width:980px){
+  .table-card{display:block;overflow-x:auto}
+  .two-col{grid-template-columns:1fr}
+  .stats.s3{grid-template-columns:repeat(2,1fr)}
+  .frow,.frow3{grid-template-columns:1fr}
+  .item-row{grid-template-columns:1fr 1fr;}
+  .top-search{display:none}
+  .stat-value{font-size:21px}
+  .stat{padding:14px}
+}
+</style>
+</head>
+<body>
+<div class="login-page" id="loginPage">
+  <div class="login-card">
+    <div class="brand">
+      <div class="brand-mark">C</div>
+      <div><div class="brand-name">COMPLETE CRM</div><div class="brand-sub">Svi projekti na jednom mestu</div></div>
+    </div>
+    <div class="login-title">Dobrodošao nazad</div>
+    <div class="login-sub">Prijavi se da nastaviš.</div>
+    <div class="login-err" id="loginErr">Pogrešno korisničko ime ili šifra.</div>
+    <form id="loginForm">
+      <div class="field"><label>Korisničko ime</label><input type="text" id="loginUser" placeholder="npr. konstantin" autocomplete="username" autocapitalize="none" required></div>
+      <div class="field"><label>Šifra</label><input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" required></div>
+      <button class="btn-primary" type="submit">Prijavi se</button>
+    </form>
+  </div>
+</div>
+
+<div class="app" id="app">
+  <div class="topbar"><div class="topbar-inner">
+    <div class="brand"><div class="brand-mark">C</div><div class="brand-name">COMPLETE CRM</div></div>
+    <div class="proj-select"><select id="projSel">
+      <option value="harizma">HARIZMA</option>
+      <option value="kgen">KGEN (uskoro)</option>
+      <option value="potkovice">POTKOVICE (uskoro)</option>
+      <option value="admotive">ADMOTIVE (uskoro)</option>
+    </select></div>
+    <div class="top-search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="text" id="search" placeholder="Pretraži kupca, telefon, broj, proizvod…">
+    </div>
+    <div class="top-right">
+      <div class="user-chip"><div class="avatar" id="avatar">K</div><div class="user-name" id="userName"></div></div>
+      <button class="icon-btn" id="logoutBtn" title="Odjavi se"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+    </div>
+  </div></div>
+
+  <div class="main">
+    <div id="soonView" class="soon" style="display:none"><b>Uskoro</b>Ovaj projekat još nema modul. Za sada radi HARIZMA.</div>
+    <div id="harizma">
+      <div class="tabs" id="tabs">
+        <button data-tab="overview" class="active">Pregled</button>
+        <button data-tab="orders">Porudžbine</button>
+        <button data-tab="products">Roba</button>
+        <button data-tab="ads">Reklame</button>
+      </div>
+
+      <!-- PREGLED -->
+      <div class="view active" id="v-overview">
+        <div class="page-head">
+          <div><div class="page-title">Pregled</div><div class="page-sub">Prihod, profit i stanje robe.</div></div>
+          <div class="seg" id="periodSeg">
+            <button data-p="1">Danas</button><button data-p="7">7 dana</button><button data-p="30" class="active">30 dana</button><button data-p="0">Sve</button>
+          </div>
+        </div>
+        <div class="stats" id="kpi1"></div>
+        <div class="stats" id="kpi2"></div>
+        <div class="two-col">
+          <div class="panel"><h4>Za obradu <span class="fu-count" id="todoCount">0</span></h4><div id="todoList"></div></div>
+          <div class="panel"><h4>Malo na stanju <span class="fu-count" id="lowCount">0</span></h4><div id="lowList"></div></div>
+          <div class="panel"><h4>Najprodavanije</h4><div id="topList"></div></div>
+          <div class="panel"><h4>Kod kurira</h4><div id="shipList"></div></div>
+        </div>
+      </div>
+
+      <!-- PORUDŽBINE -->
+      <div class="view" id="v-orders">
+        <div class="page-head">
+          <div><div class="page-title">Porudžbine</div><div class="page-sub">Shopify i Instagram porudžbine na jednom mestu.</div></div>
+          <button class="btn-gold" id="newOrderBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Nova porudžbina</button>
+        </div>
+        <div class="toolbar">
+          <div class="seg" id="orderViewSeg"><button data-view="table" class="active">Tabela</button><button data-view="pipeline">Pipeline</button></div>
+          <div class="seg" id="chSeg"><button data-ch="all" class="active">Sve</button><button data-ch="instagram">Instagram</button><button data-ch="shopify">Shopify</button></div>
+          <div class="select-wrap"><select id="orderStatusFilter"><option value="all">Svi statusi</option></select></div>
+          <div class="count" id="orderCount"></div>
+        </div>
+        <div class="table-card" id="orderTableCard"><table>
+          <thead><tr><th>Broj</th><th>Kupac</th><th>Artikli</th><th>Kanal</th><th>Status</th><th>Iznos</th><th>Profit</th><th>Datum</th></tr></thead>
+          <tbody id="orderTbody"></tbody>
+        </table></div>
+        <div class="kanban" id="kanban"></div>
+      </div>
+
+      <!-- ROBA -->
+      <div class="view" id="v-products">
+        <div class="page-head">
+          <div><div class="page-title">Roba</div><div class="page-sub">Zalihe po veličinama, nabavna i prodajna cena, marža.</div></div>
+          <button class="btn-gold" id="newProductBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Novi komad</button>
+        </div>
+        <div class="stats" id="kpiStock"></div>
+        <div class="table-card"><table>
+          <thead><tr><th>Komad</th><th>Veličine / stanje</th><th>Nabavna</th><th>Prodajna</th><th>Marža</th><th>Prodato</th><th>Status</th></tr></thead>
+          <tbody id="prodTbody"></tbody>
+        </table></div>
+      </div>
+
+      <!-- REKLAME -->
+      <div class="view" id="v-ads">
+        <div class="page-head">
+          <div><div class="page-title">Reklame</div><div class="page-sub">Meta potrošnja po danu. Ručni unos dok ne povežemo Meta nalog.</div></div>
+        </div>
+        <div class="stats" id="kpiAds"></div>
+        <div class="panel" style="margin-bottom:16px">
+          <h4>Unesi potrošnju</h4>
+          <form id="adForm" class="frow3" style="align-items:end">
+            <div class="field" style="margin:0"><label>Datum</label><input type="date" id="adDay" required></div>
+            <div class="field" style="margin:0"><label>Potrošeno (RSD)</label><input type="number" step="0.01" id="adSpend" required></div>
+            <div class="field" style="margin:0"><label>Kampanja</label><input type="text" id="adCamp" placeholder="all"></div>
+            <div class="field" style="margin:0"><label>Kupovine (Meta)</label><input type="number" id="adPurch"></div>
+            <div class="field" style="margin:0"><label>Prihod (Meta)</label><input type="number" step="0.01" id="adRev"></div>
+            <button class="btn-gold" type="submit" style="justify-content:center">Sačuvaj</button>
+          </form>
+        </div>
+        <div class="table-card"><table>
+          <thead><tr><th>Datum</th><th>Kampanja</th><th>Potrošeno</th><th>Kupovine</th><th>Prihod (Meta)</th><th>Porudžbine tog dana (CRM)</th><th></th></tr></thead>
+          <tbody id="adTbody"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DRAWER porudžbine -->
+<div class="overlay" id="overlay"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div class="drawer-top">
+      <div><div class="drawer-title" id="dTitle"></div><div class="page-sub" id="dSub"></div></div>
+      <button class="icon-btn drawer-close" id="dClose">✕</button>
+    </div>
+    <div class="drawer-badges" id="dBadges"></div>
+    <div class="drawer-tabs" id="dTabs"><button data-dt="info" class="active">Detalji</button><button data-dt="activity">Aktivnost</button></div>
+  </div>
+  <div class="drawer-body" id="dBody"></div>
+  <div class="composer" id="composer">
+    <textarea id="cText" placeholder="Komentar… (Ctrl+V za screenshot)"></textarea>
+    <div class="attach-preview" id="attachPrev"><img id="attachImg"><span>Screenshot spreman</span><button id="attachX">✕</button></div>
+    <div class="composer-actions">
+      <label class="mini-btn">📎 Slika<input type="file" id="cFile" accept="image/*" hidden></label>
+      <button class="btn-gold" id="cSend">Pošalji</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL porudžbina -->
+<div class="modal-wrap" id="orderModal"><div class="modal-bg" data-close></div>
+  <div class="modal wide"><h3 id="omTitle">Nova porudžbina</h3>
+    <form id="orderForm">
+      <div class="frow">
+        <div class="field"><label>Ime i prezime *</label><input id="o_name" required></div>
+        <div class="field"><label>Telefon</label><input id="o_phone" type="tel"></div>
+      </div>
+      <div class="frow">
+        <div class="field"><label>Instagram</label><input id="o_ig" placeholder="@"></div>
+        <div class="field"><label>Email</label><input id="o_email" type="email"></div>
+      </div>
+      <div class="field"><label>Adresa</label><input id="o_addr"></div>
+      <div class="frow">
+        <div class="field"><label>Grad</label><input id="o_city"></div>
+        <div class="field"><label>Poštanski broj</label><input id="o_zip"></div>
+      </div>
+      <div class="frow3">
+        <div class="field"><label>Kanal</label><select id="o_channel"><option value="instagram">Instagram</option><option value="shopify">Shopify</option><option value="other">Drugo</option></select></div>
+        <div class="field"><label>Plaćanje</label><select id="o_pay"><option value="cod">Pouzeće</option><option value="card">Kartica</option><option value="bank">Uplata na račun</option></select></div>
+        <div class="field"><label>Broj porudžbine</label><input id="o_no" placeholder="auto"></div>
+      </div>
+      <div class="sec-title">Artikli</div>
+      <div id="itemRows"></div>
+      <button type="button" class="mini-btn" id="addItemBtn">+ Dodaj artikal</button>
+      <div class="sec-title">Dostava i troškovi</div>
+      <div class="frow3">
+        <div class="field"><label>Dostava (kupac plaća)</label><input id="o_shipPrice" type="number" step="0.01" value="0"></div>
+        <div class="field"><label>Dostava (plaćamo kuriru)</label><input id="o_shipCost" type="number" step="0.01" value="0"></div>
+        <div class="field"><label>Pakovanje (kutija, papir, poklon)</label><input id="o_pack" type="number" step="0.01" value="0"></div>
+      </div>
+      <div class="frow3">
+        <div class="field"><label>Popust (RSD)</label><input id="o_disc" type="number" step="0.01" value="0"></div>
+        <div class="field"><label>Kod za popust</label><input id="o_code"></div>
+        <div class="field"><label>Kurir</label><input id="o_courier" list="couriers"><datalist id="couriers"><option>Post Express</option><option>D Express</option><option>BEX</option><option>AKS</option><option>City Express</option></datalist></div>
+      </div>
+      <div class="field"><label>Broj pošiljke</label><input id="o_track"></div>
+      <div class="field"><label>Napomena</label><textarea id="o_note"></textarea></div>
+      <div class="sum-box" id="orderSum"></div>
+      <div class="modal-actions"><button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" type="submit" id="omSave">Sačuvaj</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL proizvod -->
+<div class="modal-wrap" id="prodModal"><div class="modal-bg" data-close></div>
+  <div class="modal wide"><h3 id="pmTitle">Novi komad</h3>
+    <form id="prodForm">
+      <div class="frow">
+        <div class="field"><label>Ime (VELIKIM SLOVIMA) *</label><input id="p_name" required style="text-transform:uppercase" placeholder="VERONA"></div>
+        <div class="field"><label>Kategorija</label><input id="p_cat" list="cats" placeholder="haljina"><datalist id="cats"><option>haljina</option><option>top</option><option>suknja</option><option>pantalone</option><option>sako</option><option>komplet</option><option>bluza</option><option>džemper</option></datalist></div>
+      </div>
+      <div class="frow3">
+        <div class="field"><label>Nabavna (RSD) *</label><input id="p_buy" type="number" step="0.01" required></div>
+        <div class="field"><label>Prodajna (RSD) *</label><input id="p_sell" type="number" step="0.01" required></div>
+        <div class="field"><label>"Bila" cena</label><input id="p_cmp" type="number" step="0.01"></div>
+      </div>
+      <div class="hint" id="p_hint"></div>
+      <div class="frow">
+        <div class="field"><label>Dobavljač</label><input id="p_sup" placeholder="EuroAsia, lokal…"></div>
+        <div class="field"><label>Materijal</label><input id="p_mat" placeholder="poliester"></div>
+      </div>
+      <div class="frow">
+        <div class="field"><label>Link slike</label><input id="p_img" placeholder="https://…"></div>
+        <div class="field"><label>Status</label><select id="p_status"><option value="active">Aktivan</option><option value="draft">Priprema</option><option value="archived">Arhiviran</option></select></div>
+      </div>
+      <div class="sec-title">Veličine i stanje</div>
+      <div id="sizeRows"></div>
+      <button type="button" class="mini-btn" id="addSizeBtn">+ Veličina</button>
+      <div class="field" style="margin-top:14px"><label>Napomena</label><textarea id="p_note"></textarea></div>
+      <div class="modal-actions">
+        <button type="button" class="fu-remove" id="pmDelete" style="display:none">Obriši</button>
+        <button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" type="submit">Sačuvaj</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox"><img id="lightboxImg"></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
