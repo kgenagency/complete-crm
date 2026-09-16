@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609162222';
+const APP_BUILD = '202609162243';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -2824,9 +2824,9 @@ function botSay(html, btns) { botPush('bot', html, btns); }
 
 function renderBot() {
   const box = $('botMsgs'); if (!box) return;
-  box.innerHTML = BOT.msgs.map((m, i) => `<div class="bt-msg ${m.from}" ${i === BOT.msgs.length - 1 ? 'data-last="1"' : ''}>
+  box.innerHTML = BOT.msgs.map((m, i) => `<div class="bt-msg ${m.from}${m.ai ? ' ai' : ''}" ${i === BOT.msgs.length - 1 ? 'data-last="1"' : ''}>
       ${m.from === 'bot' ? '<span class="bt-av">H</span>' : ''}
-      <div class="bt-bub">${m.html}${m.btns?.length ? `<div class="bt-btns">${m.btns.map(b => botBtn(b[0], b[1])).join('')}</div>` : ''}</div></div>`).join('')
+      <div class="bt-bub${m.streaming ? ' streaming' : ''}">${m.html || (m.streaming ? '<div class="bt-typing"><i></i><i></i><i></i></div>' : '')}${m.btns?.length ? `<div class="bt-btns">${m.btns.map(b => botBtn(b[0], b[1])).join('')}</div>` : ''}</div></div>`).join('')
     + (BOT.typing ? '<div class="bt-msg bot"><span class="bt-av">H</span><div class="bt-bub bt-typing"><i></i><i></i><i></i></div></div>' : '');
   box.scrollTop = box.scrollHeight;
   const chips = (BOT_CHIPS[state.tab] || []).concat(['Kako radi ova sekcija?', 'Zapelo mi je']);
@@ -2836,19 +2836,32 @@ function openBot() {
   if (!state.user) return;
   closeNav(); closeCmd();
   if (!BOT.msgs.length) botGreet();
-  BOT.open = true; document.body.classList.add('bot-open'); renderBot();
+  BOT.open = true; document.body.classList.add('bot-open'); renderBot(); renderBotHead();
+  if (!AI.on && Date.now() - AI.checkedAt > 120000) aiPing();
   if (window.matchMedia('(min-width: 981px)').matches) setTimeout(() => $('botInput').focus(), 60);
 }
 function closeBot() { BOT.open = false; document.body.classList.remove('bot-open'); $('botInput').blur(); }
 function botGreet() {
   const u = PEOPLE[who()], h = new Date().getHours();
   const hi = h < 11 ? 'Dobro jutro' : h < 18 ? 'Zdravo' : 'Dobro veče';
+  if (AI.on) return botSay(`${hi}, ${esc(u ? u.voc : state.user.display)}! Znam sve iz CRM-a: porudžbine, kupce, zalihe, povrate, objave, promocije, beleške i brojke. Pitaj me bilo šta, pričaj slobodno, mogu i da te odvedem gde treba ili da zabeležim nešto za tim.`, [['Šta je hitno?', 'say:Šta je hitno?'], ['Kako stojimo ovog meseca?', 'ai:Kako stojimo ovog meseca?']]);
   botSay(`${hi}, ${esc(u ? u.voc : state.user.display)}! Ja sam asistent za CRM. Napiši gde hoćeš da odeš ili šta ti treba, npr. <i>„porudžbine“</i>, <i>„šta fali na stanju“</i>, <i>„prihod ove nedelje“</i>, <i>„zabeleži pozvati dobavljača“</i> ili <i>„kako da vratim obrisano“</i>.`,
     [['Šta je hitno?', 'say:Šta je hitno?'], ['Šta umeš?', 'say:Šta umeš?']]);
 }
-async function botAsk(raw) {
+async function botAsk(raw, opts = {}) {
   raw = String(raw || '').trim(); if (!raw) return;
-  botPush('me', esc(raw));
+  BOT.msgs.push({ from: 'me', html: esc(raw), btns: [], at: Date.now(), txt: raw }); botSave();
+  if (AI.on && !opts.local && !botLocalFirst(raw)) {
+    renderBot();
+    try { return await aiAsk(); }
+    catch (e) {
+      console.error('ai', e);
+      const d = e.data || {};
+      if (d.error === 'no_key') { AI.on = false; renderBotHead(); }
+      const why = d.error === 'limit' ? `Dnevni limit AI pitanja (${d.limit}) je potrošen, do sutra odgovaram u osnovnom režimu.` : d.error === 'no_key' ? 'AI trenutno nije uključen, odgovaram u osnovnom režimu.' : 'AI trenutno ne odgovara, evo osnovnog odgovora.';
+      BOT.msgs.push({ from: 'bot', html: `<div class="bt-note" style="margin:0">${why}</div>`, btns: [], at: Date.now(), txt: ' ' });
+    }
+  }
   BOT.typing = true; renderBot();
   await new Promise(r => setTimeout(r, 280 + Math.min(500, raw.length * 8)));
   BOT.typing = false;
@@ -3074,7 +3087,8 @@ const botMobile = () => window.matchMedia('(max-width: 980px)').matches;
 function botView(segId, view, tab) { if (state.tab !== tab) setTab(tab); const b = document.querySelector(`#${segId} [data-view="${view}"]`); if (b) b.click(); }
 async function botRun(go, reply, btns) {
   const [k, ...rest] = go.split(':'); const arg = rest.join(':');
-  if (k === 'say') { if (!BOT.open) openBot(); return botAsk(arg); }
+  if (k === 'say') { if (!BOT.open) openBot(); return botAsk(arg, { local: true }); }
+  if (k === 'ai') { if (!BOT.open) openBot(); return botAsk(arg); }
   const modal = ['act', 'ref', 'open', 'metric', 'bell', 'cmd', 'logout'].includes(k);
   const nav = ['tab', 'cview', 'oview', 'pview', 'rview', 'archive'].includes(k);
   if (modal || (nav && botMobile())) closeBot();
@@ -3109,7 +3123,7 @@ function botBind() {
   $('botForm').addEventListener('submit', (e) => { e.preventDefault(); const v = $('botInput').value; $('botInput').value = ''; botAsk(v); });
   $('botPanel').addEventListener('click', (e) => {
     const g = e.target.closest('[data-bgo]'); if (g) { e.stopPropagation(); return botRun(g.dataset.bgo); }
-    const s = e.target.closest('[data-bsay]'); if (s) { e.stopPropagation(); return botAsk(s.dataset.bsay); }
+    const s = e.target.closest('[data-bsay]'); if (s) { e.stopPropagation(); return botAsk(s.dataset.bsay, { local: true }); }
   });
   $('botInput').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeBot(); } });
   document.addEventListener('keydown', (e) => {
@@ -3120,7 +3134,240 @@ function botBind() {
   });
   ACTIONS.push({ name: 'Asistent (pomoć i prečice)', kw: 'chat bot pomoc help asistent', ic: '✦', run: () => openBot() });
 }
-function botStart() { botLoad(); document.body.classList.add('bot-ready'); }
+function botStart() { botLoad(); document.body.classList.add('bot-ready'); aiPing(); }
+
+/* ---------- ASISTENT: AI režim (Claude preko Supabase funkcije crm-ai) ---------- */
+const AI = { on: false, model: '', checkedAt: 0, spend: null };
+const AI_URL = () => SUPABASE_URL + '/functions/v1/crm-ai';
+async function aiHeaders() { const { data } = await sb.auth.getSession(); const t = data.session?.access_token; if (!t) throw new Error('auth'); return { Authorization: 'Bearer ' + t, apikey: SUPABASE_ANON_KEY, 'content-type': 'application/json' }; }
+async function aiPing() {
+  AI.checkedAt = Date.now();
+  try { const r = await fetch(AI_URL(), { method: 'POST', headers: await aiHeaders(), body: '{"ping":1}' }); const d = await r.json(); AI.on = !!d.configured; AI.model = d.model || ''; }
+  catch (e) { AI.on = false; }
+  try {
+    const d = new Date(); const from = new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
+    const rows = await q(sb.from('h_ai_log').select('username,cost_usd').gte('at', from));
+    AI.spend = { n: rows.length, usd: rows.reduce((a, x) => a + n(x.cost_usd), 0), mine: rows.filter(x => x.username === who()).length };
+  } catch (e) { AI.spend = null; }
+  renderBotHead();
+}
+function renderBotHead() {
+  const el = $('botSub'); if (!el) return;
+  el.textContent = AI.on ? 'AI · zna ceo CRM i posao' : 'prečice i pomoć za CRM';
+  $('botPanel').classList.toggle('ai-on', AI.on);
+  $('botInput').placeholder = AI.on ? 'Pitaj bilo šta ili reci gde ideš…' : 'Gde ideš ili šta ti treba…';
+}
+const plain = (html) => { const d = document.createElement('div'); d.innerHTML = String(html || '').replace(/<br\s*\/?>/g, '\n').replace(/<\/(div|li|p)>/g, '\n'); return d.textContent.replace(/\n{3,}/g, '\n\n').trim(); };
+
+/* snimak svih podataka za AI (kompaktan tekst) */
+function aiSnapshot() {
+  const L = [];
+  const cell = (x) => (x == null || x === '' ? '-' : String(x).replace(/\s+/g, ' ').replace(/\|/g, '/').trim());
+  const row = (...a) => L.push(a.map(cell).join('|'));
+  const d = (iso) => (iso ? dayStr(new Date(iso)) : '-');
+  const dt = (iso) => (iso ? `${dayStr(new Date(iso))} ${new Date(iso).toTimeString().slice(0, 5)}` : '-');
+  const cut = (s, k) => { s = String(s || ''); return s.length > k ? s.slice(0, k) + '…' : s; };
+  const R = (v) => Math.round(n(v));
+  L.push('## BROJKE (RSD, bez otkazanih i vraćenih porudžbina)');
+  [['Danas', ' danas '], ['Juče', ' juce '], ['Ova nedelja', ' ove nedelje '], ['Prošla nedelja', ' prosle nedelje '], ['Ovaj mesec', ' ovog meseca '], ['Prošli mesec', ' proslog meseca '], ['Poslednjih 30 dana', ' 30 dana '], ['Poslednjih 90 dana', ' 90 dana '], ['Ukupno', ' ukupno ']].forEach(([lbl, k]) => {
+    const P = botPeriod(k), S = botStats(P.from, P.to);
+    L.push(`${lbl}${P.all ? '' : ` (od ${dayStr(P.from)})`}: prihod ${R(S.rev)}, bruto profit ${R(S.profit)}, porudžbine ${S.n}, komada ${S.pieces}, prosečna korpa ${R(S.basket)}, reklame ${R(S.ads)}, neto ${R(S.net)}, ROAS ${S.ads ? (S.rev / S.ads).toFixed(2) : '-'}, prijave povrata ${S.rets}`);
+  });
+  const act = state.products.filter(p => p.status === 'active');
+  const pcs = act.reduce((a, p) => a + variantsOf(p.id).reduce((b, v) => b + n(v.stock), 0), 0);
+  const val = act.reduce((a, p) => a + variantsOf(p.id).reduce((b, v) => b + n(v.stock) * n(p.buy_price), 0), 0);
+  L.push(`Zalihe: ${pcs} kom aktivnih komada, vrednost po nabavnoj ${R(val)}. Za obradu: ${state.orders.filter(o => TODO.includes(o.status)).length} porudžbina.`);
+
+  const soldMap = {}, sold30 = {}; const d30 = Date.now() - 30 * 864e5;
+  state.items.forEach(i => { const o = order(i.order_id); if (!o || NO_REVENUE.includes(o.status)) return; const pid = i.product_id || variant(i.variant_id)?.product_id; if (!pid) return; soldMap[pid] = (soldMap[pid] || 0) + i.qty; if (new Date(o.created_at) >= d30) sold30[pid] = (sold30[pid] || 0) + i.qty; });
+
+  const os = state.orders.slice().sort((a, b) => b.created_at.localeCompare(a.created_at));
+  L.push(`\n## PORUDŽBINE (najnovijih ${Math.min(60, os.length)} od ${os.length})\nid|broj|datum|kupac|grad|kanal|status|plaćanje|iznos|profit|popust|kod|kurir|broj pošiljke|stavke|napomena`);
+  os.slice(0, 60).forEach(o => { const T = totals(o); row(o.id, o.order_no, dt(o.created_at), o.customer_name, o.city, CH[o.channel] || o.channel, ST[o.status], PAY[o.payment] || o.payment, R(T.revenue), R(T.profit), R(o.discount) || '', o.discount_code, o.courier, o.tracking_no, itemsOf(o.id).map(i => `${i.name || prodName(i.product_id)} ${i.size || ''} x${i.qty}`).join(', '), cut(o.note, 80)); });
+
+  L.push(`\n## GARDEROBA (${state.products.length} komada; upozorenje kad veličina ima ≤ ${lowT()} kom)\nid|naziv|kategorija|status|nabavna|prodajna|stara cena|marža %|dobavljač|materijal|veličine=stanje|prodato ukupno|prodato 30 dana|napomena`);
+  state.products.forEach(p => row(p.id, p.name, p.category, { active: 'Aktivan', draft: 'Priprema', archived: 'Arhiviran' }[p.status] || p.status, R(p.buy_price), R(p.sell_price), R(p.compare_price) || '', n(p.sell_price) ? Math.round((1 - n(p.buy_price) / n(p.sell_price)) * 100) : '', p.supplier, p.material, variantsOf(p.id).map(v => `${v.size}${v.color ? ' ' + v.color : ''}=${v.stock}`).join(' '), soldMap[p.id] || 0, sold30[p.id] || 0, cut(p.note, 80)));
+  const al = stockAlerts();
+  L.push(`Upozorenja zaliha: ${al.length ? al.map(({ p, v }) => `${p.name} ${v.size}=${v.stock}`).join(', ') : 'nema'}`);
+
+  const cs = state.customers.map(c => ({ c, s: custStats(c) })).sort((a, b) => b.s.spend - a.s.spend);
+  L.push(`\n## KUPCI (prvih ${Math.min(60, cs.length)} po potrošnji od ${cs.length})\nid|ime|telefon|instagram|grad|kupovina|potrošnja|nivo|poeni|prva kupovina|poslednja kupovina|dana od poslednje|vip|napomena`);
+  cs.slice(0, 60).forEach(({ c, s }) => row(c.id, c.name, c.phone, c.instagram, c.city, s.count, R(s.spend), s.tier?.name, s.points, d(s.first), d(s.last), s.idle ?? '', c.vip ? 'da' : '', cut(c.note, 60)));
+  L.push(`Loyalty pravila: ${JSON.stringify(loy())}`);
+  L.push(`\n## KODOVI ZA POPUST\nid|kod|%|RSD|aktivan|važi od|važi do|max upotreba|upotrebljen|prihod|napomena`);
+  state.codes.forEach(c => { const u = codeUses(c); row(c.id, c.code, c.pct, c.rsd, c.active === false ? 'ne' : 'da', d(c.valid_from), d(c.valid_to), c.max_uses, u.n, R(u.rev), cut(c.note, 60)); });
+
+  const rs = state.rets.slice().sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const openR = rs.filter(r => !retClosed(r)), closedR = rs.filter(r => retClosed(r)).slice(0, 20);
+  L.push(`\n## POVRATI, ZAMENE, REKLAMACIJE, UTISCI (otvoreni ${openR.length} + poslednjih ${closedR.length} zatvorenih)\nid|broj|datum|tip|status|kupac|porudžbina|artikal|veličina|razlog|kupac želi|rok|ocena|vraćeno RSD|zadužen|opis|šta da popravimo`);
+  openR.concat(closedR).forEach(r => { const du = retDue(r); row(r.id, r.case_no, d(r.created_at), RT[r.type], ST[r.status] || r.status, r.customer_name, r.order_no, r.item, r.size, r.reason, r.resolution_wanted, du ? dueText(du) : '', r.rating, R(r.refund_amount) || '', r.assignee, cut(r.description, 160), cut(r.improve, 80)); });
+
+  L.push(`\n## PROMOCIJE\nid|naziv|tip|od|do|status|kod|popust|kanal|budžet|cilj|porudžbine u periodu|prihod|sa kodom|rast vs prosek|reklame|neto|opis|rezultat|beleške`);
+  state.promos.slice().sort((a, b) => b.starts_at.localeCompare(a.starts_at)).forEach(p => { const x = promoResults(p); row(p.id, p.name, p.type, d(p.starts_at), p.ends_at ? d(p.ends_at) : 'traje', ST[promoStatus(p)], p.code, p.discount_pct ? p.discount_pct + '%' : p.discount_rsd ? R(p.discount_rsd) + ' RSD' : '', p.channel, R(p.budget) || '', cut(p.goal, 60), x.orders, R(x.revenue), x.withCode, x.lift == null ? '' : Math.round(x.lift * 100) + '%', R(x.spend), R(x.net), cut(p.description, 100), cut(p.result_note, 80), promoNotes(p.id).map(z => `${personName(z.author)}: ${cut(z.body, 60)}`).join(' / ')); });
+
+  L.push(`\n## OBJAVE\nid|naslov|faza|format|datum objave|zadužen|hook|koncept|caption|drive link|pregledi|lajkovi`);
+  state.posts.forEach(p => row(p.id, p.title, ST[p.status], FMT[p.format] || p.format, dt(p.publish_at), p.assignee, cut(p.hook, 90), cut(p.concept, 160), cut(p.caption, 80), p.drive_link ? 'ima' : 'nema', p.views, p.likes));
+
+  L.push(`\n## PREDLOZI ZA SAJT I PAKOVANJE\nid|oblast|naslov|kategorija|prioritet|status|autor|glasovi|opis`);
+  state.ideas.forEach(i => row(i.id, i.area === 'packaging' ? 'pakovanje' : 'sajt', i.title, CAT[i.category] || i.category, PRIO[i.priority] || i.priority, ST[i.status], i.created_by, (i.votes || []).length || '', cut(i.description, 140)));
+
+  L.push(`\n## PAKOVANJE (materijal)\nid|naziv|vrsta|stanje|minimum|po paketu|cena|dobavljač|napomena`);
+  state.pack.forEach(x => row(x.id, x.name, x.kind, x.stock, x.min_stock, x.per_order, R(x.unit_price) || '', x.supplier, cut(x.note, 60)));
+  L.push(`\n## SAJT\nLink: ${siteUrl()}`);
+
+  L.push('\n## BRAND STORY (poglavlja)');
+  state.story.forEach(s => L.push(`### ${cell(s.title)}\n${cut(s.body, 1500) || '(prazno)'}`));
+
+  const area = (a) => a === 'general' ? 'opšta' : a === 'story' ? 'brand story' : String(a || '').startsWith('promo:') ? 'uz promociju ' + (state.promos.find(p => p.id === a.slice(6))?.name || '') : a;
+  const notes = state.notes.filter(x => !String(x.area || '').startsWith('promo:'));
+  const nl = notes.filter(x => x.pinned && !x.done).concat(notes.filter(x => !(x.pinned && !x.done)).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 45));
+  L.push(`\n## BELEŠKE TIMA (zakačene + najnovije; ukupno ${notes.length})\nid|datum|autor|gde|zakačena|urađena|tekst`);
+  nl.forEach(x => row(x.id, dt(x.created_at), personName(x.author), area(x.area), x.pinned ? 'da' : '', x.done ? `da (${personName(x.done_by || '')})` : '', cut(x.body, 300)));
+
+  const ads = state.ads.filter(a => new Date(a.day) >= new Date(Date.now() - 45 * 864e5)).sort((a, b) => b.day.localeCompare(a.day));
+  L.push(`\n## REKLAME (Meta, poslednjih 45 dana)\ndatum|kampanja|potrošnja|kupovine po Meta|prihod po Meta`);
+  ads.forEach(a => row(a.day, a.campaign, R(a.spend), a.purchases, R(a.revenue)));
+
+  L.push(`\n## ISTORIJA (događaji i prekretnice)\nid|datum|naslov|opis|autor`);
+  state.milestones.slice().sort((a, b) => b.happened_at.localeCompare(a.happened_at)).slice(0, 30).forEach(m => row(m.id, d(m.happened_at), m.title, cut(m.body, 120), m.author));
+
+  const ch = state.audit.filter(a => chgCounts(a)).sort((a, b) => b.id - a.id).map(a => ({ a, dd: describeAudit(a) })).filter(x => x.dd).slice(0, 30);
+  L.push(`\n## POSLEDNJE PROMENE DRUGIH ČLANOVA (za korisnika koji piše)\nkad|ko|šta`);
+  ch.forEach(x => row(dt(x.a.at), PEOPLE[x.a.actor]?.name || 'Forma', plain(x.dd.text)));
+  if (state.nfState) L.push(`Nepročitane tuđe promene po sekcijama: ${CHG_TABS.map(t => [t, chgUnread(t)]).filter(x => x[1]).map(x => `${x[0]}=${x[1]}`).join(', ') || 'nema'}`);
+  if (AI.spend) L.push(`\n## AI ASISTENT\nOvog meseca: ${AI.spend.n} pitanja, trošak oko ${AI.spend.usd.toFixed(2)} USD. Model: ${AI.model}.`);
+  return L.join('\n');
+}
+
+/* prikaz AI teksta (bezbedan mini markdown + crm linkovi) */
+const AI_LIST = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'rets', promo: 'promos', code: 'codes', ms: 'milestones', idea: 'ideas', pack: 'pack', note: 'notes' };
+const aiExists = (k, id) => AI_LIST[k] && (state[AI_LIST[k]] || []).some(x => x.id === id);
+function aiInline(s) {
+  return s
+    .replace(/\[([^\]]+)\]\(crm:([a-z]+):([^)\s]+)\)/g, (m, txt, k, id) => {
+      if (k === 'tab') return SECTIONS.some(x => x.tab === id) ? `<a class="bt-link" data-bgo="tab:${id}">${txt}</a>` : txt;
+      if (k === 'note') return aiExists(k, id) ? `<a class="bt-link" data-bgo="tab:notes">${txt}</a>` : txt;
+      return aiExists(k, id) ? `<a class="bt-link" data-bgo="ref:${k}:${id}">${txt}</a>` : txt;
+    })
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s).,!?:;]|$)/g, '$1<i>$2</i>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+function aiFormat(text) {
+  const lines = esc(text).split('\n'); let out = '', list = null;
+  const close = () => { if (list) { out += `</${list}>`; list = null; } };
+  lines.forEach(l => {
+    let m;
+    if ((m = l.match(/^\s*[-•*]\s+(.*)$/))) { if (list !== 'ul') { close(); out += '<ul class="bt-ul">'; list = 'ul'; } out += `<li>${aiInline(m[1])}</li>`; return; }
+    if ((m = l.match(/^\s*\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { close(); out += '<ol class="bt-ul">'; list = 'ol'; } out += `<li>${aiInline(m[1])}</li>`; return; }
+    close();
+    if ((m = l.match(/^\s*#{1,4}\s+(.*)$/))) { out += `<div class="bt-h">${aiInline(m[1])}</div>`; return; }
+    out += l.trim() ? `<div class="bt-p">${aiInline(l)}</div>` : '<div class="bt-sp"></div>';
+  });
+  close();
+  return out.replace(/(<div class="bt-sp"><\/div>)+$/, '');
+}
+
+/* alati koje AI poziva */
+const AI_FORMS = { porudzbina: 'Nova porudžbina', kupac: 'Novi kupac', komad: 'Novi komad', objava: 'Nova ideja za objavu', promocija: 'Nova promocija', kod: 'Novi kod za popust', povrat: 'Nova prijava povrata (ručno)', predlog_sajt: 'Novi predlog za sajt', predlog_pakovanje: 'Novi predlog za pakovanje', dogadjaj: 'Zabeleži događaj u istoriji', beleska: 'Nova beleška' };
+function aiItemName(k, id) {
+  const x = (state[AI_LIST[k]] || []).find(y => y.id === id); if (!x) return '';
+  return { order: `${x.order_no || 'porudžbina'} · ${x.customer_name}`, cust: x.name, product: x.name, post: x.title, ret: `${x.case_no} · ${x.customer_name}`, promo: x.name, code: x.code, ms: x.title, idea: x.title, pack: x.name }[k] || '';
+}
+function aiToolGo(name, inp) {
+  inp = inp || {};
+  if (name === 'idi_na_sekciju') {
+    const s = SECTIONS.find(x => x.tab === inp.sekcija); if (!s) return null;
+    const v = inp.pogled, sec = inp.sekcija;
+    const go = v === 'pipeline' ? 'oview:pipeline' : v === 'tabela' ? 'oview:table' : v === 'kupci' ? 'cview:list' : v === 'loyalty' ? 'cview:club' : v === 'popusti' ? 'cview:codes'
+      : v === 'kalendar' ? 'pview:calendar' : v === 'sta_da_popravimo' ? 'rview:insights' : v === 'arhiva' ? 'archive'
+      : v === 'tabla' ? (sec === 'returns' ? 'rview:board' : sec === 'posts' ? 'pview:board' : 'tab:' + sec)
+      : v === 'lista' ? (sec === 'returns' ? 'rview:list' : sec === 'posts' ? 'pview:list' : 'tab:' + sec) : 'tab:' + sec;
+    return { go, label: inp.natpis || s.name, now: !!inp.odmah };
+  }
+  if (name === 'otvori_stavku') { if (!aiExists(inp.vrsta, inp.id)) return null; return { go: `ref:${inp.vrsta}:${inp.id}`, label: inp.natpis || aiItemName(inp.vrsta, inp.id) || 'Otvori', now: !!inp.odmah }; }
+  if (name === 'otvori_formu') { const a = AI_FORMS[inp.forma]; return a ? { go: 'act:' + a, label: inp.natpis || a, now: !!inp.odmah } : null; }
+  if (name === 'otvori_grafikon') { const M = METRICS[inp.metrika]; return M ? { go: `metric:${inp.metrika}:${inp.period || '30'}`, label: inp.natpis || `Grafikon: ${M.name}`, now: !!inp.odmah } : null; }
+  return null;
+}
+async function aiRunTools(msg, tools) {
+  let ran = false; const done = [];
+  for (const tl of tools.slice(0, 4)) {
+    let inp = {}; try { inp = tl.json ? JSON.parse(tl.json) : {}; } catch (e) { continue; }
+    if (tl.name === 'sacuvaj_belesku') {
+      const body = String(inp.tekst || '').trim(); if (!body) continue;
+      try {
+        const r = await q(sb.from('h_notes').insert({ area: 'general', author: who(), body, pinned: !!inp.zakaci }).select().single());
+        state.notes.push(r); renderAll();
+        msg.html += `<div class="bt-quote">${esc(body)}</div>`; msg.btns.push(['Poništi belešku', 'undonote:' + r.id], ['Beleške', 'tab:notes']);
+        done.push(`sačuvana beleška: ${body}`);
+      } catch (e) { msg.html += `<div class="bt-note">Beleška nije sačuvana: ${esc(e.message || e)}</div>`; }
+      continue;
+    }
+    const g = aiToolGo(tl.name, inp); if (!g) continue;
+    if (!msg.btns.some(b => b[1] === g.go)) msg.btns.push([g.label, g.go]);
+    if (g.now && !ran) { ran = true; done.push(`otvoreno: ${g.label}`); setTimeout(() => botRun(g.go), 350); }
+    else done.push(`ponuđeno dugme: ${g.label}`);
+  }
+  if (done.length) msg.txt = (msg.txt || '') + `\n[akcije: ${done.join('; ')}]`;
+}
+
+/* razgovor sa AI (streaming) */
+function aiPaint(msg) {
+  const el = document.querySelector('#botMsgs .bt-msg[data-last] .bt-bub');
+  if (el && BOT.msgs[BOT.msgs.length - 1] === msg) { el.innerHTML = msg.html || '<div class="bt-typing"><i></i><i></i><i></i></div>'; el.classList.toggle('streaming', !!msg.streaming); const box = $('botMsgs'); if (box.scrollHeight - box.scrollTop - box.clientHeight < 160) box.scrollTop = box.scrollHeight; }
+  else renderBot();
+}
+async function aiAsk() {
+  const history = BOT.msgs.slice(-14).map(m => ({ role: m.from === 'me' ? 'user' : 'assistant', content: m.txt || plain(m.html) }));
+  const msg = { from: 'bot', html: '', btns: [], at: Date.now(), ai: 1, streaming: 1, txt: '' };
+  BOT.msgs.push(msg); renderBot();
+  let r;
+  try {
+    r = await fetch(AI_URL(), { method: 'POST', headers: await aiHeaders(), body: JSON.stringify({ messages: history, snapshot: aiSnapshot(), now: new Date().toLocaleString('sr-Latn-RS', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }), who: personName(who()), tab: SECTIONS.find(s => s.tab === state.tab)?.name || state.tab }) });
+  } catch (e) { BOT.msgs.pop(); throw e; }
+  if (!(r.headers.get('content-type') || '').includes('event-stream')) {
+    BOT.msgs.pop(); let d = {}; try { d = await r.json(); } catch (e) {}
+    const err = new Error(d.error || 'http ' + r.status); err.data = d; throw err;
+  }
+  let text = '', raf = 0; const tools = {};
+  const paint = () => { raf = 0; msg.html = aiFormat(text); aiPaint(msg); };
+  const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = '';
+  for (;;) {
+    const { value, done } = await reader.read(); if (done) break;
+    buf += value; let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!line.startsWith('data:')) continue;
+      let ev; try { ev = JSON.parse(line.slice(5)); } catch (e) { continue; }
+      if (ev.type === 'content_block_start' && ev.content_block?.type === 'tool_use') tools[ev.index] = { name: ev.content_block.name, json: '' };
+      else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') { text += ev.delta.text; if (!raf) raf = requestAnimationFrame(paint); }
+      else if (ev.type === 'content_block_delta' && ev.delta?.type === 'input_json_delta' && tools[ev.index]) tools[ev.index].json += ev.delta.partial_json || '';
+      else if (ev.type === 'error') text += `\n\n(Greška AI: ${ev.error?.message || 'nepoznato'})`;
+    }
+  }
+  if (raf) cancelAnimationFrame(raf);
+  msg.streaming = 0; msg.txt = text.trim();
+  msg.html = text.trim() ? aiFormat(text.trim()) : '';
+  await aiRunTools(msg, Object.keys(tools).sort((a, b) => a - b).map(k => tools[k]));
+  if (!msg.html) msg.html = msg.btns.length ? 'Evo:' : 'Nemam odgovor na ovo, probaj drugačije da pitaš.';
+  if (AI.spend) { AI.spend.n++; AI.spend.mine++; }
+  botSave(); renderBot();
+}
+function botLocalFirst(raw) {
+  const t = bfold(raw);
+  if (/^\s*(zabele[zž]i|zapi[sš]i|bele[sš]ka\s*:|note\s*:)/i.test(raw)) return true;
+  if (/^\s*(pitaj tim|poruka timu|javi timu|pitanje za tim|pitaj ostale)/i.test(raw)) return true;
+  if (/^ (odjavi me|odjava|logout|pretraga|arhiva|hvala|ok|okej|vazi|super) $/.test(t)) return true;
+  if (/^\s*#?\s*[A-Za-z]{0,3}-?\d{3,}\s*$/.test(raw)) return true;
+  const words = t.trim().split(' ').filter(w => w && !BOT_STOP.has(w));
+  if (/\?/.test(raw) || words.length > 2) return false;
+  const sec = botSections(t); if (sec && sec.sc >= 3) return true;
+  if (/^ (nov|nova|novi|novu|dodaj|unesi|napravi) /.test(t) && BOT_NEW.some(([ws]) => bhas(t, ws))) return true;
+  return false;
+}
 
 async function enterApp(user) {
   state.user = user;

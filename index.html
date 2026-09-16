@@ -1058,6 +1058,17 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 }
 .bot-ov{display:none}
 @media (max-width:980px){.bot-ov{display:block;position:fixed;inset:0;z-index:69;background:rgba(15,20,17,.45);opacity:0;pointer-events:none;transition:opacity .3s}body.bot-open .bot-ov{opacity:1;pointer-events:auto}}
+.bt-link{color:#2f4a3a;font-weight:600;text-decoration:underline;text-decoration-color:rgba(126,140,116,.6);text-underline-offset:2px;cursor:pointer}
+.bt-link:hover{color:#1B2620;text-decoration-color:#1B2620}
+.bt-p{margin:0}.bt-p+.bt-p{margin-top:6px}.bt-sp{height:6px}
+.bt-h{font-weight:700;margin:6px 0 2px;color:#1B2620}
+.bt-bub code{font-size:12px;background:var(--gold-wash);padding:1px 5px;border-radius:5px}
+.bt-bub ol.bt-ul{list-style:decimal}
+.bt-bub.streaming>div:last-child::after{content:"";display:inline-block;width:7px;height:14px;margin-left:3px;vertical-align:-2px;background:var(--sage);border-radius:2px;animation:btBlink .9s steps(2) infinite}
+.bt-bub.streaming>.bt-typing::after{display:none}
+@keyframes btBlink{50%{opacity:0}}
+.bot-panel.ai-on .bot-head small::before{background:#b9d99f;box-shadow:0 0 0 3px rgba(185,217,159,.25),0 0 10px rgba(185,217,159,.6)}
+.bot-panel.ai-on .bot-head .bt-av{box-shadow:0 0 0 2px rgba(185,217,159,.35)}
 </style>
 </head>
 <body>
@@ -1845,7 +1856,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 </button>
 <div class="bot-ov" id="botOv"></div>
 <section class="bot-panel" id="botPanel" aria-label="Asistent">
-  <div class="bot-head"><span class="bt-av">H</span><div><b>Asistent</b><small>prečice i pomoć za CRM</small></div>
+  <div class="bot-head"><span class="bt-av">H</span><div><b>Asistent</b><small id="botSub">prečice i pomoć za CRM</small></div>
     <button class="bh-btn" id="botClear" type="button" title="Nov razgovor">↺</button><button class="bh-btn" id="botClose" type="button" title="Zatvori">✕</button></div>
   <div class="bot-msgs" id="botMsgs"></div>
   <div class="bot-chips" id="botChips"></div>
@@ -1855,8 +1866,8 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202609162222"></script>
-<script>window.HTML_BUILD="202609162222";</script>
-<script src="app.js?v=202609162222"></script>
+<script src="config.js?v=202609162243"></script>
+<script>window.HTML_BUILD="202609162243";</script>
+<script src="app.js?v=202609162243"></script>
 </body>
 </html>

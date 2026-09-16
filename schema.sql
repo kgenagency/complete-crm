@@ -565,3 +565,19 @@ alter table public.h_notes add column if not exists updated_at timestamptz;
 alter table public.h_notes add column if not exists updated_by text;
 alter table public.h_notes add column if not exists done_by text;
 alter table public.h_notif_state add column if not exists seen_tabs jsonb not null default '{}'::jsonb;
+-- v11: AI asistent, evidencija potrošnje
+create table if not exists public.h_ai_log (
+  id bigserial primary key,
+  at timestamptz not null default now(),
+  username text not null,
+  model text,
+  input_tokens int not null default 0,
+  output_tokens int not null default 0,
+  cache_read int not null default 0,
+  cache_write int not null default 0,
+  cost_usd numeric(10,5) not null default 0
+);
+create index if not exists h_ai_log_user_at on public.h_ai_log(username, at);
+alter table public.h_ai_log enable row level security;
+drop policy if exists "team read" on public.h_ai_log;
+create policy "team read" on public.h_ai_log for select to authenticated using (true);
