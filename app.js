@@ -1,4 +1,9 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
+const APP_BUILD = '202609161256';
+if (window.HTML_BUILD !== APP_BUILD) {
+  // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
+  try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
+}
 const SUPABASE_URL = window.CRM_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = window.CRM_SUPABASE_ANON_KEY || '';
 const AUTH_DOMAIN = 'complete-crm.local';
@@ -46,7 +51,7 @@ let state = {
   posts: [], ideas: [], story: [], notes: [], pack: [],
   postView: LS.get('crm_pview', 'board'), postFmt: 'all', siteCat: 'all', who: 'all',
   calMonth: (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(),
-  editPostId: null, editIdeaId: null, ideaArea: 'site', editPackId: null,
+  writer: null, editPostId: null, editIdeaId: null, ideaArea: 'site', editPackId: null,
   tab: LS.get('crm_tab', 'overview'),
   period: +LS.get('crm_period', '30'),
   orderView: LS.get('crm_oview', 'table'),
@@ -1009,11 +1014,13 @@ function renderNotes() {
     <span class="by ${PEOPLE[x.author] ? x.author : 'other'}">${esc(personName(x.author))}</span><span class="txt">${esc(x.body).replace(/\n/g, '<br>')}</span>
     <span class="n-act"><button data-note="${x.id}" data-act="pin" title="Zakači">📌</button><button data-note="${x.id}" data-act="done" title="Završeno">✓</button><button data-note="${x.id}" data-act="del" title="Obriši">✕</button></span></div>`).join('')
     || `<div class="note" style="color:#9a957f">${state.who === 'all' ? 'Još nema beleški.' : personName(state.who) + ' još nema beleške.'}</div>`;
-  $('noteInput').placeholder = `Beleška kao ${state.user.display}… (Enter za čuvanje)`;
+  const w = state.writer || who();
+  document.querySelectorAll('#writerSeg button').forEach(b => b.classList.toggle('active', b.dataset.writer === w));
+  $('noteInput').placeholder = `Beleška: ${personName(w)}… (Enter za čuvanje)`;
 }
 async function addNote() {
   const body = $('noteInput').value.trim(); if (!body) return;
-  try { state.notes.push(await q(sb.from('h_notes').insert({ area: 'story', author: who(), body }).select().single())); $('noteInput').value = ''; renderNotes(); } catch (e) { fail(e); }
+  try { state.notes.push(await q(sb.from('h_notes').insert({ area: 'story', author: state.writer || who(), body }).select().single())); $('noteInput').value = ''; renderNotes(); } catch (e) { fail(e); }
 }
 async function noteAction(id, act) {
   const x = state.notes.find(z => z.id === id); if (!x) return;
@@ -1168,7 +1175,9 @@ function bindEvents() {
   $('paDelete').addEventListener('click', deletePack);
   $('newSecBtn').addEventListener('click', addSection);
   $('storyDoc').addEventListener('input', storyInput);
-  $('whoSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.who = b.dataset.who; renderNotes(); });
+  $('whoSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.who = b.dataset.who; if (b.dataset.who !== 'all') state.writer = b.dataset.who; renderNotes(); });
+  $('writerSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.writer = b.dataset.writer; renderNotes(); $('noteInput').focus(); });
+  $('noteSave').addEventListener('click', addNote);
   $('noteInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote(); } });
   $('noteInput').addEventListener('input', (e) => autosize(e.target));
   document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.dataset?.cfield) { e.preventDefault(); addComment(e.target); } });
