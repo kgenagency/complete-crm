@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609161749';
+const APP_BUILD = '202609161810';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -2058,7 +2058,19 @@ function renderNotifHistory() {
   $('nfList').innerHTML = list.map(g => { const d = dayStr(new Date(g.at)); const head = d !== last ? `<div class="nf-day">${new Date(g.at).toLocaleDateString('sr-Latn-RS', { weekday: 'long', day: 'numeric', month: 'long' })}</div>` : ''; last = d;
     return head + nfCard(g, { history: true, cls: (g.actor === me ? 'mine ' : '') + (nfDismissed(g) || g.actor === me ? 'read' : '') }); }).join('') || '<div class="kb-empty" style="padding:30px">Nema promena za ovaj filter.</div>';
 }
-let nfReloadT = null;
+let nfReloadT = null, nfPending = false;
+/* odmah primeni tuđu promenu na ekran, pre punog učitavanja */
+function applyAuditRow(a) {
+  try {
+    const row = a.new_row; if (!row) return;
+    const lists = { h_notes: 'notes', h_orders: 'orders', h_products: 'products', h_variants: 'variants', h_posts: 'posts', h_returns: 'rets', h_promotions: 'promos', h_milestones: 'milestones', h_customers: 'customers', h_site_ideas: 'ideas', h_packaging: 'pack', h_discount_codes: 'codes', h_activities: 'acts', h_order_items: 'items', h_ad_spend: 'ads', h_loyalty_events: 'levents' };
+    const key = lists[a.tbl]; if (!key || !Array.isArray(state[key])) return;
+    const arr = state[key]; const i = arr.findIndex(x => x.id === row.id);
+    if (row.deleted_at) { if (i >= 0) arr.splice(i, 1); }
+    else if (i >= 0) Object.assign(arr[i], row); else arr.push(row);
+    renderAll();
+  } catch (e) {}
+}
 function onAuditLive(row) {
   if (!row || state.audit.some(a => a.id === row.id)) return;
   state.audit.unshift(row);
@@ -2066,8 +2078,9 @@ function onAuditLive(row) {
   if (row.actor !== who()) {
     const g = state.nfGroups.find(x => x.ids.includes(row.id)); if (g) { g.live = true; const s = nfState(); s.dismissed = s.dismissed.filter(k => k !== g.key); }
     renderTray();
+    applyAuditRow(row);
     clearTimeout(nfReloadT);
-    nfReloadT = setTimeout(async () => { if (document.querySelector('.modal-wrap.open') && !$('notifModal').classList.contains('open')) return; try { await loadData(); renderAll(); if (state.openOrderId) renderDrawer(); } catch (e) {} }, 1200);
+    nfReloadT = setTimeout(async () => { if (document.querySelector('.modal-wrap.open:not(#notifModal):not(#noteModal)')) { nfPending = true; return; } try { await loadData(); renderAll(); if (state.openOrderId) renderDrawer(); } catch (e) {} }, 250);
   }
   if ($('notifModal').classList.contains('open')) renderNotifHistory();
 }
@@ -2080,7 +2093,9 @@ async function pollAudit() {
   } catch (e) {}
 }
 function startLive() {
-  setInterval(pollAudit, 45000);
+  setInterval(pollAudit, 10000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pollAudit(); });
+  window.addEventListener('focus', pollAudit);
   try {
     sb.channel('h_audit_live').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'h_audit' }, (payload) => onAuditLive(payload.new)).subscribe();
   } catch (e) { console.warn('realtime', e); }
@@ -2256,11 +2271,12 @@ function deltaChip(key) {
 
 /* ---------- BRZA BELEŠKA + beleške na Pregledu ---------- */
 function renderHomeNotes() {
-  const list = state.notes.filter(x => x.area === 'general').sort((a, b) => (b.pinned - a.pinned) || (a.done - b.done) || b.created_at.localeCompare(a.created_at));
+  const list = state.notes.slice().sort((a, b) => (b.pinned - a.pinned) || (a.done - b.done) || b.created_at.localeCompare(a.created_at));
+  const where = (x) => x.area === 'story' ? 'Brand story' : (x.area || '').startsWith('promo:') ? ('Promocija: ' + (state.promos.find(p => p.id === x.area.split(':')[1])?.name || '')) : '';
   const show = list.filter(x => !x.done).slice(0, 8);
   $('homeNotes').innerHTML = show.map((x, i) => `<div class="hn ${x.pinned ? 'pinned' : ''} ${x.done ? 'done' : ''}" style="animation-delay:${i * 40}ms">
       <div class="txt">${esc(x.body).replace(/\n/g, '<br>')}</div>
-      <div class="meta"><span class="by ${PEOPLE[x.author] ? x.author : 'other'}">${esc(personName(x.author))}</span>${relTime(x.created_at)}${x.pinned ? ' · 📌' : ''}</div>
+      <div class="meta"><span class="by ${PEOPLE[x.author] ? x.author : 'other'}">${esc(personName(x.author))}</span>${relTime(x.created_at)}${where(x) ? ' · ' + esc(where(x)) : ''}${x.pinned ? ' · 📌' : ''}</div>
       <span class="n-act"><button data-note="${x.id}" data-act="pin" title="Zakači">📌</button><button data-note="${x.id}" data-act="done" title="Završeno">✓</button><button data-note="${x.id}" data-act="del" title="Obriši">✕</button></span></div>`).join('')
     + `<div class="hn add" id="hnAdd">✎ Nova beleška${list.filter(x => x.done).length ? ` <span class="page-sub" style="margin-left:8px">· ${list.filter(x => x.done).length} završenih</span>` : ''}</div>`;
 }
@@ -2415,7 +2431,7 @@ function bindEvents() {
     const go = e.target.closest('[data-goto]'); if (go) { document.querySelectorAll('.modal-wrap.open').forEach(m => m.classList.remove('open')); return setTab(go.dataset.goto); }
     const oe = e.target.closest('[data-order]'); if (oe && !e.target.closest('.drawer')) { if (e.target.closest('#custModal')) $('custModal').classList.remove('open'); if (e.target.closest('#metricModal')) $('metricModal').classList.remove('open'); return openDrawer(oe.dataset.order); }
     const pe = e.target.closest('[data-product]'); if (pe) return openProductModal(pe.dataset.product);
-    if (e.target.matches('[data-close]')) { const mw = e.target.closest('.modal-wrap'); mw.classList.remove('open'); if (mw.id === 'notifModal') { state.trayHidden = false; renderTray(); } }
+    if (e.target.matches('[data-close]')) { const mw = e.target.closest('.modal-wrap'); mw.classList.remove('open'); if (mw.id === 'notifModal') { state.trayHidden = false; renderTray(); } if (nfPending) { nfPending = false; loadData().then(() => renderAll()).catch(() => {}); } }
   });
 
   $('overlay').addEventListener('click', closeDrawer);
