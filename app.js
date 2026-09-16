@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609161700';
+const APP_BUILD = '202609161741';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -197,8 +197,9 @@ function nextOrderNo(channel) {
 }
 
 /* ---------------- render: overview ---------------- */
-function stat(label, value, note) {
-  return `<div class="stat"><div class="stat-label"><span class="stat-dot"></span>${label}</div><div class="stat-value">${value}</div>${note ? `<div class="stat-note">${note}</div>` : ''}</div>`;
+function stat(label, value, note, metric) {
+  const m = metric && METRICS[metric];
+  return `<div class="stat ${m ? 'clickable' : ''}" ${m ? `data-metric="${metric}" title="Klikni za grafikon"` : ''}><div class="stat-label"><span class="stat-dot"></span>${label}${m ? deltaChip(metric) : ''}</div><div class="stat-value">${value}</div>${note ? `<div class="stat-note">${note}</div>` : ''}${m ? sparkline(metric) : ''}</div>`;
 }
 function renderOverview() {
   const P = state.period;
@@ -209,18 +210,18 @@ function renderOverview() {
   const returned = state.orders.filter(o => inPeriod(o.created_at, P) && o.status === 'returned').length;
   const all = state.orders.filter(o => inPeriod(o.created_at, P)).length;
   $('kpi1').innerHTML =
-    stat('Prihod', rsd(rev), `<b>${os.length}</b> porudžbina · <b>${pcs}</b> kom`) +
-    stat('Bruto profit', rsd(prof), `marža <b>${rev ? pct(prof / rev) : '—'}</b>`) +
-    stat('Reklame', rsd(spend), `ROAS <b>${spend ? (rev / spend).toFixed(2) + 'x' : '—'}</b>`) +
-    stat('Neto (posle reklama)', `<span class="${prof - spend >= 0 ? 'pos' : 'neg'}">${rsd(prof - spend)}</span>`, `prosečna korpa <b>${os.length ? rsd(rev / os.length) : '—'}</b>`);
+    stat('Prihod', rsd(rev), `<b>${os.length}</b> porudžbina · <b>${pcs}</b> kom`, 'revenue') +
+    stat('Bruto profit', rsd(prof), `marža <b>${rev ? pct(prof / rev) : '—'}</b>`, 'profit') +
+    stat('Reklame', rsd(spend), `ROAS <b>${spend ? (rev / spend).toFixed(2) + 'x' : '—'}</b>`, 'ads') +
+    stat('Neto (posle reklama)', `<span class="${prof - spend >= 0 ? 'pos' : 'neg'}">${rsd(prof - spend)}</span>`, `prosečna korpa <b>${os.length ? rsd(rev / os.length) : '—'}</b>`, 'net');
   let stockPcs = 0, stockCost = 0, stockSell = 0;
   state.products.filter(p => p.status !== 'archived').forEach(p => variantsOf(p.id).forEach(v => { stockPcs += v.stock; stockCost += v.stock * n(p.buy_price); stockSell += v.stock * n(p.sell_price); }));
   const todo = state.orders.filter(o => TODO.includes(o.status));
   $('kpi2').innerHTML =
-    stat('Za obradu', todo.length, `nove, potvrđene, spakovane`) +
-    stat('Komada na stanju', stockPcs, `<b>${state.products.filter(p => p.status === 'active').length}</b> aktivnih modela`) +
-    stat('Vrednost robe (nabavna)', rsd(stockCost), `po prodajnoj <b>${rsd(stockSell)}</b>`) +
-    stat('Povraćaji', returned, `od <b>${all}</b> porudžbina (${all ? pct(returned / all) : '—'})`);
+    stat('Porudžbine', os.length, `<b>${todo.length}</b> za obradu`, 'orders') +
+    stat('Komada na stanju', stockPcs, `<b>${state.products.filter(p => p.status === 'active').length}</b> aktivnih modela`, 'stock') +
+    stat('Vrednost robe (nabavna)', rsd(stockCost), `po prodajnoj <b>${rsd(stockSell)}</b>`, 'stock_value') +
+    stat('Povraćaji', state.rets.filter(r => r.type !== 'feedback' && inPeriod(r.created_at, P)).length, `<b>${returned}</b> vraćenih porudžbina od <b>${all}</b>`, 'returns');
 
   $('todoCount').textContent = todo.length;
   $('todoList').innerHTML = todo.slice().reverse().map(o => `<div class="list-row" data-order="${o.id}"><span><b>${esc(o.order_no)}</b> · ${esc(o.customer_name)}</span>${pill(o.status)}</div>`).join('') || '<div class="kb-empty">Sve je obrađeno.</div>';
@@ -359,7 +360,7 @@ function renderProducts() {
     models++; marg += n(p.sell_price) ? (n(p.sell_price) - n(p.buy_price)) / n(p.sell_price) : 0;
     variantsOf(p.id).forEach(v => { pcs += v.stock; cost += v.stock * n(p.buy_price); });
   });
-  $('kpiStock').innerHTML = stat('Modela', models) + stat('Komada', pcs) + stat('Uloženo u robu', rsd(cost)) + stat('Prosečna marža', models ? pct(marg / models) : '—');
+  $('kpiStock').innerHTML = stat('Modela', models) + stat('Komada', pcs, '', 'stock') + stat('Uloženo u robu', rsd(cost), '', 'stock_value') + stat('Prodato komada', state.items.filter(i => !NO_REVENUE.includes(order(i.order_id)?.status)).reduce((a, i) => a + i.qty, 0), `prosečna marža <b>${models ? pct(marg / models) : '—'}</b>`, 'sold');
   $('prodTbody').innerHTML = list.map(p => {
     const m = n(p.sell_price) - n(p.buy_price);
     const vs = variantsOf(p.id);
@@ -1144,7 +1145,7 @@ function renderReturns() {
   const rated = all.filter(r => r.rating);
   $('kpiRet').innerHTML = stat('Otvorene prijave', open.length, `<b>${fresh}</b> novih · <b class="${late.length ? 'neg' : ''}">${late.length}</b> kasni`) +
     stat('Stopa povrata i zamena', orders ? pct(retCount / orders) : '—', orders ? `${retCount} od ${orders} porudžbina` : 'još nema porudžbina') +
-    stat('Vraćeno kupcima', rsd(refunded), `slanje nas koštalo <b>${rsd(shipCost)}</b>`) +
+    stat('Vraćeno kupcima', rsd(refunded), `slanje nas koštalo <b>${rsd(shipCost)}</b>`, 'refunds') +
     stat('Prosečna ocena', rated.length ? (rated.reduce((a, r) => a + r.rating, 0) / rated.length).toFixed(1) + ' ★' : '—', `${all.filter(r => r.type === 'feedback').length} utisaka`);
   $('retAlerts').innerHTML = [...late, ...soon].map(r => { const d = retDue(r); return `<div class="alert ${d.level === 'late' ? 'out' : ''}" data-ret="${r.id}">
     <div class="a-ic">${d.level === 'late' ? '!' : d.days}</div><div><div class="a-t">${esc(r.case_no)} · ${esc(r.customer_name)}</div>
@@ -1698,7 +1699,7 @@ function renderCustomers() {
   const repeat = all.filter(x => x.s.count >= 2).length, club = all.filter(x => ['klub', 'vip'].includes(x.s.tier.key)).length;
   const spend = all.reduce((a, x) => a + x.s.spend, 0);
   const buyers = all.filter(x => x.s.count > 0).length;
-  $('kpiCust').innerHTML = stat('Kupaca', state.customers.length, `${buyers} sa bar jednom porudžbinom`) +
+  $('kpiCust').innerHTML = stat('Kupaca', state.customers.length, `${buyers} sa bar jednom porudžbinom`, 'customers') +
     stat('Vraćaju se', buyers ? pct(repeat / buyers) : '—', `<b>${repeat}</b> kupilo 2+ puta`) +
     stat('Vrednost kupca', buyers ? rsd(spend / buyers) : '—', 'prosečno potrošeno po kupcu') +
     stat('U klubu', club, `${all.filter(x => x.s.points >= n(L.reward_points)).length} čeka nagradu`);
@@ -2084,6 +2085,174 @@ function startLive() {
   } catch (e) { console.warn('realtime', e); }
 }
 
+/* ---------- ANALITIKA: klik na karticu → grafikon ---------- */
+const METRICS = {
+  revenue: { name: 'Prihod', unit: 'rsd', kind: 'flow', src: 'orders', val: o => totals(o).revenue, sub: 'Sve što su kupci platili (artikli + dostava − popust), bez otkazanih i vraćenih' },
+  profit: { name: 'Bruto profit', unit: 'rsd', kind: 'flow', src: 'orders', val: o => totals(o).profit, sub: 'Prihod bez nabavne cene robe, kurira i pakovanja' },
+  orders: { name: 'Porudžbine', unit: 'n', kind: 'flow', src: 'orders', val: () => 1, sub: 'Broj porudžbina po danu' },
+  basket: { name: 'Prosečna korpa', unit: 'rsd', kind: 'avg', src: 'orders', val: o => totals(o).revenue, sub: 'Prosečna vrednost porudžbine' },
+  ads: { name: 'Reklame', unit: 'rsd', kind: 'flow', src: 'ads', val: a => n(a.spend), sub: 'Potrošnja na Meta reklame po danu' },
+  net: { name: 'Neto (posle reklama)', unit: 'rsd', kind: 'flow', src: 'net', sub: 'Bruto profit minus potrošnja na reklame' },
+  returns: { name: 'Povraćaji', unit: 'n', kind: 'flow', src: 'returns', val: () => 1, sub: 'Prijave povrata, zamena i reklamacija po danu (bez utisaka)' },
+  refunds: { name: 'Vraćeno kupcima', unit: 'rsd', kind: 'flow', src: 'returns', val: r => n(r.refund_amount), sub: 'Novac vraćen kupcima po danu prijave' },
+  customers: { name: 'Novi kupci', unit: 'n', kind: 'flow', src: 'customers', val: () => 1, sub: 'Kupci koji su prvi put kupili tog dana' },
+  stock: { name: 'Komada na stanju', unit: 'n', kind: 'level', src: 'daily', field: 'stock_pcs', sub: 'Stanje zaliha na kraju dana (dnevni presek)' },
+  stock_value: { name: 'Vrednost robe', unit: 'rsd', kind: 'level', src: 'daily', field: 'stock_value', sub: 'Vrednost zaliha po nabavnoj ceni (dnevni presek)' },
+  sold: { name: 'Prodato komada', unit: 'n', kind: 'flow', src: 'items', val: i => i.qty, sub: 'Komada prodato po danu' },
+};
+const mt = { key: 'revenue', preset: '30', from: '', to: '', gran: 'day', compare: false, sel: null, table: false };
+function mtRange() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let from, to = new Date(today);
+  if (mt.preset === 'custom') { from = mt.from ? new Date(mt.from + 'T00:00:00') : new Date(today.getFullYear(), 0, 1); to = mt.to ? new Date(mt.to + 'T00:00:00') : today; }
+  else if (mt.preset === 'month') from = new Date(today.getFullYear(), today.getMonth(), 1);
+  else if (mt.preset === 'lastmonth') { from = new Date(today.getFullYear(), today.getMonth() - 1, 1); to = new Date(today.getFullYear(), today.getMonth(), 0); }
+  else if (mt.preset === '0') { const all = state.orders.map(o => o.created_at).concat(state.ads.map(a => a.day + 'T12:00:00'), state.daily.map(d => d.day + 'T12:00:00')).sort(); from = all.length ? new Date(all[0].slice(0, 10) + 'T00:00:00') : new Date(today); if (from > today) from = new Date(today); }
+  else { from = new Date(today); from.setDate(from.getDate() - (+mt.preset - 1)); }
+  return { from, to };
+}
+function mtBucket(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); if (mt.gran === 'month') return dayStr(new Date(x.getFullYear(), x.getMonth(), 1)); if (mt.gran === 'week') { const wd = (x.getDay() + 6) % 7; x.setDate(x.getDate() - wd); } return dayStr(x); }
+function mtBuckets(from, to) { const out = []; const d = new Date(mtBucket(from) + 'T00:00:00'); const end = new Date(to); while (d <= end) { out.push(dayStr(d)); if (mt.gran === 'month') d.setMonth(d.getMonth() + 1); else d.setDate(d.getDate() + (mt.gran === 'week' ? 7 : 1)); } return out; }
+function mtRows(key) {
+  const M = METRICS[key];
+  if (M.src === 'orders') return state.orders.filter(o => !NO_REVENUE.includes(o.status)).map(o => ({ at: o.created_at, v: M.val(o), ref: o, kind: 'order' }));
+  if (M.src === 'ads') return state.ads.map(a => ({ at: a.day + 'T12:00:00', v: M.val(a), ref: a, kind: 'ad' }));
+  if (M.src === 'net') return state.orders.filter(o => !NO_REVENUE.includes(o.status)).map(o => ({ at: o.created_at, v: totals(o).profit, ref: o, kind: 'order' })).concat(state.ads.map(a => ({ at: a.day + 'T12:00:00', v: -n(a.spend), ref: a, kind: 'ad' })));
+  if (M.src === 'returns') return state.rets.filter(r => r.type !== 'feedback').map(r => ({ at: r.created_at, v: M.val(r), ref: r, kind: 'ret' }));
+  if (M.src === 'customers') return state.customers.filter(c => c.first_order_at || c.created_at).map(c => ({ at: c.first_order_at || c.created_at, v: 1, ref: c, kind: 'cust' }));
+  if (M.src === 'items') return state.items.map(i => ({ i, o: order(i.order_id) })).filter(x => x.o && !NO_REVENUE.includes(x.o.status)).map(x => ({ at: x.o.created_at, v: x.i.qty, ref: x.o, kind: 'order' }));
+  if (M.src === 'daily') return state.daily.map(d => ({ at: d.day + 'T12:00:00', v: n(d[M.field]), ref: d, kind: 'daily' }));
+  return [];
+}
+function mtSeries(key, from, to) {
+  const M = METRICS[key], rows = mtRows(key).filter(r => { const d = new Date(r.at); return d >= from && d <= new Date(to.getTime() + 86399999); });
+  const map = {}; rows.forEach(r => { const b = mtBucket(r.at); (map[b] = map[b] || { v: 0, c: 0, items: [], last: null }); map[b].v += r.v; map[b].c++; map[b].items.push(r); });
+  const buckets = mtBuckets(from, to);
+  return buckets.map(b => { const m = map[b]; let v = m ? m.v : 0;
+    if (M.kind === 'avg') v = m && m.c ? m.v / m.c : null;
+    if (M.kind === 'level') v = m ? m.items.sort((a, c) => a.at.localeCompare(c.at)).at(-1).v : null;
+    return { b, v, c: m ? m.c : 0, items: m ? m.items : [] }; });
+}
+const fmtVal = (M, v) => v == null ? '—' : M.unit === 'rsd' ? rsd(v) : String(Math.round(v * 10) / 10).replace('.', ',');
+const bucketLabel = (b) => { const d = new Date(b + 'T12:00:00'); if (mt.gran === 'month') return d.toLocaleDateString('sr-Latn-RS', { month: 'long', year: 'numeric' }); if (mt.gran === 'week') { const e = new Date(d); e.setDate(e.getDate() + 6); return `${d.toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' })} – ${e.toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' })}`; } return d.toLocaleDateString('sr-Latn-RS', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); };
+function niceStep(max) { if (max <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(max / 4))); const s = (max / 4) / p; return (s <= 1 ? 1 : s <= 2 ? 2 : s <= 5 ? 5 : 10) * p; }
+function openMetric(key, preset) {
+  if (!METRICS[key]) return;
+  mt.key = key; mt.sel = null; mt.table = false;
+  if (preset) { mt.preset = preset; }
+  if (state.period === 'custom' && !preset) { mt.preset = 'custom'; mt.from = state.range.from; mt.to = state.range.to; }
+  else if (!preset && ['1', '7', '30', '0'].includes(String(state.period))) mt.preset = String(state.period) === '1' ? '7' : String(state.period);
+  const days = (mtRange().to - mtRange().from) / 864e5;
+  mt.gran = days > 200 ? 'month' : days > 70 ? 'week' : 'day';
+  $('metricModal').classList.add('open');
+  requestAnimationFrame(renderMetric);
+}
+function renderMetric() {
+  const M = METRICS[mt.key], { from, to } = mtRange();
+  $('mtTitle').textContent = M.name; $('mtSub').textContent = M.sub;
+  document.querySelectorAll('#mtPreset button').forEach(b => b.classList.toggle('active', b.dataset.r === mt.preset));
+  document.querySelectorAll('#mtGran button').forEach(b => b.classList.toggle('active', b.dataset.g === mt.gran));
+  $('mtFrom').value = dayStr(from); $('mtTo').value = dayStr(to); $('mtCompare').checked = mt.compare;
+  $('mtCompare').parentElement.style.display = M.kind === 'level' ? 'none' : '';
+  const S = mtSeries(mt.key, from, to);
+  const len = to - from + 864e5; const pFrom = new Date(from.getTime() - len), pTo = new Date(from.getTime() - 864e5);
+  const P = mt.compare && M.kind !== 'level' ? mtSeries(mt.key, pFrom, pTo) : null;
+  const vals = S.map(x => x.v).filter(v => v != null);
+  const total = M.kind === 'flow' ? vals.reduce((a, v) => a + v, 0) : null;
+  const avg = vals.length ? vals.reduce((a, v) => a + v, 0) / vals.length : 0;
+  const best = S.filter(x => x.v != null).sort((a, b) => b.v - a.v)[0];
+  const pv = P ? P.map(x => x.v).filter(v => v != null) : null;
+  const ptotal = pv ? pv.reduce((a, v) => a + v, 0) : null;
+  let delta = null;
+  if (M.kind === 'flow' && ptotal != null && ptotal !== 0) delta = total / ptotal - 1;
+  if (M.kind === 'level' && vals.length > 1) delta = vals[0] ? vals[vals.length - 1] / vals[0] - 1 : null;
+  const days = Math.round(len / 864e5);
+  const gl = { day: 'dan', week: 'nedelju', month: 'mesec' }[mt.gran];
+  $('mtSum').innerHTML = (M.kind === 'flow' ? `<div><b>${fmtVal(M, total)}</b><span>ukupno za ${days} dana</span></div>` : M.kind === 'level' ? `<div><b>${fmtVal(M, vals.at(-1))}</b><span>trenutno</span></div>` : `<div><b>${fmtVal(M, avg)}</b><span>prosek u periodu</span></div>`) +
+    `<div><b>${fmtVal(M, avg)}</b><span>prosek po ${gl}${M.kind === 'flow' ? '' : ' (kad ima podataka)'}</span></div>` +
+    `<div><b>${best ? fmtVal(M, best.v) : '—'}</b><span>${best ? 'najbolje: ' + bucketLabel(best.b) : 'nema podataka'}</span></div>` +
+    `<div><b class="${delta == null ? '' : delta >= 0 ? 'pos' : 'neg'}">${delta == null ? '—' : (delta >= 0 ? '+' : '') + Math.round(delta * 100) + '%'}</b><span>${M.kind === 'level' ? 'od početka perioda' : mt.compare ? `vs prethodnih ${days} dana (${fmtVal(M, ptotal)})` : 'uključi poređenje iznad'}</span></div>`;
+  // chart
+  const box = $('mtChart'); const W = Math.max(320, (box.clientWidth || 900) - 12), H = Math.max(160, (box.clientHeight || 300) - 14), narrow = W < 520, L = narrow ? 40 : 58, R = 12, T = 14, B = 30, iw = W - L - R, ih = H - T - B;
+  const allV = vals.concat(pv || []); const maxV = Math.max(1, ...allV.map(v => Math.abs(v))); const minV = Math.min(0, ...allV);
+  const step = niceStep(maxV); const yMax = Math.ceil(maxV / step) * step; const yMin = minV < 0 ? -Math.ceil(-minV / step) * step : 0;
+  const y = (v) => T + ih - (v - yMin) / (yMax - yMin) * ih; const y0 = y(0);
+  const nB = S.length, slot = iw / Math.max(1, nB), bw = Math.min(24, Math.max(2, slot * (P ? 0.36 : 0.62)));
+  const xC = (i) => L + slot * i + slot / 2;
+  let g = '';
+  for (let v = yMin; v <= yMax + 1e-9; v += step) g += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${M.unit === 'rsd' ? (Math.abs(v) >= 1000 ? Math.round(v / 1000) + 'k' : v) : v}</text>`;
+  const every = Math.ceil(nB / (narrow ? 4 : 8)); let lastLbl = -99;
+  S.forEach((s, i) => { if ((i % every === 0 && i <= nB - 1 - every / 2) || (i === nB - 1 && i - lastLbl >= Math.max(2, every * 0.8))) { lastLbl = i; const d = new Date(s.b + 'T12:00:00'); g += `<text class="ax" x="${xC(i)}" y="${H - 8}" text-anchor="middle">${mt.gran === 'month' ? d.toLocaleDateString('sr-Latn-RS', { month: 'short', year: '2-digit' }) : d.toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' })}</text>`; } });
+  let marks = '';
+  if (M.kind === 'level' || M.kind === 'avg') {
+    const pts = S.map((s, i) => s.v == null ? null : [xC(i), y(s.v)]).filter(Boolean);
+    if (pts.length) { marks += `<path class="area" d="M${pts[0][0]},${y0} ` + pts.map(p => `L${p[0]},${p[1]}`).join(' ') + ` L${pts.at(-1)[0]},${y0} Z"/><polyline class="line" points="${pts.map(p => p.join(',')).join(' ')}"/>`; S.forEach((s, i) => { if (s.v != null) marks += `<circle class="dot ${mt.sel === s.b ? 'sel' : ''}" cx="${xC(i)}" cy="${y(s.v)}" r="4"/>`; }); }
+  } else {
+    if (P) P.forEach((s, i) => { if (i >= nB || s.v == null || !s.v) return; const hgt = Math.abs(y(s.v) - y0); marks += `<rect class="bar prev" x="${xC(i) - bw - 1}" y="${Math.min(y(s.v), y0)}" width="${bw}" height="${Math.max(2, hgt)}" rx="3"/>`; });
+    S.forEach((s, i) => { if (!s.v) return; const hgt = Math.abs(y(s.v) - y0); marks += `<rect class="bar ${mt.sel === s.b ? 'sel' : (mt.sel ? 'dim' : '')}" x="${P ? xC(i) + 1 : xC(i) - bw / 2}" y="${Math.min(y(s.v), y0)}" width="${bw}" height="${Math.max(2, hgt)}" rx="3" style="animation:barUp .6s var(--ease) both;animation-delay:${Math.min(i, 40) * 8}ms"/>`; });
+  }
+  if (M.kind === 'flow' && vals.length > 1 && avg) marks += `<line class="avg" x1="${L}" x2="${W - R}" y1="${y(avg)}" y2="${y(avg)}"/><text class="avgl" x="${L + 6}" y="${y(avg) - 5}">prosek ${fmtVal(M, avg)}</text>`;
+  if (yMin < 0) marks += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y0}" y2="${y0}" style="stroke:#8a9187"/>`;
+  const hits = S.map((s, i) => `<rect class="hit" data-bi="${i}" x="${L + slot * i}" y="${T}" width="${slot}" height="${ih}"/>`).join('');
+  $('mtChart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="width:100%;height:100%">${g}<line class="xh" id="mtXh" x1="0" x2="0" y1="${T}" y2="${T + ih}" style="display:none"/>${marks}${hits}</svg><div class="mt-tip" id="mtTip"></div>${!vals.length ? '<div class="mt-empty">Nema podataka u ovom periodu.</div>' : ''}`;
+  $('mtLegend').innerHTML = P ? `<span>ovaj period</span><span class="prev">prethodni period</span>` : '';
+  mt.S = S; mt.P = P; mt.geo = { W, H, L, T, ih, slot, xC };
+  renderMetricDetails();
+}
+function mtShowTip(i, pin) {
+  const s = mt.S[i]; if (!s) return; const M = METRICS[mt.key];
+  const tip = $('mtTip'), chart = $('mtChart'), r = chart.getBoundingClientRect(), sx = r.width / mt.geo.W;
+  const px = (mt.geo.xC(i)) * sx;
+  tip.style.left = Math.max(80, Math.min(r.width - 80, px)) + 'px'; tip.style.top = '12px';
+  const p = mt.P && mt.P[i];
+  tip.innerHTML = `<small>${esc(bucketLabel(s.b))}</small><b>${fmtVal(M, s.v)}</b>${M.kind !== 'level' && M.kind !== 'avg' ? `<small>${s.c} ${s.c === 1 ? 'zapis' : 'zapisa'}</small>` : ''}${p && p.v != null ? `<small>prethodni: ${fmtVal(M, p.v)}</small>` : ''}${pin ? '' : '<small>klik za detalje</small>'}`;
+  tip.classList.add('on');
+  const xh = $('mtXh'); xh.style.display = ''; xh.setAttribute('x1', mt.geo.xC(i)); xh.setAttribute('x2', mt.geo.xC(i));
+}
+function renderMetricDetails() {
+  const M = METRICS[mt.key], S = mt.S || [];
+  $('mtTableBtn').classList.toggle('active', mt.table);
+  if (mt.table) {
+    $('mtDetTitle').textContent = 'Tabela po periodu';
+    $('mtDetails').innerHTML = `<div class="table-card"><table class="mt-table"><thead><tr><th>Period</th><th class="num">${esc(M.name)}</th>${M.kind === 'flow' ? '<th class="num">Zapisa</th>' : ''}</tr></thead><tbody>${S.slice().reverse().map(s => `<tr><td>${esc(bucketLabel(s.b))}</td><td class="num">${fmtVal(M, s.v)}</td>${M.kind === 'flow' ? `<td class="num">${s.c}</td>` : ''}</tr>`).join('')}</tbody></table></div>`;
+    return;
+  }
+  const s = S.find(x => x.b === mt.sel);
+  if (!s) { $('mtDetTitle').textContent = 'Klikni na stubić za detalje tog dana'; $('mtDetails').innerHTML = ''; return; }
+  $('mtDetTitle').textContent = `${bucketLabel(s.b)}: ${fmtVal(M, s.v)}`;
+  const items = s.items.slice().sort((a, b) => b.at.localeCompare(a.at));
+  $('mtDetails').innerHTML = items.map(it => {
+    if (it.kind === 'order') { const o = it.ref, t = totals(o); return `<div class="list-row" data-order="${o.id}"><span><b>${esc(o.order_no || '')}</b> · ${esc(o.customer_name)} · ${itemsSummary(o)} <span class="page-sub">${fmtDT(o.created_at)}</span></span><span>${pill(o.status)} <b class="num">${mt.key === 'profit' || mt.key === 'net' ? rsd(t.profit) : rsd(t.revenue)}</b></span></div>`; }
+    if (it.kind === 'ad') { const a = it.ref; return `<div class="list-row" data-goto="ads"><span>Reklame · ${esc(a.campaign)}${a.purchases != null ? ` · ${a.purchases} kupovina (Meta)` : ''}</span><b class="num neg">−${rsd(a.spend)}</b></div>`; }
+    if (it.kind === 'ret') { const r = it.ref; return `<div class="list-row" data-ret="${r.id}"><span><b>${esc(r.case_no)}</b> · ${esc(r.customer_name)} · ${RT[r.type]} · ${esc(r.item || '')} ${esc(r.reason || '')}</span><span>${pill(r.status)}${r.refund_amount ? ` <b class="num">${rsd(r.refund_amount)}</b>` : ''}</span></div>`; }
+    if (it.kind === 'cust') { const c = it.ref; return `<div class="list-row" data-cust="${c.id}"><span><b>${esc(c.name)}</b> · ${esc(c.city || '')} · ${esc(c.phone || c.instagram || '')}</span><span class="page-sub">${fmtDT(it.at)}</span></span></div>`; }
+    if (it.kind === 'daily') { const d = it.ref; return `<div class="list-row" style="cursor:default"><span>Presek ${esc(d.day)}: ${d.stock_pcs} kom · ${rsd(d.stock_value)} · ${d.orders} porudžbina · ${rsd(d.revenue)}</span><span class="page-sub">upisano ${fmtDT(d.updated_at)}</span></div>`; }
+    return '';
+  }).join('') || '<div class="kb-empty">Nema zapisa za ovaj period.</div>';
+}
+function sparkline(key) {
+  const M = METRICS[key]; if (!M) return '';
+  const save = { gran: mt.gran, preset: mt.preset }; mt.gran = 'day';
+  const to = new Date(); to.setHours(0, 0, 0, 0); const from = new Date(to); from.setDate(from.getDate() - 13);
+  const S = mtSeries(key, from, to); mt.gran = save.gran;
+  const vals = S.map(s => s.v == null ? 0 : s.v); const max = Math.max(1, ...vals.map(Math.abs)), min = Math.min(0, ...vals);
+  const w = 96, h = 30, pts = vals.map((v, i) => [i / 13 * w, h - 3 - (v - min) / (max - min || 1) * (h - 6)]);
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path class="sp-fill" d="M${pts[0][0]},${h} ${pts.map(p => `L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')} L${w},${h} Z"/><polyline points="${pts.map(p => p.map(x => x.toFixed(1)).join(',')).join(' ')}"/><circle cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1].toFixed(1)}" r="3"/></svg>`;
+}
+function deltaChip(key) {
+  const M = METRICS[key]; if (!M || M.kind !== 'flow') return '';
+  const P = state.period; if (P === 'custom' || String(P) === '0') return '';
+  const days = +P || 30; const to = new Date(); to.setHours(0, 0, 0, 0); const from = new Date(to); from.setDate(from.getDate() - (days - 1));
+  const pTo = new Date(from.getTime() - 864e5), pFrom = new Date(pTo.getTime() - (days - 1) * 864e5);
+  const save = mt.gran; mt.gran = 'day';
+  const cur = mtSeries(key, from, to).reduce((a, s) => a + (s.v || 0), 0), prev = mtSeries(key, pFrom, pTo).reduce((a, s) => a + (s.v || 0), 0);
+  mt.gran = save;
+  if (!prev) return '';
+  const d = cur / prev - 1; const up = d >= 0.005, down = d <= -0.005;
+  const good = key === 'ads' || key === 'returns' || key === 'refunds' ? !up : up;
+  return `<span class="delta ${!up && !down ? 'flat' : good ? 'up' : 'down'}" title="u odnosu na prethodnih ${days} dana">${up ? '▲' : down ? '▼' : '•'} ${Math.abs(Math.round(d * 100))}%</span>`;
+}
+
 /* ---------------- shell ---------------- */
 function renderAll() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
@@ -2134,6 +2303,18 @@ function bindEvents() {
     else if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey) { openOrderModal(); }
   });
   if (!/Mac|iPhone|iPad/.test(navigator.platform)) $('cmdKbd').textContent = 'Ctrl K';
+  // brend: klik na logo -> početna
+  $('brandHome').addEventListener('click', (e) => { e.preventDefault(); $('projSel').value = 'harizma'; $('harizma').style.display = ''; $('soonView').style.display = 'none'; setTab('overview'); });
+  // analitika
+  $('mtPreset').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; mt.preset = b.dataset.r; mt.sel = null; const d = (mtRange().to - mtRange().from) / 864e5; mt.gran = d > 200 ? 'month' : d > 70 ? 'week' : 'day'; renderMetric(); });
+  ['mtFrom', 'mtTo'].forEach(id => $(id).addEventListener('change', () => { mt.preset = 'custom'; mt.from = $('mtFrom').value; mt.to = $('mtTo').value; mt.sel = null; renderMetric(); }));
+  $('mtGran').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; mt.gran = b.dataset.g; mt.sel = null; renderMetric(); });
+  $('mtCompare').addEventListener('change', (e) => { mt.compare = e.target.checked; renderMetric(); });
+  $('mtTableBtn').addEventListener('click', () => { mt.table = !mt.table; renderMetricDetails(); });
+  let mtRz; window.addEventListener('resize', () => { if (!$('metricModal').classList.contains('open')) return; clearTimeout(mtRz); mtRz = setTimeout(renderMetric, 150); });
+  $('mtChart').addEventListener('pointermove', (e) => { const h = e.target.closest('.hit'); if (h) mtShowTip(+h.dataset.bi, false); });
+  $('mtChart').addEventListener('pointerleave', () => { if (mt.sel == null) { $('mtTip')?.classList.remove('on'); const xh = $('mtXh'); if (xh) xh.style.display = 'none'; } else { const i = mt.S.findIndex(s => s.b === mt.sel); if (i >= 0) mtShowTip(i, true); } });
+  $('mtChart').addEventListener('click', (e) => { const h = e.target.closest('.hit'); if (!h) return; const s = mt.S[+h.dataset.bi]; mt.sel = mt.sel === s.b ? null : s.b; mt.table = false; renderMetric(); if (mt.sel) mtShowTip(+h.dataset.bi, true); });
   // obaveštenja
   $('bellBtn').addEventListener('click', (e) => { e.stopPropagation(); $('bellMenu').classList.toggle('open'); });
   document.addEventListener('click', (e) => { if (!e.target.closest('.bell-wrap')) $('bellMenu').classList.remove('open'); });
@@ -2171,18 +2352,19 @@ function bindEvents() {
     const bm = e.target.closest('[data-bm]'); if (bm) { e.stopPropagation(); return nfMenu(bm.dataset.bm); }
     const nd = e.target.closest('[data-ndis]'); if (nd) { e.stopPropagation(); return nfDismiss(+nd.dataset.ndis); }
     const no = e.target.closest('[data-nopen]'); if (no) { e.stopPropagation(); const r = no.dataset.nopen; $('notifModal').classList.remove('open'); if (r.startsWith('tab:')) return setTab(r.slice(4)); const tabFor = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' }; const k = r.split(':')[0]; if (tabFor[k] && state.tab !== tabFor[k]) setTab(tabFor[k]); return openRef(r); }
+    const mtile = e.target.closest('[data-metric]'); if (mtile) return openMetric(mtile.dataset.metric);
     if (e.target.id === 'loySave') return saveLoyalty();
     const rw = e.target.closest('[data-reward]'); if (rw) { e.stopPropagation(); return giveReward(rw.dataset.reward); }
     const noc = e.target.closest('[data-newordercust]'); if (noc) { const c = state.customers.find(x => x.id === noc.dataset.newordercust); $('custModal').classList.remove('open'); openOrderModal(); if (c) { $('o_name').value = c.name; $('o_phone').value = c.phone || ''; $('o_ig').value = c.instagram || ''; $('o_email').value = c.email || ''; $('o_addr').value = c.address || ''; $('o_city').value = c.city || ''; $('o_zip').value = c.postal_code || ''; } return; }
     const cdl = e.target.closest('[data-code]'); if (cdl && !e.target.closest('#codeModal')) return openCodeModal(cdl.dataset.code);
-    const cst = e.target.closest('[data-cust]'); if (cst && !e.target.closest('#custModal')) return openCustModal(cst.dataset.cust);
+    const cst = e.target.closest('[data-cust]'); if (cst && !e.target.closest('#custModal')) { if (e.target.closest('#metricModal')) $('metricModal').classList.remove('open'); return openCustModal(cst.dataset.cust); }
     const rs = e.target.closest('[data-restore]'); if (rs) { const [t, id] = rs.dataset.restore.split(':'); return restoreRow(t, id); }
     const pw = e.target.closest('[data-pwriter]'); if (pw) { state.writer = pw.dataset.pwriter; renderPromoNotes(state.editPromoId); return; }
     if (e.target.id === 'histMore') { state.histLimit += 200; return renderHistory(); }
     const op = e.target.closest('[data-open]'); if (op && !e.target.closest('.modal-wrap')) return openRef(op.dataset.open);
     const pm = e.target.closest('[data-promo]'); if (pm && !e.target.closest('#promoModal')) return openPromoModal(pm.dataset.promo);
     const ti = e.target.closest('[data-toidea]'); if (ti) { e.stopPropagation(); return retToIdea(ti.dataset.toidea); }
-    const rr = e.target.closest('[data-ret]'); if (rr && !e.target.closest('#retModal')) { if (e.target.closest('#custModal')) $('custModal').classList.remove('open'); return openRetModal(rr.dataset.ret); }
+    const rr = e.target.closest('[data-ret]'); if (rr && !e.target.closest('#retModal')) { if (e.target.closest('#custModal')) $('custModal').classList.remove('open'); if (e.target.closest('#metricModal')) $('metricModal').classList.remove('open'); return openRetModal(rr.dataset.ret); }
     const ii = e.target.closest('[data-idea]'); if (ii) return openIdeaModal(ii.dataset.idea);
     const pk = e.target.closest('[data-pack]'); if (pk) return openPackModal(pk.dataset.pack);
     const sb_ = e.target.closest('[data-stock]');
@@ -2191,8 +2373,8 @@ function bindEvents() {
     if (del) { if (confirm('Unos ide u arhivu. Nastaviti?')) softDelete('h_ad_spend', del.dataset.delad).then(() => { state.ads = state.ads.filter(a => a.id !== del.dataset.delad); renderAll(); }).catch(fail); return; }
     const zoom = e.target.closest('[data-zoom]');
     if (zoom) { $('lightboxImg').src = zoom.src; $('lightbox').classList.add('open'); return; }
-    const go = e.target.closest('[data-goto]'); if (go) return setTab(go.dataset.goto);
-    const oe = e.target.closest('[data-order]'); if (oe && !e.target.closest('.drawer')) { if (e.target.closest('#custModal')) $('custModal').classList.remove('open'); return openDrawer(oe.dataset.order); }
+    const go = e.target.closest('[data-goto]'); if (go) { document.querySelectorAll('.modal-wrap.open').forEach(m => m.classList.remove('open')); return setTab(go.dataset.goto); }
+    const oe = e.target.closest('[data-order]'); if (oe && !e.target.closest('.drawer')) { if (e.target.closest('#custModal')) $('custModal').classList.remove('open'); if (e.target.closest('#metricModal')) $('metricModal').classList.remove('open'); return openDrawer(oe.dataset.order); }
     const pe = e.target.closest('[data-product]'); if (pe) return openProductModal(pe.dataset.product);
     if (e.target.matches('[data-close]')) { const mw = e.target.closest('.modal-wrap'); mw.classList.remove('open'); if (mw.id === 'notifModal') { state.trayHidden = false; renderTray(); } }
   });
