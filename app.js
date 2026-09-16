@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609161741';
+const APP_BUILD = '202609161749';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -1057,7 +1057,7 @@ async function noteAction(id, act) {
   try {
     if (act === 'del') { if (!confirm('Beleška ide u arhivu. Nastaviti?')) return; await softDelete('h_notes', id); state.notes = state.notes.filter(z => z.id !== id); }
     else { const f = act === 'pin' ? 'pinned' : 'done'; await q(sb.from('h_notes').update({ [f]: !x[f] }).eq('id', id)); x[f] = !x[f]; }
-    renderNotes(); if (state.editPromoId && $('promoModal').classList.contains('open')) { renderPromoNotes(state.editPromoId); renderPromos(); }
+    renderNotes(); renderHomeNotes(); if (state.editPromoId && $('promoModal').classList.contains('open')) { renderPromoNotes(state.editPromoId); renderPromos(); }
   } catch (e) { fail(e); }
 }
 
@@ -1577,6 +1577,7 @@ const SECTIONS = [
 ];
 const ACTIONS = [
   { name: 'Nova porudžbina', kw: 'dodaj unesi', ic: '+', run: () => openOrderModal() },
+  { name: 'Nova beleška', kw: 'zabelezi note zapisi', ic: '✎', run: () => openNoteModal('general') },
   { name: 'Novi kupac', kw: 'dodaj', ic: '+', run: () => openCustModal() },
   { name: 'Novi komad', kw: 'proizvod roba dodaj', ic: '+', run: () => openProductModal() },
   { name: 'Nova ideja za objavu', kw: 'post reel', ic: '+', run: () => openPostModal() },
@@ -2253,6 +2254,37 @@ function deltaChip(key) {
   return `<span class="delta ${!up && !down ? 'flat' : good ? 'up' : 'down'}" title="u odnosu na prethodnih ${days} dana">${up ? '▲' : down ? '▼' : '•'} ${Math.abs(Math.round(d * 100))}%</span>`;
 }
 
+/* ---------- BRZA BELEŠKA + beleške na Pregledu ---------- */
+function renderHomeNotes() {
+  const list = state.notes.filter(x => x.area === 'general').sort((a, b) => (b.pinned - a.pinned) || (a.done - b.done) || b.created_at.localeCompare(a.created_at));
+  const show = list.filter(x => !x.done).slice(0, 8);
+  $('homeNotes').innerHTML = show.map((x, i) => `<div class="hn ${x.pinned ? 'pinned' : ''} ${x.done ? 'done' : ''}" style="animation-delay:${i * 40}ms">
+      <div class="txt">${esc(x.body).replace(/\n/g, '<br>')}</div>
+      <div class="meta"><span class="by ${PEOPLE[x.author] ? x.author : 'other'}">${esc(personName(x.author))}</span>${relTime(x.created_at)}${x.pinned ? ' · 📌' : ''}</div>
+      <span class="n-act"><button data-note="${x.id}" data-act="pin" title="Zakači">📌</button><button data-note="${x.id}" data-act="done" title="Završeno">✓</button><button data-note="${x.id}" data-act="del" title="Obriši">✕</button></span></div>`).join('')
+    + `<div class="hn add" id="hnAdd">✎ Nova beleška${list.filter(x => x.done).length ? ` <span class="page-sub" style="margin-left:8px">· ${list.filter(x => x.done).length} završenih</span>` : ''}</div>`;
+}
+function openNoteModal(area) {
+  $('qn_body').value = ''; $('qn_pin').checked = false; $('qn_area').value = area || 'general';
+  const w = state.writer || who();
+  document.querySelectorAll('#qnWriter button').forEach(b => b.classList.toggle('active', b.dataset.qw === w));
+  $('noteModal').classList.add('open'); setTimeout(() => $('qn_body').focus(), 40);
+}
+async function saveQuickNote() {
+  const body = $('qn_body').value.trim(); if (!body) return toast('Napiši nešto prvo');
+  const area = $('qn_area').value, author = state.writer || who();
+  try {
+    if (area === 'milestone') {
+      const r = await q(sb.from('h_milestones').insert({ title: body.split('\n')[0].slice(0, 140), body: body.includes('\n') ? body.slice(body.indexOf('\n') + 1) : null, kind: 'event', author: personName(author) }).select().single());
+      state.milestones.push(r);
+    } else {
+      const r = await q(sb.from('h_notes').insert({ area, author, body, pinned: $('qn_pin').checked }).select().single());
+      state.notes.push(r);
+    }
+    $('noteModal').classList.remove('open'); renderAll(); toast('Zabeleženo ✓');
+  } catch (e) { fail(e); }
+}
+
 /* ---------------- shell ---------------- */
 function renderAll() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
@@ -2260,7 +2292,7 @@ function renderAll() {
   document.querySelectorAll('#periodSeg button').forEach(b => b.classList.toggle('active', b.dataset.p === String(state.period)));
   $('rangeWrap').style.display = state.period === 'custom' ? '' : 'none';
   renderOverview(); renderOrders(); renderProducts(); renderAds();
-  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes(); renderReturns(); renderPromos(); renderCustomers();
+  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes(); renderReturns(); renderPromos(); renderCustomers(); renderHomeNotes();
   if (state.tab === 'history') renderHistory();
 }
 function setTab(t) {
@@ -2301,8 +2333,14 @@ function bindEvents() {
     if (e.key === '/') { e.preventDefault(); openCmd(); }
     else if (/^[1-9]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) { const sct = SECTIONS[+e.key - 1]; if (sct) setTab(sct.tab); }
     else if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey) { openOrderModal(); }
+    else if (e.key.toLowerCase() === 'b' && !e.metaKey && !e.ctrlKey) { openNoteModal('general'); }
   });
   if (!/Mac|iPhone|iPad/.test(navigator.platform)) $('cmdKbd').textContent = 'Ctrl K';
+  // brza beleška
+  $('quickNoteBtn').addEventListener('click', () => openNoteModal('general'));
+  $('qnSave').addEventListener('click', saveQuickNote);
+  $('noteModal').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveQuickNote(); } });
+  $('qnWriter').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.writer = b.dataset.qw; document.querySelectorAll('#qnWriter button').forEach(x => x.classList.toggle('active', x === b)); });
   // brend: klik na logo -> početna
   $('brandHome').addEventListener('click', (e) => { e.preventDefault(); $('projSel').value = 'harizma'; $('harizma').style.display = ''; $('soonView').style.display = 'none'; setTab('overview'); });
   // analitika
@@ -2353,6 +2391,7 @@ function bindEvents() {
     const nd = e.target.closest('[data-ndis]'); if (nd) { e.stopPropagation(); return nfDismiss(+nd.dataset.ndis); }
     const no = e.target.closest('[data-nopen]'); if (no) { e.stopPropagation(); const r = no.dataset.nopen; $('notifModal').classList.remove('open'); if (r.startsWith('tab:')) return setTab(r.slice(4)); const tabFor = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' }; const k = r.split(':')[0]; if (tabFor[k] && state.tab !== tabFor[k]) setTab(tabFor[k]); return openRef(r); }
     const mtile = e.target.closest('[data-metric]'); if (mtile) return openMetric(mtile.dataset.metric);
+    if (e.target.id === 'hnAdd' || e.target.closest('#hnAdd')) return openNoteModal('general');
     if (e.target.id === 'loySave') return saveLoyalty();
     const rw = e.target.closest('[data-reward]'); if (rw) { e.stopPropagation(); return giveReward(rw.dataset.reward); }
     const noc = e.target.closest('[data-newordercust]'); if (noc) { const c = state.customers.find(x => x.id === noc.dataset.newordercust); $('custModal').classList.remove('open'); openOrderModal(); if (c) { $('o_name').value = c.name; $('o_phone').value = c.phone || ''; $('o_ig').value = c.instagram || ''; $('o_email').value = c.email || ''; $('o_addr').value = c.address || ''; $('o_city').value = c.city || ''; $('o_zip').value = c.postal_code || ''; } return; }
