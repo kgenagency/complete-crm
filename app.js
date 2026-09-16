@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609161256';
+const APP_BUILD = '202609161305';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -35,7 +35,7 @@ const IDEA_ST = [
 const FMT = { reel: 'Reel', carousel: 'Carousel', story: 'Story', post: 'Post', tiktok: 'TikTok' };
 const PRIO = { high: 'Visok', medium: 'Srednji', low: 'Nizak' };
 const CAT = { dizajn: 'Dizajn', tekst: 'Tekst', funkcija: 'Funkcija', proizvod: 'Proizvod', materijal: 'Materijal', ostalo: 'Ostalo' };
-const PEOPLE = { konstantin: { name: 'Konstantin', voc: 'Konstantine', f: false }, stasa: { name: 'Staša', voc: 'Staša', f: true }, marjan: { name: 'Marjan', voc: 'Marjane', f: false } };
+const PEOPLE = { konstantin: { name: 'Konstantin', voc: 'Konstantine', f: false }, stasa: { name: 'Staša', voc: 'Staša', f: true, line: 'Vreme je da zablistamo i danas ✨' }, marjan: { name: 'Marjan', voc: 'Marjane', f: false } };
 const SHOP_URL = 'https://wegmk4-wf.myshopify.com';
 Object.assign(ST, Object.fromEntries(POST_ST.map(s => [s.key, s.label])), Object.fromEntries(IDEA_ST.map(s => [s.key, s.label])));
 const lowT = () => +LS.get('crm_low', '2');
@@ -1040,10 +1040,11 @@ function greet(u) {
 function playSplash(u) {
   return new Promise(res => {
     const sp = $('splash');
-    $('splashHello').textContent = greet(u);
+    const pp = PEOPLE[u.username];
+    $('splashHello').innerHTML = esc(greet(u)) + (pp?.line ? `<span class="hello-sub">${esc(pp.line)}</span>` : '');
     const clone = sp.cloneNode(true); sp.replaceWith(clone); // restart animacija
     clone.classList.remove('hide');
-    setTimeout(() => { clone.classList.add('hide'); res(); }, 2300);
+    setTimeout(() => { clone.classList.add('hide'); res(); }, pp?.line ? 3000 : 2300);
   });
 }
 function countUp(root) {
