@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609161810';
+const APP_BUILD = '202609162138';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -1056,8 +1056,8 @@ async function noteAction(id, act) {
   const x = state.notes.find(z => z.id === id); if (!x) return;
   try {
     if (act === 'del') { if (!confirm('Beleška ide u arhivu. Nastaviti?')) return; await softDelete('h_notes', id); state.notes = state.notes.filter(z => z.id !== id); }
-    else { const f = act === 'pin' ? 'pinned' : 'done'; await q(sb.from('h_notes').update({ [f]: !x[f] }).eq('id', id)); x[f] = !x[f]; }
-    renderNotes(); renderHomeNotes(); if (state.editPromoId && $('promoModal').classList.contains('open')) { renderPromoNotes(state.editPromoId); renderPromos(); }
+    else { const f = act === 'pin' ? 'pinned' : 'done'; const patch = { [f]: !x[f] }; if (f === 'done') patch.done_by = !x.done ? who() : null; await q(sb.from('h_notes').update(patch).eq('id', id)); Object.assign(x, patch); }
+    renderNotes(); renderHomeNotes(); renderNotesPage(); renderNotesBadge(); if (state.editPromoId && $('promoModal').classList.contains('open')) { renderPromoNotes(state.editPromoId); renderPromos(); }
   } catch (e) { fail(e); }
 }
 
@@ -1563,6 +1563,7 @@ function periodLabel() { const P = state.period; return P === 'custom' ? `${stat
 /* ---------- PRETRAGA (command palette) ---------- */
 const SECTIONS = [
   { tab: 'overview', name: 'Pregled', kw: 'dashboard pocetna prihod profit statistika brojke', ic: '◈' },
+  { tab: 'notes', name: 'Beleške', kw: 'beleske note zapisi papirici tim', ic: '✎' },
   { tab: 'orders', name: 'Porudžbine', kw: 'narudzbine order kupovine pipeline tabela', ic: '◫' },
   { tab: 'customers', name: 'Kupci', kw: 'klijenti kupac loyalty klub popusti kodovi vip poeni', ic: '☺' },
   { tab: 'products', name: 'Garderoba', kw: 'roba proizvodi zalihe stanje velicine komadi upozorenja', ic: '▤' },
@@ -2018,14 +2019,15 @@ function renderTray() {
   $('bmHead').textContent = nfSnoozed() ? `Utišano do ${fmtDT(s.snooze_until)}` : list.length ? `${list.length} novih promena od drugih` : 'Nema novih promena';
   const tray = $('ntray');
   if (nfSnoozed() || state.trayHidden) { tray.innerHTML = ''; return; }
-  const show = list.slice(0, 3);
+  const maxN = window.innerWidth <= 980 ? 1 : 3;
+  const show = list.slice(0, maxN);
   const keys = new Set(show.map(g => String(g.key)));
   [...tray.querySelectorAll('.ncard[data-nk]')].forEach(el => { if (!keys.has(el.dataset.nk)) el.remove(); });
   show.slice().reverse().forEach(g => { if (!tray.querySelector(`.ncard[data-nk="${g.key}"]`)) tray.insertAdjacentHTML('afterbegin', nfCard(g, { cls: g.live ? 'live' : '' })); });
   // reorder to match
   show.forEach(g => tray.appendChild(tray.querySelector(`.ncard[data-nk="${g.key}"]`)));
   tray.querySelector('.summary')?.remove();
-  if (list.length > 3) tray.insertAdjacentHTML('beforeend', `<div class="ncard summary" data-nk="sum"><div>Još <b>${list.length - 3}</b> promena. <button data-bm="history" style="border:none;background:none;color:#E8E4D9;text-decoration:underline;font-weight:700;padding:0">Otvori istoriju</button></div><button class="n-x" data-bm="clear" title="Skloni sve">✕</button></div>`);
+  if (list.length > maxN) tray.insertAdjacentHTML('beforeend', `<div class="ncard summary" data-nk="sum"><div>Još <b>${list.length - maxN}</b> promena. <button data-bm="history" style="border:none;background:none;color:#E8E4D9;text-decoration:underline;font-weight:700;padding:0">Otvori istoriju</button></div><button class="n-x" data-bm="clear" title="Skloni sve">✕</button></div>`);
 }
 function nfDismiss(key) {
   const s = nfState(); if (!s.dismissed.includes(key)) s.dismissed.push(key);
@@ -2273,12 +2275,12 @@ function deltaChip(key) {
 function renderHomeNotes() {
   const list = state.notes.slice().sort((a, b) => (b.pinned - a.pinned) || (a.done - b.done) || b.created_at.localeCompare(a.created_at));
   const where = (x) => x.area === 'story' ? 'Brand story' : (x.area || '').startsWith('promo:') ? ('Promocija: ' + (state.promos.find(p => p.id === x.area.split(':')[1])?.name || '')) : '';
-  const show = list.filter(x => !x.done).slice(0, 8);
+  const show = list.filter(x => !x.done).slice(0, 6);
   $('homeNotes').innerHTML = show.map((x, i) => `<div class="hn ${x.pinned ? 'pinned' : ''} ${x.done ? 'done' : ''}" style="animation-delay:${i * 40}ms">
       <div class="txt">${esc(x.body).replace(/\n/g, '<br>')}</div>
       <div class="meta"><span class="by ${PEOPLE[x.author] ? x.author : 'other'}">${esc(personName(x.author))}</span>${relTime(x.created_at)}${where(x) ? ' · ' + esc(where(x)) : ''}${x.pinned ? ' · 📌' : ''}</div>
       <span class="n-act"><button data-note="${x.id}" data-act="pin" title="Zakači">📌</button><button data-note="${x.id}" data-act="done" title="Završeno">✓</button><button data-note="${x.id}" data-act="del" title="Obriši">✕</button></span></div>`).join('')
-    + `<div class="hn add" id="hnAdd">✎ Nova beleška${list.filter(x => x.done).length ? ` <span class="page-sub" style="margin-left:8px">· ${list.filter(x => x.done).length} završenih</span>` : ''}</div>`;
+    + `<div class="hn add" id="hnAdd">✎ Nova beleška</div><div class="hn all" data-goto="notes">Sve beleške (${list.length}) →</div>`;
 }
 function openNoteModal(area) {
   $('qn_body').value = ''; $('qn_pin').checked = false; $('qn_area').value = area || 'general';
@@ -2301,6 +2303,96 @@ async function saveQuickNote() {
   } catch (e) { fail(e); }
 }
 
+/* ---------- MOBILNI MENI (tri crtice) ---------- */
+function openNav() { renderNav(); document.body.classList.add('nav-open'); $('navQ').value = ''; }
+function closeNav() { document.body.classList.remove('nav-open'); $('navQ').blur(); }
+function navBadge(tab) {
+  const id = { products: 'alertBadge', returns: 'retBadge', promos: 'promoBadge', packaging: 'packBadge', notes: 'notesBadge' }[tab];
+  const el = id && $(id); return el && el.style.display !== 'none' && el.textContent ? `<span class="tab-badge ${el.classList.contains('live') ? 'live' : ''}">${esc(el.textContent)}</span>` : '';
+}
+function renderNav() {
+  if (!state.user) return;
+  $('navUser').textContent = state.user.display; $('navAvatar').textContent = state.user.display.charAt(0).toUpperCase();
+  $('navProj').value = $('projSel').value;
+  const qraw = $('navQ').value.trim(), qn = fold(qraw);
+  let html = '';
+  const secs = SECTIONS.filter(s => !qn || scoreMatch(s.name, qn) || scoreMatch(s.kw, qn));
+  if (secs.length) html += (qn ? '<div class="nd-grp">Sekcije</div>' : '') + secs.map((s, i) => `<button class="nd-item ${state.tab === s.tab ? 'active' : ''}" data-navtab="${s.tab}" style="animation-delay:${i * 22}ms"><span class="ic">${s.ic}</span><span>${hl(s.name, qn)}</span>${navBadge(s.tab)}</button>`).join('');
+  if (qn) {
+    const res = cmdItems(qraw).filter(it => it.k !== 'tab').slice(0, 12);
+    state.navRes = res;
+    if (res.length) html += '<div class="nd-grp">Rezultati</div>' + res.map((it, i) => `<button class="nd-item" data-navres="${i}"><span class="ic">${it.ic}</span><span style="min-width:0">${hl(it.title, qn)}${it.sub ? `<small>${hl(it.sub, qn)}</small>` : ''}</span></button>`).join('');
+    if (!secs.length && !res.length) html = `<div class="nd-grp">Ništa za „${esc(qraw)}“</div>`;
+  }
+  $('navList').innerHTML = html;
+}
+
+/* ---------- STRANICA BELEŠKE ---------- */
+const npState = { who: 'all', status: 'open', area: 'all', sort: 'new', editId: null };
+const notePlace = (x) => x.area === 'story' ? 'Brand story' : (x.area || '').startsWith('promo:') ? ('Promocija: ' + (state.promos.find(p => p.id === x.area.split(':')[1])?.name || '')) : 'Opšta';
+const seenKey = () => 'crm_notes_seen_' + who();
+function notesUnread() { const seen = LS.get(seenKey(), ''); return state.notes.filter(x => x.author !== who() && !x.done && (!seen || x.created_at > seen)).length; }
+function renderNotesBadge() { const n = notesUnread(), b = $('notesBadge'); if (!b) return; b.style.display = n && state.tab !== 'notes' ? '' : 'none'; b.textContent = n; }
+function npCard(x, i) {
+  const editing = npState.editId === x.id;
+  const p = PEOPLE[x.author];
+  return `<div class="np-note ${x.pinned ? 'pinned' : ''} ${x.done ? 'done' : ''}" style="animation-delay:${Math.min(i, 20) * 25}ms" data-npid="${x.id}">
+    ${editing ? `<textarea id="npEdit">${esc(x.body)}</textarea>` : `<div class="txt">${esc(x.body)}</div>`}
+    <div class="np-meta"><span class="n-av ${p ? x.author : 'system'}">${esc((p ? p.name : x.author).charAt(0))}</span><b>${esc(personName(x.author))}</b>
+      <span title="${fmtDT(x.created_at)}">${relTime(x.created_at)}</span><span class="place">${esc(notePlace(x))}</span>
+      ${x.updated_at ? `<span>· izmenio/la ${esc(personName(x.updated_by || ''))} ${relTime(x.updated_at)}</span>` : ''}
+      ${x.done ? `<span>· završeno${x.done_by ? ' (' + esc(personName(x.done_by)) + ')' : ''}</span>` : ''}</div>
+    <div class="np-acts">${editing ? `<button data-npsave="${x.id}" class="on">Sačuvaj</button><button data-npcancel="1">Otkaži</button>` :
+      `<button data-note="${x.id}" data-act="pin" class="${x.pinned ? 'on' : ''}">📌 ${x.pinned ? 'Otkači' : 'Zakači'}</button><button data-note="${x.id}" data-act="done" class="${x.done ? 'on' : ''}">✓ ${x.done ? 'Vrati' : 'Završeno'}</button><button data-npedit="${x.id}">✎ Izmeni</button><button data-note="${x.id}" data-act="del">✕</button>`}</div>
+  </div>`;
+}
+function renderNotesPage() {
+  if (!$('npList')) return;
+  const qn = fold($('npQ').value.trim());
+  const all = state.notes;
+  // ljudi
+  const people = Object.keys(PEOPLE).map(k => ({ k, open: all.filter(x => x.author === k && !x.done).length, tot: all.filter(x => x.author === k).length }));
+  $('npPeople').innerHTML = `<div class="np-person ${npState.who === 'all' ? 'active' : ''}" data-npwho="all"><span class="n-av system">∑</span><div><b>Svi</b><span>${all.filter(x => !x.done).length} otvorenih · ${all.length} ukupno</span></div></div>` +
+    people.map(p => `<div class="np-person ${npState.who === p.k ? 'active' : ''}" data-npwho="${p.k}"><span class="n-av ${p.k}">${PEOPLE[p.k].name.charAt(0)}</span><div><b>${PEOPLE[p.k].name}</b><span>${p.open} otvorenih · ${p.tot} ukupno</span></div></div>`).join('');
+  document.querySelectorAll('#npStatus button').forEach(b => b.classList.toggle('active', b.dataset.s === npState.status));
+  const w = state.writer || who();
+  document.querySelectorAll('#npWriter button').forEach(b => b.classList.toggle('active', b.dataset.npw === w));
+  let list = all.filter(x => (npState.who === 'all' || x.author === npState.who)
+    && (npState.status === 'all' || (npState.status === 'done' ? x.done : !x.done))
+    && (npState.area === 'all' || (npState.area === 'promo' ? (x.area || '').startsWith('promo:') : x.area === npState.area))
+    && (!qn || fold(x.body + ' ' + personName(x.author) + ' ' + notePlace(x)).includes(qn)));
+  list.sort((a, b) => npState.sort === 'old' ? a.created_at.localeCompare(b.created_at) : b.created_at.localeCompare(a.created_at));
+  $('npCount').textContent = `${list.length} beleški`;
+  const pinned = list.filter(x => x.pinned && !x.done), rest = list.filter(x => !(x.pinned && !x.done));
+  let html = '', i = 0;
+  if (pinned.length) html += `<div class="np-day">Zakačeno <span>${pinned.length}</span></div><div class="np-grid">${pinned.map(x => npCard(x, i++)).join('')}</div>`;
+  const groups = []; let cur = null;
+  rest.forEach(x => { const d = dayStr(new Date(x.created_at)); if (!cur || cur.d !== d) { cur = { d, items: [] }; groups.push(cur); } cur.items.push(x); });
+  groups.forEach(g => { const dt = new Date(g.d + 'T12:00:00'), today = dayStr(new Date()), y = new Date(); y.setDate(y.getDate() - 1);
+    const lbl = g.d === today ? 'Danas' : g.d === dayStr(y) ? 'Juče' : dt.toLocaleDateString('sr-Latn-RS', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    html += `<div class="np-day">${lbl} <span>${g.items.length}</span></div><div class="np-grid">${g.items.map(x => npCard(x, i++)).join('')}</div>`; });
+  const prevEdit = document.activeElement && document.activeElement.id === 'npEdit' ? document.activeElement.value : null;
+  if (prevEdit !== null) return; // ne prekidaj izmenu dok neko kuca
+  $('npList').innerHTML = html || `<div class="panel"><div class="page-sub">${all.length ? 'Nema beleški za ovaj filter.' : 'Još nema beleški. Upiši prvu gore.'}</div></div>`;
+  if (npState.editId) { const t = $('npEdit'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }
+}
+async function npSaveNew() {
+  const body = $('np_body').value.trim(); if (!body) return toast('Napiši nešto prvo');
+  try {
+    const r = await q(sb.from('h_notes').insert({ area: $('np_area').value, author: state.writer || who(), body, pinned: $('np_pin').checked }).select().single());
+    state.notes.push(r); $('np_body').value = ''; $('np_pin').checked = false; renderAll(); toast('Beleška sačuvana ✓');
+  } catch (e) { fail(e); }
+}
+async function npSaveEdit(id) {
+  const x = state.notes.find(z => z.id === id), t = $('npEdit'); if (!x || !t) return;
+  const body = t.value.trim(); if (!body) return toast('Beleška ne može biti prazna');
+  try {
+    const patch = { body, updated_at: new Date().toISOString(), updated_by: who() };
+    await q(sb.from('h_notes').update(patch).eq('id', id)); Object.assign(x, patch);
+    npState.editId = null; t.blur(); renderAll(); toast('Izmenjeno ✓');
+  } catch (e) { fail(e); }
+}
+
 /* ---------------- shell ---------------- */
 function renderAll() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
@@ -2308,10 +2400,12 @@ function renderAll() {
   document.querySelectorAll('#periodSeg button').forEach(b => b.classList.toggle('active', b.dataset.p === String(state.period)));
   $('rangeWrap').style.display = state.period === 'custom' ? '' : 'none';
   renderOverview(); renderOrders(); renderProducts(); renderAds();
-  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes(); renderReturns(); renderPromos(); renderCustomers(); renderHomeNotes();
+  renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes(); renderReturns(); renderPromos(); renderCustomers(); renderHomeNotes(); renderNotesPage(); renderNotesBadge(); if (document.body.classList.contains('nav-open')) renderNav();
   if (state.tab === 'history') renderHistory();
 }
 function setTab(t) {
+  if (t === 'notes') LS.set(seenKey(), new Date().toISOString());
+  closeNav();
   state.tab = t; LS.set('crm_tab', t); renderAll(); window.scrollTo({ top: 0, behavior: 'smooth' });
   countUp($('v-' + t));
 }
@@ -2352,6 +2446,35 @@ function bindEvents() {
     else if (e.key.toLowerCase() === 'b' && !e.metaKey && !e.ctrlKey) { openNoteModal('general'); }
   });
   if (!/Mac|iPhone|iPad/.test(navigator.platform)) $('cmdKbd').textContent = 'Ctrl K';
+  // mobilni meni
+  $('navBtn').addEventListener('click', () => document.body.classList.contains('nav-open') ? closeNav() : openNav());
+  $('navOv').addEventListener('click', closeNav);
+  $('navClose').addEventListener('click', closeNav);
+  $('navQ').addEventListener('input', renderNav);
+  $('navQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const f = $('navList').querySelector('.nd-item'); if (f) f.click(); } });
+  $('navList').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-navtab]'); if (t) { closeNav(); return setTab(t.dataset.navtab); }
+    const r = e.target.closest('[data-navres]'); if (r) { const it = state.navRes[+r.dataset.navres]; closeNav(); return runCmd(it); }
+  });
+  $('navProj').addEventListener('change', (e) => { $('projSel').value = e.target.value; $('projSel').dispatchEvent(new Event('change')); closeNav(); });
+  $('navLogout').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+  let ndX = null; $('navDrawer').addEventListener('touchstart', (e) => { ndX = e.touches[0].clientX; }, { passive: true });
+  $('navDrawer').addEventListener('touchend', (e) => { if (ndX != null && ndX - e.changedTouches[0].clientX > 60) closeNav(); ndX = null; }, { passive: true });
+  // stranica beleške
+  $('npSave').addEventListener('click', npSaveNew);
+  $('np_body').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); npSaveNew(); } });
+  $('npWriter').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.writer = b.dataset.npw; renderNotesPage(); });
+  $('npStatus').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; npState.status = b.dataset.s; renderNotesPage(); });
+  $('npArea').addEventListener('change', (e) => { npState.area = e.target.value; renderNotesPage(); });
+  $('npSort').addEventListener('change', (e) => { npState.sort = e.target.value; renderNotesPage(); });
+  $('npQ').addEventListener('input', renderNotesPage);
+  $('npPeople').addEventListener('click', (e) => { const b = e.target.closest('[data-npwho]'); if (!b) return; npState.who = b.dataset.npwho; renderNotesPage(); });
+  $('npList').addEventListener('click', (e) => {
+    const ed = e.target.closest('[data-npedit]'); if (ed) { npState.editId = ed.dataset.npedit; return renderNotesPage(); }
+    const sv = e.target.closest('[data-npsave]'); if (sv) return npSaveEdit(sv.dataset.npsave);
+    if (e.target.closest('[data-npcancel]')) { npState.editId = null; $('npEdit')?.blur(); return renderNotesPage(); }
+  });
+  $('npList').addEventListener('keydown', (e) => { if (e.target.id === 'npEdit' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); npSaveEdit(npState.editId); } if (e.target.id === 'npEdit' && e.key === 'Escape') { e.stopPropagation(); npState.editId = null; e.target.blur(); renderNotesPage(); } });
   // brza beleška
   $('quickNoteBtn').addEventListener('click', () => openNoteModal('general'));
   $('qnSave').addEventListener('click', saveQuickNote);
@@ -2529,12 +2652,13 @@ function bindEvents() {
     } catch (err) { fail(err); }
   });
 
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if ($('notifModal').classList.contains('open')) { state.trayHidden = false; setTimeout(renderTray, 50); } closeCmd(); closeDrawer(); document.querySelectorAll('.modal-wrap').forEach(m => m.classList.remove('open')); $('lightbox').classList.remove('open'); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeNav(); if ($('notifModal').classList.contains('open')) { state.trayHidden = false; setTimeout(renderTray, 50); } closeCmd(); closeDrawer(); document.querySelectorAll('.modal-wrap').forEach(m => m.classList.remove('open')); $('lightbox').classList.remove('open'); } });
 }
 
 async function enterApp(user) {
   state.user = user;
   $('userName').textContent = user.display;
+  $('navUser').textContent = user.display; $('navAvatar').textContent = user.display.charAt(0).toUpperCase();
   $('avatar').textContent = user.display.charAt(0).toUpperCase();
   const splash = playSplash(user);
   await loadData();

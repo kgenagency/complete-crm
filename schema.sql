@@ -560,3 +560,7 @@ do $$ begin
     alter publication supabase_realtime add table public.h_audit;
   end if;
 end $$;
+-- v9: izmena beleški
+alter table public.h_notes add column if not exists updated_at timestamptz;
+alter table public.h_notes add column if not exists updated_by text;
+alter table public.h_notes add column if not exists done_by text;

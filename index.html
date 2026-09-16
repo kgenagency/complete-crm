@@ -864,6 +864,88 @@ thead th{color:#3d473f;font-weight:800;background:#f3f1ea}
 .modal.qn textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-family:'Caveat',cursive;font-size:24px;line-height:1.3;min-height:120px;resize:vertical;background:#fbf7ea;color:#26312b}
 .modal.qn textarea:focus{outline:none;border-color:var(--sage);box-shadow:0 0 0 3px rgba(126,140,116,.2)}
 @media (max-width:980px){.home-notes{grid-template-columns:1fr}.note-btn{width:100%;justify-content:center}}
+
+/* ---------- MOBILNI MENI ---------- */
+.nav-btn{display:none;flex-direction:column;gap:4px;align-items:center;justify-content:center;width:40px;height:40px;flex:none}
+.nav-btn span{display:block;width:18px;height:2px;border-radius:2px;background:currentColor;transition:transform .3s var(--ease),opacity .2s}
+body.nav-open .nav-btn span:nth-child(1){transform:translateY(6px) rotate(45deg)}
+body.nav-open .nav-btn span:nth-child(2){opacity:0}
+body.nav-open .nav-btn span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
+.nav-ov{position:fixed;inset:0;background:rgba(15,20,17,.5);backdrop-filter:blur(2px);z-index:90;opacity:0;pointer-events:none;transition:opacity .3s}
+.nav-drawer{position:fixed;top:0;left:0;bottom:0;width:min(86vw,340px);background:linear-gradient(180deg,#1B2620,#16201b);color:#E8E4D9;z-index:95;transform:translateX(-105%);transition:transform .35s cubic-bezier(.2,.9,.2,1);display:flex;flex-direction:column;box-shadow:20px 0 60px -20px rgba(0,0,0,.6)}
+body.nav-open .nav-drawer{transform:none}
+body.nav-open .nav-ov{opacity:1;pointer-events:auto}
+body.nav-open{overflow:hidden}
+.nd-head{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 10px}
+.nd-head .brand{margin:0;gap:10px}
+.nd-head .brand-mark{width:40px;height:40px;background:#E8E4D9;color:#1B2620;padding:4px}
+.nd-head .brand-name{font-size:21px;color:#E8E4D9}
+.nd-head .brand-sub{color:#aab8a6}
+.nd-x{width:36px;height:36px;border-radius:50%;border:1px solid rgba(232,228,217,.25);background:rgba(232,228,217,.08);color:#E8E4D9;font-size:15px}
+.nd-search{display:flex;align-items:center;gap:10px;margin:6px 16px 10px;padding:11px 14px;border-radius:12px;background:rgba(232,228,217,.1);border:1px solid rgba(232,228,217,.2);color:#aab8a6}
+.nd-search input{flex:1;border:none;background:none;outline:none;color:#E8E4D9;font-size:15px}
+.nd-search input::placeholder{color:#8f9c8c}
+.nd-list{flex:1;overflow-y:auto;padding:4px 10px 10px}
+.nd-item{display:flex;align-items:center;gap:12px;width:100%;border:none;background:none;color:#dfe3da;padding:11px 12px;border-radius:11px;font-size:15.5px;font-weight:600;text-align:left;animation:ndIn .35s var(--ease) both}
+@keyframes ndIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}
+.nd-item .ic{width:32px;height:32px;border-radius:9px;background:rgba(232,228,217,.08);display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+.nd-item.active{background:#E8E4D9;color:#1B2620}
+.nd-item.active .ic{background:#1B2620;color:#E8E4D9}
+.nd-item:active{transform:scale(.98)}
+.nd-item .tab-badge{margin-left:auto}
+.nd-grp{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:#8f9c8c;font-weight:800;padding:12px 12px 4px}
+.nd-item mark{background:#E8E4D9;color:#1B2620;border-radius:3px;padding:0 1px}
+.nd-item small{display:block;font-size:11.5px;font-weight:500;color:#aab8a6}
+.nd-item.active small{color:#5f6a61}
+.nd-foot{border-top:1px solid rgba(232,228,217,.12);padding:12px 16px calc(14px + env(safe-area-inset-bottom))}
+.nd-proj select{width:100%;background:rgba(232,228,217,.1);color:#E8E4D9;border:1px solid rgba(232,228,217,.2);padding:10px 12px;border-radius:10px;margin-bottom:10px}
+.nd-user{display:flex;align-items:center;gap:10px}
+.nd-user .avatar{width:34px;height:34px;background:#E8E4D9;color:#1B2620;font-size:14px}
+.nd-user .mini-btn{margin-left:auto;background:rgba(232,228,217,.1);color:#E8E4D9;border-color:rgba(232,228,217,.25)}
+@media (max-width:980px){
+  .nav-btn{display:flex}
+  .topbar .proj-select,.topbar .logout-btn,.topbar .user-chip{display:none}
+  #tabs{display:none}
+  .topbar-inner{gap:8px;padding:0 12px;height:58px}
+  .topbar .brand-home{margin-right:auto}
+  .topbar .brand-mark{width:34px;height:34px}
+  .topbar .brand-name{font-size:18px}
+  .main{padding-top:18px}
+}
+@media (min-width:981px){.nav-drawer,.nav-ov{display:none}}
+
+/* ---------- STRANICA BELEŠKE ---------- */
+.np-composer{background:#fbf7ea;border-radius:16px;padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 1px rgba(0,0,0,.04),0 12px 30px -18px rgba(60,50,20,.4);background-image:linear-gradient(90deg,transparent 12px,#e8b4b0 12px,#e8b4b0 13.5px,transparent 13.5px)}
+.np-composer textarea{width:100%;border:none;background:transparent;font-family:'Caveat',cursive;font-size:25px;line-height:1.3;min-height:70px;resize:vertical;outline:none;color:#26312b;padding:2px 4px 2px 10px}
+.np-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;padding-left:10px}
+.np-people{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.np-person{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px 14px 8px 8px;cursor:pointer;transition:all .2s var(--ease)}
+.np-person:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm)}
+.np-person.active{border-color:#1B2620;box-shadow:0 0 0 1px #1B2620}
+.np-person .n-av{width:34px;height:34px;font-size:17px;margin:0}
+.np-person b{display:block;font-size:14px}
+.np-person span{font-size:11.5px;color:var(--muted)}
+.np-day{font-family:var(--font-display);font-size:20px;font-weight:700;color:#1B2620;margin:18px 0 10px;display:flex;align-items:baseline;gap:10px}
+.np-day span{font-family:var(--font-ui);font-size:12px;color:var(--muted);font-weight:500}
+.np-grid{columns:3 280px;column-gap:14px}
+.np-note{break-inside:avoid;margin-bottom:14px;background:#fbf7ea;border-radius:12px;padding:14px 16px 12px 22px;position:relative;box-shadow:0 1px 1px rgba(0,0,0,.05),0 10px 24px -14px rgba(60,50,20,.4);background-image:linear-gradient(90deg,transparent 12px,#e8b4b0 12px,#e8b4b0 13.5px,transparent 13.5px);animation:fadeUp .4s var(--ease) both;transition:transform .2s var(--ease)}
+.np-note:hover{transform:translateY(-2px) rotate(-.3deg)}
+.np-note.pinned{background-color:#f5ecc9}
+.np-note.pinned::before{content:"📌";position:absolute;top:-8px;right:14px;font-size:17px}
+.np-note.done{opacity:.6}
+.np-note.done .txt{text-decoration:line-through}
+.np-note .txt{font-family:'Caveat',cursive;font-size:23px;line-height:1.3;color:#26312b;white-space:pre-wrap;word-break:break-word}
+.np-note textarea{width:100%;border:1px solid #d9d2bc;border-radius:8px;background:#fffdf5;font-family:'Caveat',cursive;font-size:22px;line-height:1.3;padding:6px 8px;min-height:80px;resize:vertical}
+.np-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:11.5px;color:#8a8574}
+.np-meta .n-av{width:24px;height:24px;font-size:13px;border-radius:8px;margin:0}
+.np-meta b{color:#3d463f}
+.np-meta .place{background:rgba(27,38,32,.07);border-radius:5px;padding:1px 6px;font-weight:700;color:#3d463f}
+.np-acts{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.np-acts button{border:1px solid #e0d8c2;background:rgba(255,255,255,.6);border-radius:8px;padding:4px 9px;font-size:12px;font-weight:600;color:#5d5a4d}
+.np-acts button:hover{background:#fff;border-color:#c9c1a8}
+.np-acts button.on{background:#1B2620;color:#E8E4D9;border-color:#1B2620}
+.hn.all{background:#1B2620;background-image:none;color:#E8E4D9;font-family:var(--font-ui);font-size:13.5px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;min-height:64px}
+@media (max-width:980px){.np-people{flex-wrap:nowrap;overflow-x:auto;margin:0 -16px 14px;padding:2px 16px 4px;scrollbar-width:none}.np-people::-webkit-scrollbar{display:none}.np-person{flex:none;padding:6px 12px 6px 6px}.np-grid{columns:1}.np-row .btn-gold{width:100%;justify-content:center;margin-left:0}#npQ{width:100%!important}}
 </style>
 </head>
 <body>
@@ -897,6 +979,7 @@ thead th{color:#3d473f;font-weight:800;background:#f3f1ea}
 
 <div class="app" id="app">
   <div class="topbar"><div class="topbar-inner">
+    <button class="icon-btn nav-btn" id="navBtn" type="button" aria-label="Meni"><span></span><span></span><span></span></button>
     <a class="brand brand-home" id="brandHome" href="#" title="Početna"><div class="brand-mark"><svg class="logo" viewBox="0 0 120 120" aria-hidden="true"><path d="M60 6 L114 60 L60 114 L6 60 Z" fill="none" stroke="currentColor" stroke-width="5"/><path d="M60 20 L100 60 L60 100 L20 60 Z" fill="none" stroke="currentColor" stroke-width="3"/><text x="60" y="76" text-anchor="middle" font-family="Cormorant Garamond,Georgia,serif" font-size="46" font-weight="700" fill="currentColor">H</text></svg></div><div class="brand-text"><div class="brand-name">HARIZMA</div><div class="brand-sub">Complete CRM</div></div></a>
     <div class="proj-select"><select id="projSel">
       <option value="harizma">HARIZMA</option>
@@ -923,7 +1006,7 @@ thead th{color:#3d473f;font-weight:800;background:#f3f1ea}
         </div>
       </div>
       <div class="user-chip"><div class="avatar" id="avatar">K</div><div class="user-name" id="userName"></div></div>
-      <button class="icon-btn" id="logoutBtn" title="Odjavi se"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+      <button class="icon-btn logout-btn" id="logoutBtn" title="Odjavi se"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
   </div></div>
 
@@ -932,6 +1015,7 @@ thead th{color:#3d473f;font-weight:800;background:#f3f1ea}
     <div id="harizma">
       <div class="tabs" id="tabs">
         <button data-tab="overview" class="active">Pregled</button>
+        <button data-tab="notes">Beleške<span class="tab-badge live" id="notesBadge" style="display:none"></span></button>
         <button data-tab="orders">Porudžbine</button>
         <button data-tab="customers">Kupci</button>
         <button data-tab="products">Garderoba<span class="tab-badge" id="alertBadge" style="display:none"></span></button>
@@ -966,6 +1050,31 @@ thead th{color:#3d473f;font-weight:800;background:#f3f1ea}
           <div class="panel"><h4>Najprodavanije</h4><div id="topList"></div></div>
           <div class="panel"><h4>Kod kurira</h4><div id="shipList"></div></div>
         </div>
+      </div>
+
+      <!-- BELEŠKE -->
+      <div class="view" id="v-notes">
+        <div class="page-head">
+          <div><div class="page-title">Beleške</div><div class="page-sub">Sve beleške celog tima na jednom mestu. Svi vide sve.</div></div>
+        </div>
+        <div class="np-composer">
+          <textarea id="np_body" placeholder="Nova beleška… (Ctrl + Enter za čuvanje)"></textarea>
+          <div class="np-row">
+            <div class="writer" id="npWriter" style="margin:0"><span>Piše:</span><button data-npw="konstantin">Konstantin</button><button data-npw="stasa">Staša</button><button data-npw="marjan">Marjan</button></div>
+            <div class="select-wrap"><select id="np_area"><option value="general">Opšta</option><option value="story">Brand story</option></select></div>
+            <label class="threshold"><input type="checkbox" id="np_pin" style="width:auto"> zakači</label>
+            <button class="btn-gold" id="npSave" style="margin-left:auto">Sačuvaj belešku</button>
+          </div>
+        </div>
+        <div class="np-people" id="npPeople"></div>
+        <div class="toolbar">
+          <div class="seg" id="npStatus"><button data-s="open" class="active">Otvorene</button><button data-s="done">Završene</button><button data-s="all">Sve</button></div>
+          <div class="select-wrap"><select id="npArea"><option value="all">Sva mesta</option><option value="general">Opšte</option><option value="story">Brand story</option><option value="promo">Promocije</option></select></div>
+          <div class="select-wrap"><select id="npSort"><option value="new">Najnovije prvo</option><option value="old">Najstarije prvo</option></select></div>
+          <input class="inline-input" id="npQ" placeholder="traži u beleškama…" style="width:200px">
+          <div class="count" id="npCount"></div>
+        </div>
+        <div id="npList"></div>
       </div>
 
       <!-- PORUDŽBINE -->
@@ -1551,6 +1660,21 @@ thead th{color:#3d473f;font-weight:800;background:#f3f1ea}
   </div>
 </div>
 
+<!-- MOBILNI MENI -->
+<div class="nav-ov" id="navOv"></div>
+<aside class="nav-drawer" id="navDrawer" aria-label="Meni">
+  <div class="nd-head">
+    <div class="brand"><div class="brand-mark"><svg class="logo" viewBox="0 0 120 120" aria-hidden="true"><path d="M60 6 L114 60 L60 114 L6 60 Z" fill="none" stroke="currentColor" stroke-width="5"/><path d="M60 20 L100 60 L60 100 L20 60 Z" fill="none" stroke="currentColor" stroke-width="3"/><text x="60" y="76" text-anchor="middle" font-family="Cormorant Garamond,Georgia,serif" font-size="46" font-weight="700" fill="currentColor">H</text></svg></div><div><div class="brand-name">HARIZMA</div><div class="brand-sub">Complete CRM</div></div></div>
+    <button class="nd-x" id="navClose" aria-label="Zatvori">✕</button>
+  </div>
+  <div class="nd-search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="navQ" placeholder="Pretraži sekcije, kupce, porudžbine…" autocomplete="off"></div>
+  <nav class="nd-list" id="navList"></nav>
+  <div class="nd-foot">
+    <div class="select-wrap nd-proj"><select id="navProj"><option value="harizma">HARIZMA</option><option value="kgen">KGEN (uskoro)</option><option value="potkovice">POTKOVICE (uskoro)</option><option value="admotive">ADMOTIVE (uskoro)</option></select></div>
+    <div class="nd-user"><div class="avatar" id="navAvatar">K</div><div><b id="navUser"></b><div class="page-sub" style="color:#aab8a6">prijavljen/a</div></div><button class="mini-btn" id="navLogout">Odjavi se</button></div>
+  </div>
+</aside>
+
 <!-- OBAVEŠTENJA: traka -->
 <div class="ntray" id="ntray"></div>
 
@@ -1594,7 +1718,7 @@ thead th{color:#3d473f;font-weight:800;background:#f3f1ea}
     <textarea id="qn_body" placeholder="Šta treba da se zapamti…"></textarea>
     <div class="writer" id="qnWriter"><span>Piše:</span><button data-qw="konstantin">Konstantin</button><button data-qw="stasa">Staša</button><button data-qw="marjan">Marjan</button></div>
     <div class="frow" style="margin-top:12px">
-      <div class="field" style="margin:0"><label>Gde ide</label><select id="qn_area"><option value="general">Pregled (opšta beleška)</option><option value="story">Brand story</option><option value="milestone">Istorija (događaj sa datumom)</option></select></div>
+      <div class="field" style="margin:0"><label>Gde ide</label><select id="qn_area"><option value="general">Beleške (opšta)</option><option value="story">Beleške + Brand story</option><option value="milestone">Istorija (događaj sa datumom, nije beleška)</option></select></div>
       <div class="field" style="margin:0;display:flex;align-items:flex-end"><label class="check" style="margin:0;display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="qn_pin"> Zakači na vrh</label></div>
     </div>
     <div class="modal-actions"><button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" id="qnSave">Sačuvaj <kbd style="margin-left:6px;background:rgba(255,255,255,.2);border-color:transparent;color:#E8E4D9">Ctrl ⏎</kbd></button></div>
@@ -1605,8 +1729,8 @@ thead th{color:#3d473f;font-weight:800;background:#f3f1ea}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202609161810"></script>
-<script>window.HTML_BUILD="202609161810";</script>
-<script src="app.js?v=202609161810"></script>
+<script src="config.js?v=202609162138"></script>
+<script>window.HTML_BUILD="202609162138";</script>
+<script src="app.js?v=202609162138"></script>
 </body>
 </html>
