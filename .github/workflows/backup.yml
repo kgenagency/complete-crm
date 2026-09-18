@@ -17,13 +17,15 @@ jobs:
           python3 - <<'PY'
           import json, os, urllib.request, datetime
           URL, KEY = os.environ['SB_URL'], os.environ['SB_KEY']
-          TABLES = ['h_products','h_variants','h_orders','h_order_items','h_ad_spend','h_activities','h_posts','h_site_ideas','h_story_sections','h_notes','h_packaging','h_returns','h_settings','h_promotions','h_milestones','h_daily_stats','h_audit','h_customers','h_loyalty_events','h_discount_codes','h_notif_state','h_ai_log']
+          HARIZMA = ['h_products','h_variants','h_orders','h_order_items','h_ad_spend','h_activities','h_posts','h_site_ideas','h_story_sections','h_notes','h_packaging','h_returns','h_settings','h_promotions','h_milestones','h_daily_stats','h_audit','h_customers','h_loyalty_events','h_discount_codes','h_notif_state','h_ai_log']
+          POTKOVICE = [t.replace('h_', 'p_', 1) for t in HARIZMA] + ['p_imports','p_import_items']
+          TABLES = HARIZMA + POTKOVICE
           os.makedirs('out/latest', exist_ok=True)
           summary = {'exported_at': datetime.datetime.utcnow().isoformat() + 'Z', 'tables': {}}
           for t in TABLES:
               rows, off = [], 0
               while True:
-                  req = urllib.request.Request(f'{URL}/rest/v1/{t}?select=*&limit=1000&offset={off}&order=' + ('id' if t != 'h_settings' and t != 'h_daily_stats' else ('key' if t == 'h_settings' else 'day')),
+                  req = urllib.request.Request(f'{URL}/rest/v1/{t}?select=*&limit=1000&offset={off}&order=' + ('key' if t.endswith('_settings') else 'day' if t.endswith('_daily_stats') else 'id'),
                       headers={'apikey': KEY, 'Authorization': f'Bearer {KEY}'})
                   page = json.load(urllib.request.urlopen(req, timeout=60))
                   rows += page

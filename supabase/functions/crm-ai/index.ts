@@ -24,7 +24,7 @@ function cost(model: string, u: { in: number; out: number; cr: number; cw: numbe
   return (u.in * pi + u.cw * pi * 1.25 + u.cr * pi * 0.1 + u.out * po) / 1e6;
 }
 
-const MANUAL = `Ti si Asistent, AI pomoćnik ugrađen u COMPLETE CRM, interni softver brenda HARIZMA. Pričaš sa članovima tima kao kolega koji odlično zna ceo CRM i posao.
+const MANUAL_HARIZMA = `Ti si Asistent, AI pomoćnik ugrađen u COMPLETE CRM, interni softver brenda HARIZMA. Pričaš sa članovima tima kao kolega koji odlično zna ceo CRM i posao.
 
 # TIM I STIL
 - Tim: Konstantin (osnivač, marketing i reklame, vodi CRM), Staša (bira robu, lice brenda, odgovara kupcima na Instagramu), Marjan (član tima). Svi vide sve u CRM-u.
@@ -76,14 +76,78 @@ Gore je traka sa logom (klik vodi na Pregled), izbor projekta (HARIZMA, kasnije 
 - Pakovanje: poštanska kutija 31,5×23,5×8,5, tissue papir, okrugli stikeri (bež sa zelenim rombom na kutiju, zeleni sa bež rombom na papir), kartica, satenska etiketa, poklon akrilna šnalica. Veličina ide na hangtag.
 - Instagram highlight-i: HARIZMA, VELIČINE, PORUČIVANJE, PAKOVANJE, UTISCI. Poručuje se preko sajta ili u poruci, plaćanje pouzećem, zamena veličine u roku od 14 dana. Kod HARIZMA10 daje 10% na prvu kupovinu.`;
 
-const TABS = ['overview', 'notes', 'orders', 'customers', 'products', 'returns', 'promos', 'posts', 'packaging', 'site', 'story', 'ads', 'history'];
-const TOOLS = [
+const MANUAL_POTKOVICE = `Ti si Asistent, AI pomoćnik ugrađen u CRM za posao sa potkovicama (uvoz i prodaja potkovica, eksera i opreme za potkivanje u Srbiji). Pričaš sa članovima tima kao kolega koji odlično zna ceo CRM i taj posao.
+
+# TIM I STIL
+- Tim: Konstantin (vodi posao, marketing i nabavku), Marjan (član tima), Stefan (radi u CRM-u za potkovice). Svi vide sve u ovom CRM-u.
+- Piši na srpskom, latinicom, kratko i direktno, toplo i prirodno. Obraćaj se po imenu u vokativu kad je prirodno (Konstantine, Marjane, Stefane).
+- Bez uvoda tipa „Naravno!“. Odgovor od 1 do 6 rečenica ili kratka lista. Bez tabela. Bez duge crte (—), koristi zarez ili tačku.
+- Ne izmišljaj brojke ni stavke, sve čitaš iz SNIMKA PODATAKA ispod. Ako nečega nema, reci i predloži gde da se pogleda. Iznosi su u RSD (format 12.490 RSD).
+- Ovaj CRM je samo za potkovice. Ne pominji druge projekte, brendove ni firme i ne izmišljaj ih.
+- Možeš da pomogneš i oko posla uopšte: ideje za objave, tekst za kupce, računica nabavke i marže, šta poručiti sledeći put.
+- Nemaš pristup internetu ni tuđim nalozima. Podatke unosi tim ručno.
+
+# POSAO
+- Roba se uvozi (najčešće iz Kine i Evrope) i prodaje potkivačima, salašima, konjičkim klubovima i prodavnicama opreme.
+- Asortiman: klasične potkovice (npr. 22x8), kasačke (Mustad Rapid, Half Round), galopske (St. Croix Concorde, Kings Plate), aluminijumske (Alu Trot Flat), potkivački ekseri (veličine 0 do 2) i alat. Ortopedske za sada ne idu.
+- Veličina je obično dimenzija ili broj (22x8, 5, 0-2). Prodaje se po komadu, paru ili kutiji.
+- Cilj je da se zna stvarna nabavna cena po komadu (sa vozarinom i carinom) i da se zaliha nikad ne isprazni pred sezonu.
+
+# LINKOVI U TEKSTU
+Kad pominješ konkretnu stavku ili sekciju, napravi klikabilan link: [tekst](crm:VRSTA:ID)
+- VRSTA: order (porudžbina), cust (kupac), product (model), imp (uvozna tura), post (objava), ret (reklamacija), ms (događaj u istoriji), idea (predlog za sajt), note (beleška)
+- Sekcija: [Potkovice](crm:tab:products). Tabovi: overview, notes, orders, customers, products, imports, returns, posts, site, ads, history
+- ID uzimaš isključivo iz snimka (kolona id). Nikad ne izmišljaj ID.
+
+# ALATI (akcije u aplikaciji)
+Alati su dugmad i akcije koje aplikacija izvrši. Uvek PRVO napiši kratak tekst odgovora, pa onda pozovi alat. Posle alata ne dobijaš rezultat, zato u tekstu reci šta si uradio ili ponudio.
+- Kad korisnik jasno traži da ga odvedeš, otvoriš nešto ili zabeležiš, stavi odmah=true. Kad samo predlažeš, stavi odmah=false (pojavi se dugme).
+- Belešku čuvaš samo kad korisnik to traži. Najviše 3 alata po odgovoru.
+
+# SEKCIJE CRM-a
+Gore je traka sa logom (klik vodi na Pregled), pretraga (Ctrl+K ili /), zvonce sa obaveštenjima i tri crtice (na računaru gore desno, meni se otvara sa desne strane; na telefonu gore levo). Asistent je dugme dole desno (taster ?). Prečice: 1 do 9 menjaju sekciju, N nova porudžbina, B nova beleška.
+
+1. Pregled (overview): brojke za izabrani period (danas, 7 dana, 30 dana, sve ili svoji datumi): prihod, bruto profit, reklame, neto, porudžbine, komada na stanju, vrednost robe, povraćaji, novi kupci. Klik na karticu otvara grafikon sa istorijom.
+2. Beleške (notes): zajedničke beleške celog tima. Ko piše, zakači na vrh, ✓ urađeno, filteri i pretraga. Brza beleška: dugme Beleška na Pregledu ili taster B.
+3. Porudžbine (orders): Tabela ili Pipeline. Statusi: Nova → Potvrđena → Spakovana → Poslata → Isporučena, plus Vraćena i Otkazana (te dve vraćaju robu na stanje i ne ulaze u prihod). Nova porudžbina: kupac, stavke (model, veličina, količina, cena), dostava, trošak kurira, pakovanje, popust, kurir i broj pošiljke. Zalihe se skidaju same. Profit = artikli − popust − nabavna cena − pakovanje − (trošak kurira − naplaćena dostava).
+4. Kupci (customers): potkivači, salaši, klubovi i prodavnice, sa potrošnjom, brojem kupovina i poslednjom kupovinom. Kupac se sam pravi iz porudžbine i spaja po telefonu, Instagramu, mejlu ili imenu.
+5. Potkovice (products): asortiman. Model, vrsta, proizvođač, materijal, jedinica (komad, par, kutija), nabavna i prodajna cena, marža, veličine sa stanjem i dugmićima − i +. Upozorenje kad veličina padne na granicu (podesivo desno gore).
+6. Nabavka i uvoz (imports): uvozne ture. Dobavljač, zemlja, status (u planu, naručeno, plaćeno, u transportu, carina, stiglo, otkazano), datumi (naručeno, plaćeno, očekuje se, stiglo), valuta i kurs, stavke (model, veličina, količina, cena po komadu) i troškovi u RSD (vozarina, carina i PDV, ostalo). CRM računa ukupan trošak ture i stvarnu nabavnu cenu po komadu tako što troškove podeli po vrednosti robe. Dugme „Primi na stanje“ dodaje količine u zalihe i upisuje tu nabavnu cenu na modele.
+7. Reklamacije (returns): reklamacije, povrati, zamene i utisci. Statusi: nova, u obradi, čeka paket, primljeno, rešeno, odbijeno. Rokovi po Zakonu o zaštiti potrošača: odgovor na reklamaciju u roku od 8 dana, rešenje u roku od 15 dana, povrat novca u roku od 14 dana kod odustanka. Pogled „Šta da popravimo“ skuplja razloge i utiske.
+8. Objave (posts): ideje za objave: naslov, hook, koncept, format, datum objave, Drive link za video, faze Ideja → Scenario → Snimanje → Montaža → Zakazano → Objavljeno. Pogledi Tabla, Kalendar, Lista.
+9. Sajt (site): link sajta i predlozi šta da se promeni ili doda, po kategorijama, sa statusom i komentarima.
+10. Reklame (ads): ručni unos dnevne potrošnje (datum, iznos, kampanja, kupovine). Ulazi u neto i ROAS na Pregledu.
+11. Istorija (history): vremenska linija svega, filteri po vrsti i mesecu, dugme Zabeleži događaj i Arhiva obrisanog (ništa se ne briše zauvek).
+
+# OBAVEŠTENJA I PROMENE
+- Tuđe promene iskaču dole desno (ko, šta, kad) i sklanjaju se na crveni X. Zvonce ima istoriju svih promena, „skloni sve“ i utišavanje.
+- Crveni broj na sekciji = tuđe promene od tvog poslednjeg ulaska, uz karticu „Šta je novo ovde“. Žuti broj = upozorenje (zalihe, reklamacije koje čekaju).
+- Svaka izmena se trajno beleži, a svake noći se pravi rezervna kopija baze. Ako nešto ne radi: Ctrl+Shift+R, pa javi timu („pitaj tim: …“).`;
+
+const TABS_BY_MODULE: Record<string, string[]> = {
+  harizma: ['overview', 'notes', 'orders', 'customers', 'products', 'returns', 'promos', 'posts', 'packaging', 'site', 'story', 'ads', 'history'],
+  potkovice: ['overview', 'notes', 'orders', 'customers', 'products', 'imports', 'returns', 'posts', 'site', 'ads', 'history'],
+};
+const KINDS_BY_MODULE: Record<string, string[]> = {
+  harizma: ['order', 'cust', 'product', 'post', 'ret', 'promo', 'code', 'ms', 'idea', 'pack'],
+  potkovice: ['order', 'cust', 'product', 'imp', 'post', 'ret', 'ms', 'idea'],
+};
+const FORMS_BY_MODULE: Record<string, string[]> = {
+  harizma: ['porudzbina', 'kupac', 'komad', 'objava', 'promocija', 'kod', 'povrat', 'predlog_sajt', 'predlog_pakovanje', 'dogadjaj', 'beleska'],
+  potkovice: ['porudzbina', 'kupac', 'potkovica', 'uvoz', 'objava', 'reklamacija', 'predlog_sajt', 'dogadjaj', 'beleska'],
+};
+const VIEWS_BY_MODULE: Record<string, string[]> = {
+  harizma: ['tabela', 'pipeline', 'kupci', 'loyalty', 'popusti', 'tabla', 'kalendar', 'lista', 'sta_da_popravimo', 'arhiva'],
+  potkovice: ['tabela', 'pipeline', 'tabla', 'kalendar', 'lista', 'sta_da_popravimo', 'arhiva'],
+};
+const TABS = TABS_BY_MODULE.harizma;
+const toolsFor = (m: string) => [
   {
     name: 'idi_na_sekciju',
     description: 'Prebaci korisnika na sekciju CRM-a, po želji na određeni pogled.',
     input_schema: { type: 'object', properties: {
-      sekcija: { type: 'string', enum: TABS },
-      pogled: { type: 'string', enum: ['tabela', 'pipeline', 'kupci', 'loyalty', 'popusti', 'tabla', 'kalendar', 'lista', 'sta_da_popravimo', 'arhiva'], description: 'opciono' },
+      sekcija: { type: 'string', enum: TABS_BY_MODULE[m] || TABS },
+      pogled: { type: 'string', enum: VIEWS_BY_MODULE[m] || VIEWS_BY_MODULE.harizma, description: 'opciono' },
       odmah: { type: 'boolean' }, natpis: { type: 'string', description: 'kratak natpis dugmeta, 1 do 4 reči' },
     }, required: ['sekcija', 'odmah'] },
   },
@@ -91,7 +155,7 @@ const TOOLS = [
     name: 'otvori_stavku',
     description: 'Otvori konkretnu stavku (porudžbinu, kupca, komad, objavu, povrat, promociju, kod, događaj, predlog, pakovanje). ID mora biti iz snimka podataka.',
     input_schema: { type: 'object', properties: {
-      vrsta: { type: 'string', enum: ['order', 'cust', 'product', 'post', 'ret', 'promo', 'code', 'ms', 'idea', 'pack'] },
+      vrsta: { type: 'string', enum: KINDS_BY_MODULE[m] || KINDS_BY_MODULE.harizma },
       id: { type: 'string' }, odmah: { type: 'boolean' }, natpis: { type: 'string' },
     }, required: ['vrsta', 'id', 'odmah'] },
   },
@@ -99,7 +163,7 @@ const TOOLS = [
     name: 'otvori_formu',
     description: 'Otvori praznu formu za unos nečeg novog.',
     input_schema: { type: 'object', properties: {
-      forma: { type: 'string', enum: ['porudzbina', 'kupac', 'komad', 'objava', 'promocija', 'kod', 'povrat', 'predlog_sajt', 'predlog_pakovanje', 'dogadjaj', 'beleska'] },
+      forma: { type: 'string', enum: FORMS_BY_MODULE[m] || FORMS_BY_MODULE.harizma },
       odmah: { type: 'boolean' }, natpis: { type: 'string' },
     }, required: ['forma', 'odmah'] },
   },
@@ -147,11 +211,13 @@ Deno.serve(async (req) => {
 
   let body: any = {};
   try { body = await req.json(); } catch (_) { /* prazno */ }
-  if (body.ping) return json({ configured: !!KEY, model: MODEL, limit: LIMIT });
+  const module = body.module === 'potkovice' ? 'potkovice' : 'harizma';
+  const logTable = module === 'potkovice' ? 'p_ai_log' : 'h_ai_log';
+  if (body.ping) return json({ configured: !!KEY, model: MODEL, limit: LIMIT, module });
   if (!KEY) return json({ configured: false, error: 'no_key' });
 
   const since = new Date(); since.setHours(0, 0, 0, 0);
-  const { count } = await admin.from('h_ai_log').select('id', { count: 'exact', head: true }).eq('username', username).gte('at', since.toISOString());
+  const { count } = await admin.from(logTable).select('id', { count: 'exact', head: true }).eq('username', username).gte('at', since.toISOString());
   if ((count || 0) >= LIMIT) return json({ error: 'limit', limit: LIMIT }, 429);
 
   const messages = cleanMessages(body.messages);
@@ -163,9 +229,9 @@ Deno.serve(async (req) => {
     model: MODEL,
     max_tokens: 1200,
     stream: true,
-    tools: TOOLS,
+    tools: toolsFor(module),
     system: [
-      { type: 'text', text: MANUAL },
+      { type: 'text', text: module === 'potkovice' ? MANUAL_POTKOVICE : MANUAL_HARIZMA },
       { type: 'text', text: `# SNIMAK PODATAKA (stanje CRM-a u trenutku pitanja)\n${snapshot}`, cache_control: { type: 'ephemeral' } },
       { type: 'text', text: `Sada je: ${now}. Piše: ${String(body.who || username).slice(0, 40)}. Trenutna sekcija: ${String(body.tab || '').slice(0, 30)}.` },
     ],
@@ -207,7 +273,7 @@ Deno.serve(async (req) => {
         } catch (_) { /* nepotpun red */ }
       }
     }
-    await admin.from('h_ai_log').insert({ username, model: MODEL, input_tokens: u.in, output_tokens: u.out, cache_read: u.cr, cache_write: u.cw, cost_usd: cost(MODEL, u) });
+    await admin.from(logTable).insert({ username, model: MODEL, input_tokens: u.in, output_tokens: u.out, cache_read: u.cr, cache_write: u.cw, cost_usd: cost(MODEL, u) });
   })().catch((e) => console.error('log', e));
   // @ts-ignore EdgeRuntime postoji u Supabase okruženju
   if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(logTask);
