@@ -581,3 +581,8 @@ create index if not exists h_ai_log_user_at on public.h_ai_log(username, at);
 alter table public.h_ai_log enable row level security;
 drop policy if exists "team read" on public.h_ai_log;
 create policy "team read" on public.h_ai_log for select to authenticated using (true);
+-- v12: moduli i pristup. Pravila pristupa po korisniku (crm_user) su u potkovice-crm/schema.sql (važe i za h_ tabele).
+create or replace function public.h_customer_norm() returns trigger language plpgsql as $$
+begin new.phone_norm := nullif(h_norm_phone(new.phone), ''); return new; end $$;
+drop trigger if exists h_customer_norm_trg on public.h_customers;
+create trigger h_customer_norm_trg before insert or update of phone on public.h_customers for each row execute function public.h_customer_norm();
