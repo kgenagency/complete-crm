@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609162243';
+const APP_BUILD = '202609181118';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -2274,6 +2274,7 @@ function deltaChip(key) {
 
 /* ---------- BRZA BELEŠKA + beleške na Pregledu ---------- */
 function renderHomeNotes() {
+  if (!$('homeNotes')) return;                 // beleške imaju svoju sekciju, početna ostaje pregledna
   const list = state.notes.slice().sort((a, b) => (b.pinned - a.pinned) || (a.done - b.done) || b.created_at.localeCompare(a.created_at));
   const where = (x) => x.area === 'story' ? 'Brand story' : (x.area || '').startsWith('promo:') ? ('Promocija: ' + (state.promos.find(p => p.id === x.area.split(':')[1])?.name || '')) : '';
   const show = list.filter(x => !x.done).slice(0, 6);

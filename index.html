@@ -1069,6 +1069,17 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 @keyframes btBlink{50%{opacity:0}}
 .bot-panel.ai-on .bot-head small::before{background:#b9d99f;box-shadow:0 0 0 3px rgba(185,217,159,.25),0 0 10px rgba(185,217,159,.6)}
 .bot-panel.ai-on .bot-head .bt-av{box-shadow:0 0 0 2px rgba(185,217,159,.35)}
+
+/* ---------- MENI NA RAČUNARU (tri crtice, otvara se sa desne strane) ---------- */
+@media (min-width:981px){
+  .nav-drawer,.nav-ov{display:flex}
+  .nav-ov{display:block}
+  .nav-btn{display:flex;order:99;margin-left:-6px;border-radius:10px}
+  .nav-btn:hover{background:rgba(232,228,217,.12)}
+  .nav-drawer{left:auto;right:0;width:min(92vw,360px);transform:translateX(105%);box-shadow:-20px 0 60px -20px rgba(0,0,0,.6)}
+  body.nav-open .nav-drawer{transform:none}
+  .nav-drawer .nd-head{padding-top:18px}
+}
 </style>
 </head>
 <body>
@@ -1164,7 +1175,6 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
           <div class="range" id="rangeWrap" style="display:none"><input type="date" id="rangeFrom"><span>do</span><input type="date" id="rangeTo"></div>
           </div>
         </div>
-        <div class="home-notes" id="homeNotes"></div>
         <div class="stats" id="kpi1"></div>
         <div class="stats" id="kpi2"></div>
         <div class="two-col">
@@ -1866,8 +1876,8 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202609162243"></script>
-<script>window.HTML_BUILD="202609162243";</script>
-<script src="app.js?v=202609162243"></script>
+<script src="config.js?v=202609181118"></script>
+<script>window.HTML_BUILD="202609181118";</script>
+<script src="app.js?v=202609181118"></script>
 </body>
 </html>
