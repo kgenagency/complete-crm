@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202609181118';
+const APP_BUILD = '202610042056';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -78,10 +78,21 @@ function fmtDate(iso) { if (!iso) return '—'; const d = new Date(iso); return 
 function fmtDT(iso) { const d = new Date(iso); return d.toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' }); }
 function dayStr(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function linkify(t) { return esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2400); }
+function toast(msg, ms) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms || 2400); }
 function pill(s) { return `<span class="pill st-${s}"><span class="pdot"></span>${ST[s] || s}</span>`; }
 function chBadge(c) { return `<span class="ch-badge ch-${c}">${CH[c] || c}</span>`; }
-function fail(e) { console.error(e); toast('Greška: ' + (e.message || e)); }
+/* greške baze na srpskom, da se zna šta da se uradi (original ostaje u konzoli) */
+function errText(e) {
+  const m = String(e?.message || e || '');
+  if (/duplicate key|unique constraint|23505/i.test(m)) return 'Isti unos već postoji (npr. ista veličina i boja dva puta). Proveri redove pa sačuvaj ponovo.';
+  if (/not-null|null value in column|23502/i.test(m)) { const c = m.match(/column "?([a-z_]+)"?/i); return 'Nedostaje obavezno polje' + (c ? ': ' + c[1] : '') + '.'; }
+  if (/row-level security|42501|permission denied/i.test(m)) return 'Nemaš pravo za ovu izmenu u ovom modulu.';
+  if (/JWT|expired|invalid claim|401/i.test(m)) return 'Sesija je istekla. Osveži stranicu i prijavi se ponovo.';
+  if (/Failed to fetch|NetworkError|Load failed|network|timeout|fetch/i.test(m)) return 'Nema veze sa serverom. Proveri internet pa pokušaj ponovo.';
+  if (/foreign key|23503/i.test(m)) return 'Povezani zapis više ne postoji (verovatno je obrisan). Osveži stranicu.';
+  return m || 'Nepoznata greška';
+}
+function fail(e) { console.error(e); toast('Greška: ' + errText(e), 5000); }
 async function q(p) { const { data, error } = await p; if (error) throw error; return data; }
 
 const itemsOf = (oid) => state.items.filter(i => i.order_id === oid);
@@ -622,40 +633,73 @@ function openProductModal(id) {
   $('pmTitle').textContent = p ? p.name : 'Novi komad';
   Object.entries(PF).forEach(([el, f]) => { $(el).value = p ? (p[f] ?? '') : (f === 'status' ? 'active' : ''); });
   $('sizeRows').innerHTML = '';
-  (p ? variantsOf(p.id) : [{ size: 'S' }, { size: 'M' }, { size: 'L' }]).forEach(addSizeRow);
+  const vs = p ? variantsOf(p.id) : [];
+  (p ? (vs.length ? vs : [{ size: '' }]) : [{ size: 'S' }, { size: 'M' }, { size: 'L' }]).forEach(addSizeRow);
   $('pmDelete').style.display = p ? '' : 'none';
   priceHint();
   $('prodModal').classList.add('open');
 }
+/* redovi veličina iz forme: red sa bojom ili komadima a bez veličine = UNI (da se ne izgubi tiho) */
+function sizeRowsData() {
+  return [...document.querySelectorAll('#sizeRows .item-row')].map(r => {
+    const g = (f) => r.querySelector(`[data-f=${f}]`);
+    let size = g('size').value.trim().toUpperCase();
+    const color = g('color').value.trim() || null, stock = parseInt(g('stock').value) || 0;
+    if (!size && (color || stock > 0)) { size = 'UNI'; g('size').value = 'UNI'; }
+    return { el: r, id: r.dataset.id || null, size, color, stock };
+  }).filter(s => s.size);
+}
+const vkey = (s) => `${String(s.size).toUpperCase()}|${(s.color || '').trim().toLowerCase()}`;
 async function saveProduct(e) {
   e.preventDefault();
+  const btn = $('prodForm').querySelector('[type=submit]'); if (btn.disabled) return;
   const f = {};
   Object.entries(PF).forEach(([el, k]) => { const v = $(el).value.trim(); f[k] = v === '' ? null : v; });
+  if (!f.name) { $('p_name').focus(); return toast('Upiši naziv komada'); }
   f.name = f.name.toUpperCase();
   f.buy_price = n(f.buy_price); f.sell_price = n(f.sell_price); f.compare_price = f.compare_price === null ? null : n(f.compare_price);
-  const sizes = [...document.querySelectorAll('#sizeRows .item-row')].map(r => ({ id: r.dataset.id || null, size: r.querySelector('[data-f=size]').value.trim().toUpperCase(), color: r.querySelector('[data-f=color]').value.trim() || null, stock: parseInt(r.querySelector('[data-f=stock]').value) || 0 })).filter(s => s.size);
+  const sizes = sizeRowsData();
+  // ista veličina + boja dva puta → ne šaljemo ništa dok se ne sredi (baza bi odbila drugi red i ostavila pola sačuvano)
+  const seen = {};
+  for (const s of sizes) { const k = vkey(s); if (seen[k]) { s.el.querySelector('[data-f=size]').focus(); s.el.style.outline = '2px solid #c62828'; setTimeout(() => { s.el.style.outline = ''; }, 3000); return toast(`Veličina ${s.size}${s.color ? ' ' + s.color : ''} je uneta dva puta. Spoji je u jedan red.`, 5000); } seen[k] = 1; }
+  if (!sizes.length && !confirm('Komad nema nijednu veličinu ni komad na stanju. Sačuvati ga ipak?')) return;
+  btn.disabled = true; btn.dataset.t = btn.textContent; btn.textContent = 'Čuvam…';
+  const wasNew = !state.editProductId;
   try {
     let p;
     if (state.editProductId) {
       p = await q(sb.from('h_products').update(f).eq('id', state.editProductId).select().single());
-      Object.assign(product(p.id), p);
+      Object.assign(product(p.id) || {}, p);
     } else {
       p = await q(sb.from('h_products').insert(f).select().single());
       state.products.unshift(p);
+      // od ovog trenutka forma menja OVAJ komad: ako nešto ispod pukne, ponovni klik na „Sačuvaj“ ne pravi duplikat
+      state.editProductId = p.id; $('pmTitle').textContent = p.name; $('pmDelete').style.display = '';
     }
-    const keep = sizes.filter(s => s.id).map(s => s.id);
-    const removed = variantsOf(p.id).filter(v => !keep.includes(v.id));
+    // sveže stanje veličina iz baze (i obrisane, jer baza ne dozvoljava istu veličinu+boju dva puta ni kad je red u arhivi)
+    const live = await q(sb.from('h_variants').select('*').eq('product_id', p.id));
+    const byKey = {}; live.forEach(v => { if (!v.deleted_at || !byKey[vkey(v)]) byKey[vkey(v)] = v; });
+    sizes.forEach(s => { if (!s.id) { const m = byKey[vkey(s)]; if (m) { s.id = m.id; s.el.dataset.id = m.id; } } });
+    const keep = new Set(sizes.map(s => s.id).filter(Boolean));
+    const removed = live.filter(v => !v.deleted_at && !keep.has(v.id));
     if (removed.length) await q(sb.from('h_variants').update({ deleted_at: new Date().toISOString(), deleted_by: state.user.display }).in('id', removed.map(v => v.id)));
+    const fresh = [];
     for (const s of sizes) {
       const row = { product_id: p.id, size: s.size, color: s.color, stock: s.stock };
-      if (s.id) await q(sb.from('h_variants').update(row).eq('id', s.id));
-      else await q(sb.from('h_variants').insert(row));
+      if (s.id) await q(sb.from('h_variants').update({ ...row, deleted_at: null, deleted_by: null }).eq('id', s.id));
+      else fresh.push({ s, row });
     }
+    if (fresh.length) { const ins = await q(sb.from('h_variants').insert(fresh.map(x => x.row)).select()); ins.forEach(v => { const m = fresh.find(x => vkey(x.row) === vkey(v)); if (m) { m.s.id = v.id; m.s.el.dataset.id = v.id; } }); }
     state.variants = await q(sb.from('h_variants').select('*').is('deleted_at', null));
-    await log({ product_id: p.id, type: 'system', body: `${p.name} ${state.editProductId ? 'izmenjen' : 'dodat'}` });
+    await log({ product_id: p.id, type: 'system', body: `${p.name} ${wasNew ? 'dodat' : 'izmenjen'}` });
     $('prodModal').classList.remove('open');
     renderAll(); toast(`${p.name} sačuvan ✓`);
-  } catch (err) { fail(err); }
+  } catch (err) {
+    fail(err);
+    // šta god da je stiglo u bazu, prikaži ga odmah da se vidi dokle je stiglo
+    try { state.variants = await q(sb.from('h_variants').select('*').is('deleted_at', null)); renderAll(); } catch (e2) {}
+  }
+  btn.disabled = false; btn.textContent = btn.dataset.t || 'Sačuvaj';
 }
 async function deleteProduct() {
   const p = product(state.editProductId); if (!p) return;
@@ -2069,7 +2113,9 @@ function applyAuditRow(a) {
     const key = lists[a.tbl]; if (!key || !Array.isArray(state[key])) return;
     const arr = state[key]; const i = arr.findIndex(x => x.id === row.id);
     if (row.deleted_at) { if (i >= 0) arr.splice(i, 1); }
-    else if (i >= 0) Object.assign(arr[i], row); else arr.push(row);
+    else if (i >= 0) Object.assign(arr[i], row);
+    else if (['products', 'orders', 'rets', 'ideas', 'ads'].includes(key)) arr.unshift(row); // ove liste su najnovije prvo
+    else arr.push(row);
     renderAll();
   } catch (e) {}
 }
@@ -2093,6 +2139,8 @@ async function pollAudit() {
     const maxId = state.audit.length ? Math.max(...state.audit.map(a => a.id)) : 0;
     const rows = await q(sb.from('h_audit').select('*').gt('id', maxId).order('id', { ascending: true }).limit(200));
     rows.forEach(onAuditLive);
+    // tuđa promena je stigla dok je bio otvoren prozor (zatvoren tasterom Esc ili čuvanjem) → povuci sveže podatke sad
+    if (nfPending && !document.querySelector('.modal-wrap.open:not(#notifModal):not(#noteModal)')) { nfPending = false; await loadData(); renderAll(); if (state.openOrderId) renderDrawer(); }
   } catch (e) {}
 }
 function startLive() {
