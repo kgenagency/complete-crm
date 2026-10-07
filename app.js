@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610051130';
+const APP_BUILD = '202610072131';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -33,6 +33,7 @@ const IDEA_ST = [
   { key: 'done', label: 'Gotovo' }, { key: 'rejected', label: 'Odbijeno' },
 ];
 const FMT = { reel: 'Reel', carousel: 'Carousel', story: 'Story', post: 'Post', tiktok: 'TikTok' };
+const PURPOSE = { post: 'Samo objava', both: 'Objava + reklama', ad: 'Samo reklama' };
 const PRIO = { high: 'Visok', medium: 'Srednji', low: 'Nizak' };
 const CAT = { dizajn: 'Dizajn', tekst: 'Tekst', funkcija: 'Funkcija', proizvod: 'Proizvod', materijal: 'Materijal', ostalo: 'Ostalo' };
 const PEOPLE = { konstantin: { name: 'Konstantin', voc: 'Konstantine', f: false }, stasa: { name: 'Staša', voc: 'Staša', f: true, line: 'Vreme je da zablistamo i danas ✨' }, marjan: { name: 'Marjan', voc: 'Marjane', f: false } };
@@ -52,7 +53,7 @@ let state = {
   products: [], variants: [], orders: [], items: [], ads: [], acts: [],
   posts: [], ideas: [], story: [], notes: [], pack: [], rets: [], settings: [],
   retView: LS.get('crm_rview', 'board'), retType: 'all', editRetId: null,
-  postView: LS.get('crm_pview', 'board'), postFmt: 'all', siteCat: 'all', who: 'all',
+  postView: LS.get('crm_pview', 'board'), postFmt: 'all', postPurpose: LS.get('crm_ppurpose', 'all'), siteCat: 'all', who: 'all',
   calMonth: (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(),
   writer: null, editPostId: null, editIdeaId: null, ideaArea: 'site', editPackId: null,
   tab: LS.get('crm_tab', 'overview'),
@@ -794,26 +795,36 @@ function renderGarderoba() {
 function filteredPosts() {
   const qq = state.q.toLowerCase();
   return state.posts.filter(p => (state.postFmt === 'all' || p.format === state.postFmt) &&
-    (!qq || [p.title, p.concept, p.hook, p.caption, p.assignee].join(' ').toLowerCase().includes(qq)));
+    (state.postPurpose === 'all' || (p.purpose || 'post') === state.postPurpose) &&
+    (!qq || [p.title, p.concept, p.hook, p.caption, p.assignee, p.inspo].join(' ').toLowerCase().includes(qq)));
 }
 function postDate(p, short) {
   if (!p.publish_at) return '<span class="p-date">bez datuma</span>';
   const d = new Date(p.publish_at), late = d < new Date() && p.status !== 'published';
   return `<span class="p-date ${late ? 'late' : ''}">📅 ${d.toLocaleDateString('sr-Latn-RS', { weekday: short ? undefined : 'short', day: 'numeric', month: 'short' })} ${d.toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' })}${late ? ' · kasni' : ''}</span>`;
 }
+/* namena ideje i linkovi za inspiraciju */
+const ppOf = (p) => p.purpose || 'post';
+const ppBadge = (p) => ppOf(p) === 'post' ? '' : `<span class="pp-badge ${ppOf(p)}" title="${PURPOSE[ppOf(p)]}">${ppOf(p) === 'ad' ? '◆ Reklama' : '◆ Objava + reklama'}</span>`;
+const inspoLinks = (p) => String(p.inspo || '').split(/\s+/).map(x => x.trim()).filter(x => /^https?:\/\//i.test(x));
+function inspoHost(u) { try { const h = new URL(u).hostname.replace(/^www\./, ''); return /instagram/.test(h) ? 'Instagram' : /tiktok/.test(h) ? 'TikTok' : /youtu/.test(h) ? 'YouTube' : /pinterest|pin\.it/.test(h) ? 'Pinterest' : /facebook|fb\.watch/.test(h) ? 'Facebook' : h; } catch (e) { return 'link'; } }
+const inspoA = (p) => { const seen = {}; return inspoLinks(p).map(u => { const h = inspoHost(u); seen[h] = (seen[h] || 0) + 1; return `<a class="inspo" href="${esc(u)}" target="_blank" rel="noopener" title="Inspiracija: ${esc(u)}">✦ ${esc(h)}${seen[h] > 1 ? ' ' + seen[h] : ''}</a>`; }).join(''); };
 function postCard(p) {
   const pr = p.product_id ? product(p.product_id) : null;
+  const ins = inspoA(p);
   return `<div class="post-card" data-kind="post" data-id="${p.id}" data-post="${p.id}">
     <div class="kb-card-head"><div class="kb-name">${esc(p.title)}</div><span class="fmt ${p.format}">${FMT[p.format] || p.format}</span></div>
+    ${ppBadge(p) ? `<div style="margin-top:5px">${ppBadge(p)}</div>` : ''}
     ${p.hook ? `<div class="kb-social">„${esc(p.hook)}“</div>` : ''}
     <div class="kb-meta">${postDate(p)}${p.assignee ? `<span class="by ${Object.keys(PEOPLE).find(k => PEOPLE[k].name === p.assignee) || 'other'}" style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700">${esc(p.assignee)}</span>` : ''}${pr ? `<span class="cat">${esc(pr.name)}</span>` : ''}</div>
-    ${(p.drive_link || p.post_url) ? `<div class="p-links">${p.drive_link ? `<a class="drive" href="${esc(p.drive_link)}" target="_blank" rel="noopener">▲ Drive snimak</a>` : ''}${p.post_url ? `<a href="${esc(p.post_url)}" target="_blank" rel="noopener">↗ Objava</a>` : ''}</div>` : ''}
+    ${(p.drive_link || p.post_url || ins) ? `<div class="p-links">${ins}${p.drive_link ? `<a class="drive" href="${esc(p.drive_link)}" target="_blank" rel="noopener">▲ Drive snimak</a>` : ''}${p.post_url ? `<a href="${esc(p.post_url)}" target="_blank" rel="noopener">↗ Objava</a>` : ''}</div>` : ''}
   </div>`;
 }
 function renderPosts() {
   const list = filteredPosts();
-  $('postCount').textContent = `${list.length} objava`;
+  $('postCount').textContent = `${list.length} ${bpl(list.length, 'ideja', 'ideje', 'ideja')}`;
   document.querySelectorAll('#postViewSeg button').forEach(b => b.classList.toggle('active', b.dataset.view === state.postView));
+  document.querySelectorAll('#postPurposeSeg button').forEach(b => b.classList.toggle('active', b.dataset.pp === state.postPurpose));
   $('postBoard').style.display = state.postView === 'board' ? 'flex' : 'none';
   $('postCal').style.display = state.postView === 'calendar' ? '' : 'none';
   $('postList').style.display = state.postView === 'list' ? '' : 'none';
@@ -823,14 +834,14 @@ function renderPosts() {
     const d = new Date(t0); d.setDate(d.getDate() + i);
     const ds = dayStr(d), ps = state.posts.filter(p => p.publish_at && dayStr(new Date(p.publish_at)) === ds);
     return `<div class="ws-day ${i === 0 ? 'today' : ''}" data-drop="post" data-date="${ds}"><div class="ws-d">${i === 0 ? 'Danas' : d.toLocaleDateString('sr-Latn-RS', { weekday: 'short', day: 'numeric' })}</div>
-      ${ps.map(p => `<div class="cal-chip ${p.status === 'published' ? 'published' : ''}" data-kind="post" data-id="${p.id}" data-post="${p.id}" style="margin-top:6px">${esc(p.title)}</div>`).join('') || '<div class="ws-empty">Ništa zakazano</div>'}</div>`;
+      ${ps.map(p => `<div class="cal-chip pp-${ppOf(p)} ${p.status === 'published' ? 'published' : ''}" data-kind="post" data-id="${p.id}" data-post="${p.id}" style="margin-top:6px" title="${esc(p.title)} · ${PURPOSE[ppOf(p)]}">${ppOf(p) !== 'post' ? '◆ ' : ''}${esc(p.title)}</div>`).join('') || '<div class="ws-empty">Ništa zakazano</div>'}</div>`;
   }).join('');
   if (state.postView === 'board') $('postBoard').innerHTML = boardCols(list, POST_ST, 'post', postCard);
   if (state.postView === 'calendar') renderCalendar(list);
   if (state.postView === 'list') {
     const sorted = list.slice().sort((a, b) => (a.publish_at || '9') < (b.publish_at || '9') ? -1 : 1);
-    $('postTbody').innerHTML = sorted.map(p => `<tr data-post="${p.id}"><td>${postDate(p)}</td><td><div class="lead-name">${esc(p.title)}</div><div class="lead-social">${esc(p.concept || '')}</div></td><td><span class="fmt ${p.format}">${FMT[p.format]}</span></td><td>${pill(p.status)}</td><td>${esc(p.assignee || '—')}</td><td>${p.drive_link ? `<a href="${esc(p.drive_link)}" target="_blank" rel="noopener">Drive ↗</a>` : '<span class="page-sub">nema</span>'}</td></tr>`).join('')
-      || `<tr><td colspan="6" class="empty">Još nema ideja. Klikni „Nova ideja“.</td></tr>`;
+    $('postTbody').innerHTML = sorted.map(p => `<tr data-post="${p.id}"><td>${postDate(p)}</td><td><div class="lead-name">${esc(p.title)} ${ppBadge(p)}</div><div class="lead-social">${esc(p.concept || '')}</div>${inspoLinks(p).length ? `<div class="p-links" style="margin-top:4px">${inspoA(p)}</div>` : ''}</td><td><span class="fmt ${p.format}">${FMT[p.format]}</span></td><td>${pill(p.status)}</td><td>${esc(p.assignee || '—')}</td><td>${p.drive_link ? `<a href="${esc(p.drive_link)}" target="_blank" rel="noopener">Drive ↗</a>` : '<span class="page-sub">nema</span>'}</td></tr>`).join('')
+      || `<tr><td colspan="6" class="empty">${state.posts.length ? 'Nijedna ideja ne odgovara filteru.' : 'Još nema ideja. Klikni „Nova ideja“.'}</td></tr>`;
   }
 }
 function renderCalendar(list) {
@@ -843,7 +854,7 @@ function renderCalendar(list) {
     const ds = dayStr(d), ps = list.filter(p => p.publish_at && dayStr(new Date(p.publish_at)) === ds);
     cells += `<div class="cal-day ${d.getMonth() !== m.getMonth() ? 'other' : ''} ${ds === today ? 'today' : ''}" data-drop="post" data-date="${ds}">
       <div class="cal-n">${d.getDate()}</div>
-      ${ps.map(p => `<div class="cal-chip ${p.status === 'published' ? 'published' : ''}" data-kind="post" data-id="${p.id}" data-post="${p.id}" title="${esc(p.title)}">${FMT[p.format]?.[0] || ''} · ${esc(p.title)}</div>`).join('')}
+      ${ps.map(p => `<div class="cal-chip pp-${ppOf(p)} ${p.status === 'published' ? 'published' : ''}" data-kind="post" data-id="${p.id}" data-post="${p.id}" title="${esc(p.title)} · ${PURPOSE[ppOf(p)]}">${ppOf(p) !== 'post' ? '◆ ' : ''}${FMT[p.format]?.[0] || ''} · ${esc(p.title)}</div>`).join('')}
       <button class="cal-add" data-newpost="${ds}" title="Dodaj za ovaj dan">+</button></div>`;
   }
   const noDate = list.filter(p => !p.publish_at && p.status !== 'published');
@@ -869,14 +880,21 @@ async function movePost(id, zone) {
     renderAll(); toast(`${p.title}: ${patch.status ? ST[patch.status] : fmtDate(patch.publish_at)}`);
   } catch (e) { fail(e); }
 }
-const POF = { po_title: 'title', po_concept: 'concept', po_hook: 'hook', po_format: 'format', po_status: 'status', po_assignee: 'assignee', po_product: 'product_id', po_drive: 'drive_link', po_caption: 'caption', po_url: 'post_url', po_views: 'views', po_likes: 'likes', po_saves: 'saves' };
+const POF = { po_title: 'title', po_purpose: 'purpose', po_inspo: 'inspo', po_concept: 'concept', po_hook: 'hook', po_format: 'format', po_status: 'status', po_assignee: 'assignee', po_product: 'product_id', po_drive: 'drive_link', po_caption: 'caption' };
+function setPostPurpose(v) {
+  v = PURPOSE[v] ? v : 'post';
+  $('po_purpose').value = v;
+  document.querySelectorAll('#po_purposeSeg button').forEach(b => b.classList.toggle('active', b.dataset.pp === v));
+  $('po_dateLbl').textContent = v === 'ad' ? 'Datum pokretanja reklame' : v === 'both' ? 'Datum objave (i pokretanja reklame)' : 'Datum i vreme objave';
+}
 function openPostModal(id, dateStr) {
   const p = id ? state.posts.find(x => x.id === id) : null;
   state.editPostId = id || null;
-  $('poTitle').textContent = p ? p.title : 'Nova ideja za objavu';
+  $('poTitle').textContent = p ? p.title : 'Nova ideja';
   $('po_status').innerHTML = POST_ST.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
   $('po_product').innerHTML = '<option value="">—</option>' + state.products.filter(x => x.status !== 'archived').map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
-  Object.entries(POF).forEach(([el, f]) => { $(el).value = p ? (p[f] ?? '') : ({ format: 'reel', status: 'idea', assignee: state.user.display }[f] ?? ''); });
+  Object.entries(POF).forEach(([el, f]) => { $(el).value = p ? (p[f] ?? '') : ({ format: 'reel', status: 'idea', assignee: state.user.display, purpose: state.postPurpose !== 'all' ? state.postPurpose : 'post' }[f] ?? ''); });
+  setPostPurpose($('po_purpose').value);
   $('po_date').value = p ? toLocalInput(p.publish_at) : (dateStr ? dateStr + 'T18:00' : '');
   $('poDelete').style.display = p ? '' : 'none';
   $('poComments').innerHTML = commentsBlock('post_id', state.editPostId);
@@ -887,7 +905,9 @@ async function savePost(e) {
   e.preventDefault();
   const f = {};
   Object.entries(POF).forEach(([el, k]) => { const v = $(el).value.trim(); f[k] = v === '' ? null : v; });
-  ['views', 'likes', 'saves'].forEach(k => f[k] = f[k] === null ? null : +f[k]);
+  f.purpose = PURPOSE[f.purpose] ? f.purpose : 'post';
+  // inspiracija: svaki link u svom redu, bez https:// dodajemo ga sami
+  f.inspo = f.inspo ? f.inspo.split(/\s+/).map(x => x.trim()).filter(Boolean).map(x => /^https?:\/\//i.test(x) ? x : 'https://' + x.replace(/^\/+/, '')).join('\n') : null;
   f.publish_at = $('po_date').value ? new Date($('po_date').value).toISOString() : null;
   if (f.drive_link && !/^https?:\/\//.test(f.drive_link)) return toast('Drive link mora da počinje sa https://');
   try {
@@ -902,7 +922,7 @@ async function savePost(e) {
       state.posts.push(r);
       await log({ post_id: r.id, type: 'system', body: 'Ideja dodata' });
     }
-    $('postModal').classList.remove('open'); renderAll(); toast('Objava sačuvana ✓');
+    $('postModal').classList.remove('open'); renderAll(); toast(`Ideja sačuvana ✓${f.purpose !== 'post' ? ' · ' + PURPOSE[f.purpose] : ''}`);
   } catch (err) { fail(err); }
 }
 async function deletePost() {
@@ -1629,7 +1649,7 @@ const SECTIONS = [
   { tab: 'products', name: 'Garderoba', kw: 'roba proizvodi zalihe stanje velicine komadi upozorenja', ic: '▤' },
   { tab: 'returns', name: 'Povrati', kw: 'reklamacije zamene zalbe feedback utisci forma', ic: '↩' },
   { tab: 'promos', name: 'Promocije', kw: 'akcije popust kampanje kod lansiranje', ic: '％' },
-  { tab: 'posts', name: 'Objave', kw: 'instagram reel content sadrzaj kalendar video drive', ic: '▶' },
+  { tab: 'posts', name: 'Objave + reklame', kw: 'objave instagram reel content sadrzaj kalendar video drive reklama reklame ad kreativa inspiracija', ic: '▶' },
   { tab: 'packaging', name: 'Pakovanje', kw: 'ambalaza kutije stikeri kartice papir', ic: '▣' },
   { tab: 'site', name: 'Sajt', kw: 'shopify web predlozi link domen', ic: '◎' },
   { tab: 'story', name: 'Brand story', kw: 'prica brend beleske poglavlja', ic: '✎' },
@@ -1641,7 +1661,7 @@ const ACTIONS = [
   { name: 'Nova beleška', kw: 'zabelezi note zapisi', ic: '✎', run: () => openNoteModal('general') },
   { name: 'Novi kupac', kw: 'dodaj', ic: '+', run: () => openCustModal() },
   { name: 'Novi komad', kw: 'proizvod roba dodaj', ic: '+', run: () => openProductModal() },
-  { name: 'Nova ideja za objavu', kw: 'post reel', ic: '+', run: () => openPostModal() },
+  { name: 'Nova ideja za objavu', kw: 'post reel reklama ad kreativa inspiracija', ic: '+', run: () => openPostModal() },
   { name: 'Nova promocija', kw: 'akcija', ic: '+', run: () => openPromoModal() },
   { name: 'Novi kod za popust', kw: 'kupon', ic: '+', run: () => openCodeModal() },
   { name: 'Nova prijava povrata (ručno)', kw: 'reklamacija', ic: '+', run: () => openRetModal() },
@@ -1669,7 +1689,7 @@ function cmdItems(qraw) {
     state.customers.forEach(c => { const s = custStats(c); push('Kupci', { ic: '☺', title: c.name, sub: [c.phone, c.instagram, `${s.count} porudžbina`, rsd(s.spend)].filter(Boolean).join(' · '), k: 'cust', id: c.id }, Math.max(scoreMatch(c.name, qn), scoreMatch(c.phone, qn), scoreMatch(c.instagram, qn), scoreMatch(c.email, qn))); });
     state.orders.forEach(o => push('Porudžbine', { ic: '◫', title: `${o.order_no || ''} · ${o.customer_name}`, sub: `${ST[o.status]} · ${rsd(totals(o).revenue)} · ${fmtDate(o.created_at)} · ${itemsSummary(o).replace(/<[^>]+>/g, '')}`, k: 'order', id: o.id }, Math.max(scoreMatch(o.order_no, qn), scoreMatch(o.customer_name, qn), scoreMatch(o.phone, qn), scoreMatch(o.tracking_no, qn), scoreMatch(o.city, qn) / 2)));
     state.products.forEach(p => { const st = variantsOf(p.id).reduce((a, v) => a + v.stock, 0); push('Garderoba', { ic: '▤', title: p.name, sub: `${p.category || ''} · ${st} kom na stanju · ${rsd(p.sell_price)}`, k: 'product', id: p.id }, Math.max(scoreMatch(p.name, qn), scoreMatch(p.category, qn) / 2)); });
-    state.posts.forEach(p => push('Objave', { ic: '▶', title: p.title, sub: `${ST[p.status]} · ${FMT[p.format] || ''}${p.publish_at ? ' · ' + fmtDate(p.publish_at) : ''}`, k: 'post', id: p.id }, Math.max(scoreMatch(p.title, qn), scoreMatch(p.hook, qn) / 2)));
+    state.posts.forEach(p => push('Objave + reklame', { ic: '▶', title: p.title, sub: `${ST[p.status]} · ${FMT[p.format] || ''}${ppOf(p) !== 'post' ? ' · ' + PURPOSE[ppOf(p)] : ''}${p.publish_at ? ' · ' + fmtDate(p.publish_at) : ''}`, k: 'post', id: p.id }, Math.max(scoreMatch(p.title, qn), scoreMatch(p.hook, qn) / 2)));
     state.rets.forEach(r => push('Povrati', { ic: '↩', title: `${r.case_no} · ${r.customer_name}`, sub: `${RT[r.type]} · ${ST[r.status]} · ${r.item || ''}`, k: 'ret', id: r.id }, Math.max(scoreMatch(r.case_no, qn), scoreMatch(r.customer_name, qn), scoreMatch(r.phone, qn))));
     state.promos.forEach(p => push('Promocije', { ic: '％', title: p.name, sub: `${fmtDate(p.starts_at)} → ${p.ends_at ? fmtDate(p.ends_at) : 'traje'}${p.code ? ' · ' + p.code : ''}`, k: 'promo', id: p.id }, Math.max(scoreMatch(p.name, qn), scoreMatch(p.code, qn))));
     state.codes.forEach(c => push('Popusti', { ic: '％', title: c.code, sub: `${c.pct ? c.pct + '%' : ''}${c.rsd ? rsd(c.rsd) : ''} · ${codeUses(c).n} upotreba`, k: 'code', id: c.id }, scoreMatch(c.code, qn)));
@@ -1953,7 +1973,7 @@ async function deleteCust() {
 }
 
 /* ---------- OBAVEŠTENJA: ko je šta kad menjao ---------- */
-const NF_FIELD = { status: 'status', courier: 'kurir', tracking_no: 'broj pošiljke', sell_price: 'prodajna', buy_price: 'nabavna', compare_price: '„bila“ cena', stock: 'stanje', publish_at: 'datum objave', drive_link: 'Drive link', assignee: 'zadužen', priority: 'prioritet', title: 'naslov', body: 'tekst', value: 'vrednost', note: 'napomena', refund_amount: 'vraćeno kupcu', return_shipping_cost: 'trošak slanja', resolution_note: 'rešenje', improve: 'šta da popravimo', vip: 'VIP', tags: 'oznake', points_adj: 'poeni', name: 'ime', phone: 'telefon', city: 'grad', address: 'adresa', postal_code: 'poštanski broj', payment: 'plaćanje', shipping_price: 'dostava (kupac)', shipping_cost: 'dostava (kurir)', packaging_cost: 'pakovanje', discount: 'popust', discount_code: 'kod', channel: 'kanal', category: 'kategorija', supplier: 'dobavljač', material: 'materijal', image_url: 'slika', concept: 'koncept', hook: 'hook', caption: 'opis', format: 'format', post_url: 'link objave', views: 'pregledi', likes: 'lajkovi', saves: 'sačuvano', description: 'opis', link: 'link', votes: 'glasovi', code: 'kod', pct: 'popust %', rsd: 'popust RSD', valid_to: 'važi do', valid_from: 'važi od', active: 'aktivan', max_uses: 'maks. upotreba', starts_at: 'početak', ends_at: 'kraj', budget: 'budžet', goal: 'cilj', result_note: 'zaključak', happened_at: 'datum', kind: 'vrsta', min_stock: 'granica', per_order: 'po paketu', unit_price: 'cena', spend: 'potrošeno', purchases: 'kupovine', revenue: 'prihod', reason: 'razlog', package_received_at: 'paket stigao', resolution_wanted: 'kupac želi', restocked: 'vraćeno na stanje', size: 'veličina', color: 'boja', qty: 'količina', email: 'email', instagram: 'instagram', birthday: 'rođendan', source: 'izvor', position: 'redosled', pinned: 'zakačeno', done: 'završeno', delivered_on: 'paket primljen', shipped_at: 'poslato', delivered_at: 'isporučeno', photos: 'fotografije', order_no: 'broj', exchange_details: 'želi umesto toga', item: 'komad', rating: 'ocena', customer_name: 'kupac', type: 'tip', discount_pct: 'popust %', discount_rsd: 'popust RSD', deleted_at: '__del' };
+const NF_FIELD = { purpose: 'namena', inspo: 'inspiracija', status: 'status', courier: 'kurir', tracking_no: 'broj pošiljke', sell_price: 'prodajna', buy_price: 'nabavna', compare_price: '„bila“ cena', stock: 'stanje', publish_at: 'datum objave', drive_link: 'Drive link', assignee: 'zadužen', priority: 'prioritet', title: 'naslov', body: 'tekst', value: 'vrednost', note: 'napomena', refund_amount: 'vraćeno kupcu', return_shipping_cost: 'trošak slanja', resolution_note: 'rešenje', improve: 'šta da popravimo', vip: 'VIP', tags: 'oznake', points_adj: 'poeni', name: 'ime', phone: 'telefon', city: 'grad', address: 'adresa', postal_code: 'poštanski broj', payment: 'plaćanje', shipping_price: 'dostava (kupac)', shipping_cost: 'dostava (kurir)', packaging_cost: 'pakovanje', discount: 'popust', discount_code: 'kod', channel: 'kanal', category: 'kategorija', supplier: 'dobavljač', material: 'materijal', image_url: 'slika', concept: 'koncept', hook: 'hook', caption: 'opis', format: 'format', post_url: 'link objave', views: 'pregledi', likes: 'lajkovi', saves: 'sačuvano', description: 'opis', link: 'link', votes: 'glasovi', code: 'kod', pct: 'popust %', rsd: 'popust RSD', valid_to: 'važi do', valid_from: 'važi od', active: 'aktivan', max_uses: 'maks. upotreba', starts_at: 'početak', ends_at: 'kraj', budget: 'budžet', goal: 'cilj', result_note: 'zaključak', happened_at: 'datum', kind: 'vrsta', min_stock: 'granica', per_order: 'po paketu', unit_price: 'cena', spend: 'potrošeno', purchases: 'kupovine', revenue: 'prihod', reason: 'razlog', package_received_at: 'paket stigao', resolution_wanted: 'kupac želi', restocked: 'vraćeno na stanje', size: 'veličina', color: 'boja', qty: 'količina', email: 'email', instagram: 'instagram', birthday: 'rođendan', source: 'izvor', position: 'redosled', pinned: 'zakačeno', done: 'završeno', delivered_on: 'paket primljen', shipped_at: 'poslato', delivered_at: 'isporučeno', photos: 'fotografije', order_no: 'broj', exchange_details: 'želi umesto toga', item: 'komad', rating: 'ocena', customer_name: 'kupac', type: 'tip', discount_pct: 'popust %', discount_rsd: 'popust RSD', deleted_at: '__del' };
 const NF_SKIP = new Set(['updated_at', 'updated_by', 'created_at', 'created_by', 'deleted_by', 'phone_norm', 'first_order_at', 'customer_id', 'product_id', 'variant_id', 'order_id', 'code_id', 'consent', 'case_no', 'id', 'bank_account', 'shopify_order_id', 'shopify_product_id', 'shopify_variant_id', 'resolved_at', 'area', 'author']);
 const prodName = (id) => product(id)?.name || 'komad';
 const custName = (id) => state.customers.find(c => c.id === id)?.name || 'kupac';
@@ -1980,7 +2000,7 @@ const NF_TBL = {
     open: r => r.order_id ? `order:${r.order_id}` : r.post_id ? `post:${r.post_id}` : r.return_id ? `ret:${r.return_id}` : r.customer_id ? `cust:${r.customer_id}` : r.site_id ? `idea:${r.site_id}` : '',
     ins: r => r.type === 'comment' ? `komentar „${(r.body || '').slice(0, 90)}“` : 'screenshot' },
 };
-const NF_CAT = { notes: 'Beleške', order: 'Porudžbine', customer: 'Kupci', stock: 'Garderoba', ret: 'Povrati', promo: 'Promocije', post: 'Objave', pack: 'Pakovanje', site: 'Sajt', story: 'Brand story', ads: 'Reklame', code: 'Kodovi i poeni', history: 'Istorija', settings: 'Podešavanja', comment: 'Komentari' };
+const NF_CAT = { notes: 'Beleške', order: 'Porudžbine', customer: 'Kupci', stock: 'Garderoba', ret: 'Povrati', promo: 'Promocije', post: 'Objave + reklame', pack: 'Pakovanje', site: 'Sajt', story: 'Brand story', ads: 'Reklame', code: 'Kodovi i poeni', history: 'Istorija', settings: 'Podešavanja', comment: 'Komentari' };
 function nfVerb(actor, what) {
   const f = PEOPLE[actor]?.f, sys = !PEOPLE[actor];
   return { add: sys ? 'dodato' : f ? 'dodala' : 'dodao', edit: sys ? 'izmenjeno' : f ? 'izmenila' : 'izmenio', del: sys ? 'obrisano' : f ? 'obrisala' : 'obrisao', restore: sys ? 'vraćeno' : f ? 'vratila' : 'vratio' }[what];
@@ -1990,6 +2010,7 @@ function nfVal(field, v) {
   if (typeof v === 'boolean') return v ? 'da' : 'ne';
   if (Array.isArray(v)) return v.map(x => PEOPLE[x]?.name || x).join(', ') || '—';
   if (field === 'status' || field === 'kind' || field === 'type') return ST[v] || RT[v] || PROMO_T[v] || MS_K[v] || FMT[v] || v;
+  if (field === 'purpose') return PURPOSE[v] || v;
   if (field === 'resolution_wanted') return RES_W[v] || v;
   if (field === 'payment') return PAY[v] || v;
   if (field === 'channel') return CH[v] || v;
@@ -2769,6 +2790,8 @@ function bindEvents() {
   $('poDelete').addEventListener('click', deletePost);
   $('postViewSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.postView = b.dataset.view; LS.set('crm_pview', b.dataset.view); renderPosts(); });
   $('postFmtFilter').addEventListener('change', (e) => { state.postFmt = e.target.value; renderPosts(); });
+  $('postPurposeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-pp]'); if (!b) return; state.postPurpose = b.dataset.pp; LS.set('crm_ppurpose', state.postPurpose); renderPosts(); });
+  $('po_purposeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-pp]'); if (b) setPostPurpose(b.dataset.pp); });
   $('newSiteBtn').addEventListener('click', () => openIdeaModal(null, 'site'));
   $('newPackIdeaBtn').addEventListener('click', () => openIdeaModal(null, 'packaging'));
   $('siteForm').addEventListener('submit', saveIdea);
@@ -2865,7 +2888,7 @@ const BOT_FAQ = [
   { g: [['povrat', 'reklamac', 'zamen', 'forma', 'zalb'], ['form', 'funkcion', 'radi', 'rok', 'prijav', 'link', 'salj', 'posalj', 'kako da', 'kako se', 'obrad']], a: 'Kupci popunjavaju formu za povrat (link možeš da kopiraš ispod). Prijava stiže u <b>Povrati</b> sa rokom: 8 dana za odgovor na reklamaciju, 14 dana za povrat novca ili zamenu. Karticu pomeraš kroz statuse.', b: [['Kopiraj link forme', 'copyform'], ['Povrati', 'tab:returns']] },
   { g: [['grafik', 'chart', 'datum', 'period', 'statistik', 'istoriju prihod']], a: 'Na Pregledu klikni karticu <b>Prihod, Profit, Reklame</b> ili neku drugu. Otvara se grafikon: biraš period (7, 30, 90 dana, mesec ili svoje datume), prikaz po danu, nedelji ili mesecu, i klikom na stubić vidiš tačno taj dan.', b: [['Grafikon prihoda', 'metric:revenue:30']] },
   { g: [['pretrag', 'nadj', 'trazi', 'search', 'precic', 'tastat']], a: 'Pretraga: <kbd>Ctrl</kbd>+<kbd>K</kbd> ili <kbd>/</kbd> (na telefonu lupa gore desno). Nalazi kupce, porudžbine, komade i sekcije. Prečice: brojevi <kbd>1</kbd>–<kbd>9</kbd> menjaju sekciju, <kbd>N</kbd> nova porudžbina, <kbd>B</kbd> nova beleška, <kbd>?</kbd> otvara mene.', b: [['Otvori pretragu', 'cmd']] },
-  { g: [['objav', 'reel', 'video', 'drive', 'kalendar', 'snima'], ['dodam', 'dodaj', 'nov', 'unes', 'napravi', 'upis', 'drive', 'link', 'pomer', 'faz', 'promen', 'datum', 'kako da', 'kako se', 'funkcion']], a: 'Objave → <b>+ Nova ideja</b>: naslov, koncept, datum objave i Google Drive link za video. Karticu pomeraš kroz faze (Ideja → Scenario → Snimanje → Montaža → Zakazano → Objavljeno), a u Kalendaru vidiš ceo mesec.', b: [['Nova ideja za objavu', 'act:Nova ideja za objavu'], ['Objave', 'tab:posts']] },
+  { g: [['objav', 'reel', 'video', 'drive', 'kalendar', 'snima'], ['dodam', 'dodaj', 'nov', 'unes', 'napravi', 'upis', 'drive', 'link', 'pomer', 'faz', 'promen', 'datum', 'kako da', 'kako se', 'funkcion']], a: 'Objave + reklame → <b>+ Nova ideja</b>: naslov, gde se koristi (samo objava, objava + reklama ili samo reklama), link za inspiraciju, koncept, datum i Google Drive link za video. Gore biraš filter Sve / Objava + reklama / Samo reklama / Samo objava. Karticu pomeraš kroz faze (Ideja → Scenario → Snimanje → Montaža → Zakazano → Objavljeno), a u Kalendaru vidiš ceo mesec; ideje za reklamu imaju znak ◆.', b: [['Nova ideja', 'act:Nova ideja za objavu'], ['Objave + reklame', 'tab:posts']] },
   { g: [['promocij', 'akcij', 'kampanj'], ['dodam', 'dodaj', 'nov', 'napravi', 'unes', 'kako da', 'kako se', 'racun', 'funkcion', 'pokren']], a: 'Promocije → <b>+ Nova promocija</b>: ime, od-do, kod i budžet. CRM sam pokazuje koliko je porudžbina i prihoda donela, a svako može da doda beleške.', b: [['Nova promocija', 'act:Nova promocija'], ['Promocije', 'tab:promos']] },
   { g: [['sajt', 'shopify', 'domen']], a: 'Link sajta stoji na vrhu sekcije <b>Sajt</b>. Ispod dodaješ predloge šta da se promeni ili doda na sajtu.', b: [['Sajt', 'tab:site'], ['Otvori HARIZMA sajt', 'site']] },
   { g: [['pakovanj', 'ambalaz', 'kutij', 'stiker']], a: 'Pakovanje: menjaš stanje (−, +, +50) i dodaješ predloge za novo pakovanje. Kad nešto padne ispod minimuma, dobiješ žuto upozorenje.', b: [['Pakovanje', 'tab:packaging'], ['Novi predlog', 'act:Novi predlog za pakovanje']] },
@@ -3272,8 +3295,8 @@ function aiSnapshot() {
   L.push(`\n## PROMOCIJE\nid|naziv|tip|od|do|status|kod|popust|kanal|budžet|cilj|porudžbine u periodu|prihod|sa kodom|rast vs prosek|reklame|neto|opis|rezultat|beleške`);
   state.promos.slice().sort((a, b) => b.starts_at.localeCompare(a.starts_at)).forEach(p => { const x = promoResults(p); row(p.id, p.name, p.type, d(p.starts_at), p.ends_at ? d(p.ends_at) : 'traje', ST[promoStatus(p)], p.code, p.discount_pct ? p.discount_pct + '%' : p.discount_rsd ? R(p.discount_rsd) + ' RSD' : '', p.channel, R(p.budget) || '', cut(p.goal, 60), x.orders, R(x.revenue), x.withCode, x.lift == null ? '' : Math.round(x.lift * 100) + '%', R(x.spend), R(x.net), cut(p.description, 100), cut(p.result_note, 80), promoNotes(p.id).map(z => `${personName(z.author)}: ${cut(z.body, 60)}`).join(' / ')); });
 
-  L.push(`\n## OBJAVE\nid|naslov|faza|format|datum objave|zadužen|hook|koncept|caption|drive link|pregledi|lajkovi`);
-  state.posts.forEach(p => row(p.id, p.title, ST[p.status], FMT[p.format] || p.format, dt(p.publish_at), p.assignee, cut(p.hook, 90), cut(p.concept, 160), cut(p.caption, 80), p.drive_link ? 'ima' : 'nema', p.views, p.likes));
+  L.push(`\n## OBJAVE + REKLAME\nid|naslov|namena|faza|format|datum|zadužen|hook|koncept|caption|drive link|inspiracija`);
+  state.posts.forEach(p => row(p.id, p.title, PURPOSE[ppOf(p)], ST[p.status], FMT[p.format] || p.format, dt(p.publish_at), p.assignee, cut(p.hook, 90), cut(p.concept, 160), cut(p.caption, 80), p.drive_link ? 'ima' : 'nema', inspoLinks(p).join(' ')));
 
   L.push(`\n## PREDLOZI ZA SAJT I PAKOVANJE\nid|oblast|naslov|kategorija|prioritet|status|autor|glasovi|opis`);
   state.ideas.forEach(i => row(i.id, i.area === 'packaging' ? 'pakovanje' : 'sajt', i.title, CAT[i.category] || i.category, PRIO[i.priority] || i.priority, ST[i.status], i.created_by, (i.votes || []).length || '', cut(i.description, 140)));

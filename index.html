@@ -459,7 +459,17 @@ tbody tr{transition:background .15s}
 .fmt.carousel{background:#ece8fb;color:#4a3aa7}.fmt.story{background:#fdf1d8;color:#8a6100}.fmt.tiktok{background:#e3edfb;color:#1c5cab}
 .p-date{font-size:11.5px;font-weight:600;color:var(--ink-2);display:inline-flex;gap:4px;align-items:center}
 .p-date.late{color:#a32c2c}
-.p-links{display:flex;gap:6px;margin-top:8px}
+.pp-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:6px;font-size:10.5px;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+.pp-badge.both{background:#f6ead0;color:#7a5410}
+.pp-badge.ad{background:#1B2620;color:#E8E4D9}
+.p-links a.inspo{background:#f3eefb;color:#5b3fa0}
+.cal-chip.pp-ad,.cal-chip.pp-both{box-shadow:inset 0 -2px 0 #c99a3b}
+.pp-seg{display:flex;flex-wrap:wrap}
+.pp-seg button{flex:1 1 auto}
+.inspo-list{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+.p-links a{white-space:nowrap}
+@media (max-width:640px){#postPurposeSeg{display:flex;flex-wrap:wrap;width:100%}#postPurposeSeg button{flex:1 1 auto;padding:7px 10px}}
+.p-links{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 .p-links a{font-size:11.5px;font-weight:600;text-decoration:none;padding:3px 8px;border-radius:6px;background:#eef1f4;color:#3f4a56}
 .p-links a.drive{background:#e2f3ee;color:#0d6b4f}
 .st-idea{background:#eef1f4;color:#3f4a56}.st-scripting{background:#fdf1d8;color:#8a6100}.st-filming{background:#ece8fb;color:#4a3aa7}.st-editing{background:#e3edfb;color:#1c5cab}.st-scheduled{background:#e2e6dc;color:#1B2620}.st-published{background:#e2f4e2;color:#067306}
@@ -1165,7 +1175,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         <button data-tab="products">Garderoba<span class="tab-badge" id="alertBadge" style="display:none"></span></button>
         <button data-tab="returns">Povrati<span class="tab-badge" id="retBadge" style="display:none"></span></button>
         <button data-tab="promos">Promocije<span class="tab-badge live" id="promoBadge" style="display:none"></span></button>
-        <button data-tab="posts">Objave</button>
+        <button data-tab="posts">Objave + reklame</button>
         <button data-tab="packaging">Pakovanje<span class="tab-badge" id="packBadge" style="display:none"></span></button>
         <button data-tab="site">Sajt</button>
         <button data-tab="story">Brand story</button>
@@ -1333,7 +1343,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         <div class="stats" id="kpiHist"></div>
         <div class="panel" style="margin-bottom:18px;padding:16px 18px"><h4>Prihod po danu <span class="page-sub" id="histChartSub"></span></h4><div class="chart" id="histChart"></div></div>
         <div class="toolbar">
-          <div class="seg" id="histSeg"><button data-f="all" class="active">Sve</button><button data-f="milestone">Prekretnice</button><button data-f="order">Porudžbine</button><button data-f="stock">Garderoba</button><button data-f="post">Objave</button><button data-f="ret">Povrati</button><button data-f="promo">Promocije</button><button data-f="site">Sajt i pakovanje</button></div>
+          <div class="seg" id="histSeg"><button data-f="all" class="active">Sve</button><button data-f="milestone">Prekretnice</button><button data-f="order">Porudžbine</button><button data-f="stock">Garderoba</button><button data-f="post">Objave + reklame</button><button data-f="ret">Povrati</button><button data-f="promo">Promocije</button><button data-f="site">Sajt i pakovanje</button></div>
           <div class="select-wrap"><select id="histMonth"></select></div>
           <div class="count" id="histCount"></div>
         </div>
@@ -1344,12 +1354,13 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       <!-- OBJAVE -->
       <div class="view" id="v-posts">
         <div class="page-head">
-          <div><div class="page-title">Objave</div><div class="page-sub">Ideje, koncepti, datumi objave i snimci na Drive-u.</div></div>
+          <div><div class="page-title">Objave + reklame</div><div class="page-sub">Ideje za objave i reklame, inspiracija, koncepti, datumi i snimci na Drive-u.</div></div>
           <button class="btn-gold" id="newPostBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Nova ideja</button>
         </div>
         <div class="week-strip" id="weekStrip"></div>
         <div class="toolbar">
           <div class="seg" id="postViewSeg"><button data-view="board" class="active">Tabla</button><button data-view="calendar">Kalendar</button><button data-view="list">Lista</button></div>
+          <div class="seg" id="postPurposeSeg"><button data-pp="all" class="active">Sve</button><button data-pp="both">Objava + reklama</button><button data-pp="ad">Samo reklama</button><button data-pp="post">Samo objava</button></div>
           <div class="select-wrap"><select id="postFmtFilter"><option value="all">Svi formati</option><option value="reel">Reel</option><option value="carousel">Carousel</option><option value="story">Story</option><option value="post">Post</option><option value="tiktok">TikTok</option></select></div>
           <div class="count" id="postCount"></div>
         </div>
@@ -1551,9 +1562,11 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 
 <!-- MODAL objava -->
 <div class="modal-wrap" id="postModal"><div class="modal-bg" data-close></div>
-  <div class="modal wide"><h3 id="poTitle">Nova ideja za objavu</h3>
+  <div class="modal wide"><h3 id="poTitle">Nova ideja</h3>
     <form id="postForm">
       <div class="field"><label>Ideja *</label><input id="po_title" required placeholder="npr. Pakujemo prvu porudžbinu"></div>
+      <div class="field"><label>Gde se koristi</label><div class="seg pp-seg" id="po_purposeSeg"><button type="button" data-pp="post">Samo objava</button><button type="button" data-pp="both">Objava + reklama</button><button type="button" data-pp="ad">Samo reklama</button></div><input type="hidden" id="po_purpose" value="post"></div>
+      <div class="field"><label>Inspiracija (link videa ili objave koju smo videli, može više, svaki u novom redu)</label><textarea id="po_inspo" rows="2" placeholder="https://www.instagram.com/reel/…&#10;https://www.tiktok.com/@…"></textarea></div>
       <div class="field"><label>Koncept</label><textarea id="po_concept" placeholder="Šta se vidi, kojim redom, koja muzika, koja poruka"></textarea></div>
       <div class="field"><label>Hook (prve 2 sekunde)</label><input id="po_hook"></div>
       <div class="frow3">
@@ -1562,19 +1575,11 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         <div class="field"><label>Zadužen</label><select id="po_assignee"><option value="">—</option><option>Konstantin</option><option>Staša</option><option>Marjan</option></select></div>
       </div>
       <div class="frow">
-        <div class="field"><label>Datum i vreme objave</label><input id="po_date" type="datetime-local"></div>
+        <div class="field"><label id="po_dateLbl">Datum i vreme objave</label><input id="po_date" type="datetime-local"></div>
         <div class="field"><label>Komad iz ponude</label><select id="po_product"></select></div>
       </div>
       <div class="field"><label>Google Drive link za snimak</label><input id="po_drive" type="url" placeholder="https://drive.google.com/…"></div>
       <div class="field"><label>Opis ispod objave</label><textarea id="po_caption"></textarea></div>
-      <div class="frow">
-        <div class="field"><label>Link objave (kad izađe)</label><input id="po_url" type="url" placeholder="https://instagram.com/…"></div>
-        <div class="frow3" style="gap:8px">
-          <div class="field"><label>Pregledi</label><input id="po_views" type="number"></div>
-          <div class="field"><label>Lajkovi</label><input id="po_likes" type="number"></div>
-          <div class="field"><label>Sačuvano</label><input id="po_saves" type="number"></div>
-        </div>
-      </div>
       <div id="poComments"></div>
       <div class="modal-actions">
         <button type="button" class="fu-remove" id="poDelete" style="display:none">Obriši</button>
@@ -1830,7 +1835,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
     <h3 style="margin-bottom:10px">Istorija promena</h3>
     <div class="toolbar" style="margin-bottom:10px">
       <div class="seg" id="nfWho"><button data-w="others" class="active">Tuđe</button><button data-w="all">Sve</button><button data-w="konstantin">Konstantin</button><button data-w="stasa">Staša</button><button data-w="marjan">Marjan</button></div>
-      <div class="select-wrap"><select id="nfCat"><option value="all">Sve vrste</option><option value="notes">Beleške</option><option value="order">Porudžbine</option><option value="customer">Kupci</option><option value="stock">Garderoba</option><option value="ret">Povrati</option><option value="promo">Promocije</option><option value="post">Objave</option><option value="pack">Pakovanje</option><option value="site">Sajt</option><option value="story">Brand story</option><option value="ads">Reklame</option><option value="code">Kodovi i poeni</option><option value="history">Istorija</option><option value="settings">Podešavanja</option><option value="comment">Komentari</option></select></div>
+      <div class="select-wrap"><select id="nfCat"><option value="all">Sve vrste</option><option value="notes">Beleške</option><option value="order">Porudžbine</option><option value="customer">Kupci</option><option value="stock">Garderoba</option><option value="ret">Povrati</option><option value="promo">Promocije</option><option value="post">Objave + reklame</option><option value="pack">Pakovanje</option><option value="site">Sajt</option><option value="story">Brand story</option><option value="ads">Reklame</option><option value="code">Kodovi i poeni</option><option value="history">Istorija</option><option value="settings">Podešavanja</option><option value="comment">Komentari</option></select></div>
       <input class="inline-input" id="nfQ" placeholder="traži…" style="width:160px">
       <div class="count" id="nfCount"></div>
     </div>
@@ -1889,8 +1894,8 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610051130"></script>
-<script>window.HTML_BUILD="202610051130";</script>
-<script src="app.js?v=202610051130"></script>
+<script src="config.js?v=202610072131"></script>
+<script>window.HTML_BUILD="202610072131";</script>
+<script src="app.js?v=202610072131"></script>
 </body>
 </html>

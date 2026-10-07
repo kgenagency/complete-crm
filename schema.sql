@@ -586,3 +586,9 @@ create or replace function public.h_customer_norm() returns trigger language plp
 begin new.phone_norm := nullif(h_norm_phone(new.phone), ''); return new; end $$;
 drop trigger if exists h_customer_norm_trg on public.h_customers;
 create trigger h_customer_norm_trg before insert or update of phone on public.h_customers for each row execute function public.h_customer_norm();
+
+-- v16: objave + reklame (namena ideje i link za inspiraciju)
+alter table h_posts add column if not exists purpose text not null default 'post';
+alter table h_posts drop constraint if exists h_posts_purpose_check;
+alter table h_posts add constraint h_posts_purpose_check check (purpose in ('post','ad','both'));
+alter table h_posts add column if not exists inspo text;
