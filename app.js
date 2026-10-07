@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610072309';
+const APP_BUILD = '202610072318';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -1524,15 +1524,25 @@ function greet(u) {
   if (!p) return `Dobrodošli, ${u.display}`;
   return `${p.f ? 'Dobrodošla' : 'Dobrodošao'}, ${p.voc}`;
 }
-function playSplash(u) {
+/* pretraživač ne pušta zvuk dok se ekran ne dodirne; kad si već prijavljen (otvoriš ili osvežiš CRM),
+   uvod čeka jedan dodir („Dodirni za ulaz“), pa kreće animacija sa zvukom. Sa ugašenim zvukom nema čekanja. */
+const audioReady = () => (AUD && AUD.state === 'running') || !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
+function playSplash(u, gate) {
   return new Promise(res => {
     const sp = $('splash');
     const pp = PEOPLE[u.username];
     $('splashHello').innerHTML = esc(greet(u)) + (pp?.line ? `<span class="hello-sub">${esc(pp.line)}</span>` : '');
     const clone = sp.cloneNode(true); sp.replaceWith(clone); // restart animacija
-    clone.classList.remove('hide');
-    sfx('intro');
-    setTimeout(() => { clone.classList.add('hide'); res(); }, pp?.line ? 3000 : 2300);
+    clone.querySelectorAll('.sp-gate').forEach(x => x.remove());
+    clone.classList.remove('hide', 'gate');
+    const run = () => { clone.classList.remove('gate'); sfx('intro'); setTimeout(() => { clone.classList.add('hide'); res(); }, pp?.line ? 3000 : 2300); };
+    if (!gate) return run();
+    clone.classList.add('gate');
+    const g = document.createElement('div'); g.className = 'sp-gate';
+    g.innerHTML = `<svg viewBox="0 0 120 120" aria-hidden="true"><g class="ring"><path d="M60 6 L114 60 L60 114 L6 60 Z"/><path d="M60 16 L104 60 L60 104 L16 60 Z"/></g><text x="60" y="76" text-anchor="middle">H</text></svg><div class="sp-gate-t">${matchMedia('(hover: none)').matches ? 'Dodirni' : 'Klikni'} za ulaz</div>`;
+    clone.appendChild(g);
+    const go = () => { window.removeEventListener('pointerdown', go, true); window.removeEventListener('keydown', go, true); audioCtx(); run(); };
+    window.addEventListener('pointerdown', go, true); window.addEventListener('keydown', go, true);
   });
 }
 function countUp(root) {
@@ -3946,12 +3956,12 @@ function botLocalFirst(raw) {
 }
 
 async function byeOut() { const played = sfx('bye'); await Promise.all([sb.auth.signOut(), new Promise(r => setTimeout(r, played ? 800 : 0))]); location.reload(); }
-async function enterApp(user) {
+async function enterApp(user, restored) {
   state.user = user;
   $('userName').textContent = user.display;
   $('navUser').textContent = user.display; $('navAvatar').textContent = user.display.charAt(0).toUpperCase();
   $('avatar').textContent = user.display.charAt(0).toUpperCase();
-  const splash = playSplash(user);
+  const splash = playSplash(user, restored && soundOn() && !audioReady());
   await loadData();
   renderAll();
   snapshotToday();
@@ -3972,5 +3982,5 @@ async function enterApp(user) {
 (async function init() {
   bindEvents(); botBind();
   const { data } = await sb.auth.getSession();
-  if (data.session) { try { await enterApp(userFrom(data.session.user)); } catch (e) { console.error(e); } }
+  if (data.session) { try { await enterApp(userFrom(data.session.user), true); } catch (e) { console.error(e); } }
 })();

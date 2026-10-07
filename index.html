@@ -438,6 +438,16 @@ tbody tr{transition:background .15s}
 .splash .hello{text-align:center}
 .hello-sub{display:block;font-style:normal;font-size:17px;letter-spacing:.04em;color:#E8E4D9;margin-top:10px;opacity:0;animation:fadeUp .7s 1.6s var(--ease) forwards}
 .splash .line{width:0;height:1px;background:#7E8C74;animation:lineGrow .8s 1s var(--ease) forwards}
+.splash.gate .d,.splash.gate .br,.splash.gate .hl,.splash.gate .word,.splash.gate .hello,.splash.gate .line{animation-play-state:paused}
+.sp-gate{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;cursor:pointer;transition:opacity .35s var(--ease);-webkit-tap-highlight-color:transparent}
+.splash:not(.gate) .sp-gate{opacity:0;pointer-events:none}
+.sp-gate svg{width:96px;height:96px;overflow:visible}
+.sp-gate path{fill:none;stroke:rgba(232,228,217,.55);stroke-width:1.4}
+.sp-gate text{font-family:'Cormorant Garamond',serif;font-size:46px;font-weight:600;fill:rgba(232,228,217,.8)}
+.sp-gate .ring{transform-origin:60px 60px;animation:gateBreath 2.6s ease-in-out infinite}
+.sp-gate-t{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:21px;letter-spacing:.16em;color:#b9c0b1;animation:gatePulse 2.6s ease-in-out infinite}
+@keyframes gateBreath{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:1;transform:scale(1.07)}}
+@keyframes gatePulse{0%,100%{opacity:.45}50%{opacity:1}}
 @keyframes lineGrow{to{width:120px}}
 
 /* login u HARIZMA stilu */
@@ -2087,8 +2097,8 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610072309"></script>
-<script>window.HTML_BUILD="202610072309";</script>
-<script src="app.js?v=202610072309"></script>
+<script src="config.js?v=202610072318"></script>
+<script>window.HTML_BUILD="202610072318";</script>
+<script src="app.js?v=202610072318"></script>
 </body>
 </html>
