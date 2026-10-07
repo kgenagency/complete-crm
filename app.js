@@ -1,5 +1,6 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610072318';
+const APP_BUILD = '202610072323';
+try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -825,12 +826,14 @@ function taskGet(px, legacy) {
    jedan zajednički izlaz (kompresor + prostorni odjek), pa kratki „instrumenti“: zvonce, ton, šum */
 let AUD = null, BUS = null, NOISE = null;
 function audioCtx() { try { AUD = AUD || new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' }); if (AUD.state === 'suspended') AUD.resume().catch(() => {}); return AUD; } catch (e) { return null; } }
+if (LS.get('crm_sfx_v2', '') !== '1') { LS.set('crm_sound', '1'); LS.set('crm_sfx_v2', '1'); } // jednom vrati zvuk (neko ga je možda slučajno ugasio)
 const soundOn = () => LS.get('crm_sound', '1') !== '0';
 function sfxBus(a) {
   if (BUS && BUS.a === a) return BUS;
-  const master = a.createGain(); master.gain.value = 0.85;
-  const comp = a.createDynamicsCompressor(); comp.threshold.value = -18; comp.knee.value = 14; comp.ratio.value = 3.5; comp.attack.value = 0.003; comp.release.value = 0.25;
-  master.connect(comp); comp.connect(a.destination);
+  const master = a.createGain(); master.gain.value = 2.2;
+  const comp = a.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.004; comp.release.value = 0.25;
+  const lim = a.createDynamicsCompressor(); lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.1;
+  master.connect(comp); comp.connect(lim); lim.connect(a.destination);
   // odjek kao u velikoj, praznoj sobi (napravljen šumom koji se gasi)
   const len = Math.floor(a.sampleRate * 2.2), ir = a.createBuffer(2, len, a.sampleRate);
   for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.4) * Math.min(1, i / 240); }
@@ -876,9 +879,9 @@ const SFX = {
     vNoise(B, { t, a: 0.55, d: 0.75, peak: 0.045, f: 260, f2: 3400, q: 0.8, verb: 0.55, pan: -0.25, pan2: 0.25 });
     [[65.41, 0.085], [98.0, 0.05]].forEach(([f, pk]) => vOsc(B, { f, t: t + 0.05, a: 0.75, d: 2.3, peak: pk, type: 'triangle', lp: 380, verb: 0.3 }));
     vOsc(B, { f: 130.81, f2: 128, t: t + 0.68, a: 0.006, d: 1.7, peak: 0.15, verb: 0.55 });
-    vBell(B, C4, t + 0.7, 0.085, 1.9, 0, 0.6); vBell(B, G4, t + 0.73, 0.05, 1.7, 0.1, 0.6);
-    [C5, E5, G5, B5, D6, G6].forEach((f, i) => vBell(B, f, t + 0.92 + i * 0.075, 0.042 - i * 0.003, 1.5, -0.65 + i * 0.26, 0.75));
-    [C4, E4, G4, B4, D5].forEach((f, i) => vOsc(B, { f, t: t + 1.22, a: 0.4, d: 1.7, peak: 0.024, pan: -0.3 + i * 0.15, verb: 0.65, detune: i % 2 ? 5 : -5 }));
+    vBell(B, C4, t + 0.7, 0.11, 1.9, 0, 0.6); vBell(B, G4, t + 0.73, 0.07, 1.7, 0.1, 0.6);
+    [C5, E5, G5, B5, D6, G6].forEach((f, i) => vBell(B, f, t + 0.92 + i * 0.075, 0.055 - i * 0.004, 1.5, -0.65 + i * 0.26, 0.75));
+    [C4, E4, G4, B4, D5].forEach((f, i) => vOsc(B, { f, t: t + 1.22, a: 0.4, d: 1.7, peak: 0.032, pan: -0.3 + i * 0.15, verb: 0.65, detune: i % 2 ? 5 : -5 }));
   } },
   // nova porudžbina: fioka kase, „ka-čing“ i par novčića
   sale: { v: 1.4, p: 6, vibe: [10, 30, 10, 30, 18], play(B, t) {
@@ -2526,7 +2529,11 @@ function nfDismiss(key) {
 }
 function nfMenu(action) {
   if (action === 'sound') { setSound(!soundOn()); toast(soundOn() ? 'Zvuci uključeni 🔔' : 'Zvuci isključeni'); return; }
-  if (action === 'soundtest') { if (!soundOn()) setSound(true); audioCtx(); setTimeout(() => sfx('intro'), 40); return; }
+  if (action === 'soundtest') {
+    if (!soundOn()) setSound(true); const a = audioCtx(); sfxLast = { t: 0, p: -1 }; setTimeout(() => sfx('intro'), 40);
+    setTimeout(() => toast(!a ? 'Ovaj pretraživač ne podržava zvuk.' : a.state !== 'running' ? 'Pretraživač još blokira zvuk. Klikni bilo gde na stranicu pa probaj ponovo.' : 'Svira uvod. Ako ništa ne čuješ, pojačaj zvuk na uređaju i proveri da kartica pretraživača nije utišana.', 5000), 500);
+    return;
+  }
   const s = nfState();
   if (action === 'history') { $('bellMenu').classList.remove('open'); return openNotifHistory(); }
   if (action === 'clear') { s.cleared_before = new Date().toISOString(); s.dismissed = []; }
