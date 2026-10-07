@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610072207';
+const APP_BUILD = '202610072214';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -745,7 +745,7 @@ const assignFields = (arr) => ({ assignees: arr, assignee: arr.length ? arr.map(
    Baza sama beleži ko je i kad dodelio (task_at / task_by) i zatvara zadatak kad stavka dođe do kraja (npr. objavljeno). */
 const tcut = (s, k) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > k ? s.slice(0, k) + '…' : s; };
 const TASK_SRC = [
-  { k: 'note', tbl: 'h_notes', label: 'Beleške', ic: '✎', list: () => state.notes, title: x => tcut(x.body, 140), sub: x => notePlace(x), final: x => !!x.done, ref: x => `note:${x.id}` },
+  { k: 'note', tbl: 'h_notes', label: 'Beleške', ic: '✎', sec: x => areaSec(x.area), list: () => state.notes, title: x => tcut(x.body, 140), sub: x => (x.area && x.area !== 'general' ? 'beleška' : ''), final: x => !!x.done, ref: x => `note:${x.id}` },
   { k: 'post', tbl: 'h_posts', label: 'Objave + reklame', ic: '▶', list: () => state.posts, title: x => x.title, sub: x => `${ST[x.status] || x.status} · ${PURPOSE[ppOf(x)]}`, final: x => x.status === 'published', ref: x => `post:${x.id}` },
   { k: 'site', tbl: 'h_site_ideas', label: 'Sajt', ic: '◎', list: () => state.ideas.filter(i => i.area !== 'packaging'), title: x => x.title, sub: x => (IDEA_ST.find(s => s.key === x.status) || {}).label || '', final: x => ['done', 'rejected'].includes(x.status), ref: x => `idea:${x.id}` },
   { k: 'packidea', tbl: 'h_site_ideas', label: 'Pakovanje', ic: '▣', list: () => state.ideas.filter(i => i.area === 'packaging'), title: x => x.title, sub: x => 'predlog · ' + ((IDEA_ST.find(s => s.key === x.status) || {}).label || ''), final: x => ['done', 'rejected'].includes(x.status), ref: x => `idea:${x.id}` },
@@ -766,7 +766,7 @@ function dueInfo(d) {
 }
 function allTasks() {
   const out = [];
-  TASK_SRC.forEach(src => src.list().forEach(x => { const as = assigneesOf(x); if (as.length) out.push({ src, x, as, done: taskIsDone(x, src), due: x.task_due || null }); }));
+  TASK_SRC.forEach(src => src.list().forEach(x => { const as = assigneesOf(x); if (as.length) out.push({ src, x, as, sec: src.sec ? src.sec(x) : src.label, done: taskIsDone(x, src), due: x.task_due || null }); }));
   return out;
 }
 /* mala oznaka na kartici stavke */
@@ -842,12 +842,26 @@ function tkRow(t, i) {
   return `<div class="tk-row ${t.done ? 'done' : ''} ${d ? d.level : ''}" data-tkopen="${src.k}:${x.id}" style="animation-delay:${Math.min(i, 20) * 18}ms">
     <button class="tk-check" data-tkdone="${src.k}:${x.id}" title="${t.done ? 'Vrati u otvorene' : 'Gotovo'}">✓</button>
     <div class="tk-main"><div class="tk-t">${esc(src.title(x))}</div>
-      <div class="tk-s"><span class="tk-sec">${src.ic} ${esc(src.label)}</span>${src.sub(x) ? `<span>${esc(src.sub(x))}</span>` : ''}${info}</div></div>
+      <div class="tk-s"><span class="tk-sec">${src.ic} ${esc(t.sec)}</span>${src.sub(x) ? `<span>${esc(src.sub(x))}</span>` : ''}${info}</div></div>
     <div class="tk-side">${d ? `<span class="tk-due ${d.level}">⏱ ${d.txt}</span>` : ''}<span class="tk-avs">${t.as.map(a => `<span class="n-av ${PEOPLE[a] ? a : 'system'}" title="${esc(personName(a))}">${esc(personName(a).charAt(0))}</span>`).join('')}</span><button class="tk-edit" data-tkedit="${src.k}:${x.id}" title="Zaduženi i rok">👤</button></div>
   </div>`;
 }
+const TAB_SEC = { notes: 'Ostalo', orders: 'Porudžbine', customers: 'Kupci', products: 'Garderoba', returns: 'Povrati', promos: 'Promocije', posts: 'Objave + reklame', packaging: 'Pakovanje', site: 'Sajt', story: 'Brand story', ads: 'Reklame' };
+function renderSecTasks(all) {
+  Object.entries(TAB_SEC).forEach(([tab, sec]) => {
+    const t = $('v-' + tab)?.querySelector(':scope > .page-head .page-title'); if (!t) return;
+    const open = all.filter(x => !x.done && x.sec === sec), late = open.filter(x => dueInfo(x.due)?.level === 'late').length;
+    let el = t.querySelector('.sec-tk');
+    if (!open.length) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('button'); el.type = 'button'; el.className = 'sec-tk'; t.appendChild(el); }
+    el.dataset.sectk = sec; el.classList.toggle('late', !!late);
+    el.textContent = `☑ ${open.length} ${bpl(open.length, 'zadatak', 'zadatka', 'zadataka')}${late ? ' · ' + late + ' kasni' : ''}`;
+    el.title = 'Otvori Taskove za ovu sekciju';
+  });
+}
 function renderTasks() {
   const me = who(), all = allTasks();
+  renderSecTasks(all);
   const mine = all.filter(t => !t.done && t.as.includes(me)), late = mine.filter(t => dueInfo(t.due)?.level === 'late').length;
   const b = $('taskBadge');
   if (b) { b.style.display = mine.length ? '' : 'none'; b.textContent = mine.length; b.classList.toggle('soft', !late); b.title = `${mine.length} tvojih otvorenih${late ? `, ${late} kasni` : ''}`; }
@@ -855,12 +869,12 @@ function renderTasks() {
   const others = Object.keys(PEOPLE).filter(k => k !== me);
   $('tkWho').innerHTML = [['me', 'Moji'], ['all', 'Svi'], ...others.map(k => [k, PEOPLE[k].name])].map(([k, l]) => `<button data-tw="${k}" class="${tkState.who === k ? 'active' : ''}">${l}</button>`).join('');
   document.querySelectorAll('#tkState button').forEach(x => x.classList.toggle('active', x.dataset.ts === tkState.st));
-  const labels = [...new Set(TASK_SRC.map(s => s.label))];
+  const labels = [...NOTE_AREAS.slice(1).map(a => a[1]), 'Ostalo'];
   if ($('tkSec').options.length !== labels.length + 1) $('tkSec').innerHTML = `<option value="all">Sve sekcije</option>` + labels.map(l => `<option>${esc(l)}</option>`).join('');
   $('tkSec').value = tkState.sec;
   const wk = tkState.who === 'me' ? me : tkState.who, qn = fold($('tkQ').value.trim());
-  const base = all.filter(t => (wk === 'all' || t.as.includes(wk)) && (tkState.sec === 'all' || t.src.label === tkState.sec)
-    && (!qn || fold(`${t.src.title(t.x)} ${t.src.sub(t.x)} ${t.src.label} ${t.as.map(personName).join(' ')}`).includes(qn)));
+  const base = all.filter(t => (wk === 'all' || t.as.includes(wk)) && (tkState.sec === 'all' || t.sec === tkState.sec)
+    && (!qn || fold(`${t.src.title(t.x)} ${t.src.sub(t.x)} ${t.sec} ${t.as.map(personName).join(' ')}`).includes(qn)));
   const open = base.filter(t => !t.done), done = base.filter(t => t.done);
   const wk7 = Date.now() - 7 * 864e5;
   $('kpiTasks').innerHTML = stat(wk === me ? 'Tvoji otvoreni' : wk === 'all' ? 'Otvoreni (svi)' : `Otvoreni: ${personName(wk)}`, open.length) +
@@ -1836,8 +1850,8 @@ const SECTIONS = [
 ];
 const ACTIONS = [
   { name: 'Nova porudžbina', kw: 'dodaj unesi', ic: '+', run: () => openOrderModal() },
-  { name: 'Nova beleška', kw: 'zabelezi note zapisi', ic: '✎', run: () => openNoteModal('general') },
-  { name: 'Nov zadatak', kw: 'task zadatak zaduzi dodeli obaveza', ic: '☑', run: () => openNoteModal('general', true) },
+  { name: 'Nova beleška', kw: 'zabelezi note zapisi', ic: '✎', run: () => openNoteModal('auto') },
+  { name: 'Nov zadatak', kw: 'task zadatak zaduzi dodeli obaveza', ic: '☑', run: () => openNoteModal('auto', true) },
   { name: 'Novi kupac', kw: 'dodaj', ic: '+', run: () => openCustModal() },
   { name: 'Novi komad', kw: 'proizvod roba dodaj', ic: '+', run: () => openProductModal() },
   { name: 'Nova ideja za objavu', kw: 'post reel reklama ad kreativa inspiracija', ic: '+', run: () => openPostModal() },
@@ -2560,10 +2574,12 @@ function renderHomeNotes() {
     + `<div class="hn add" id="hnAdd">✎ Nova beleška</div><div class="hn all" data-goto="notes">Sve beleške (${list.length}) →</div>`;
 }
 function openNoteModal(area, asTask) {
-  $('qn_body').value = ''; $('qn_pin').checked = false; $('qn_area').value = area || 'general';
+  $('qn_body').value = ''; $('qn_pin').checked = false;
+  if (!area || area === 'auto') area = state.tab === 'tasks' && tkState.sec !== 'all' ? ((NOTE_AREAS.find(x => x[1] === tkState.sec) || [])[0] || 'general') : (TAB_AREA[state.tab] || 'general');
+  $('qn_area').value = area;
   $('noteModal').querySelector('h3').textContent = asTask ? 'Nov zadatak' : 'Zabeleži';
   $('qn_body').placeholder = asTask ? 'Šta treba da se uradi…' : 'Šta treba da se zapamti…';
-  taskSet('qt', null, taskSrcOf('note')); $('qt_task').style.display = '';
+  taskSet('qt', null, taskSrcOf('note')); $('qt_task').style.display = area === 'milestone' ? 'none' : '';
   const w = state.writer || who();
   document.querySelectorAll('#qnWriter button').forEach(b => b.classList.toggle('active', b.dataset.qw === w));
   $('noteModal').classList.add('open'); setTimeout(() => $('qn_body').focus(), 40);
@@ -2613,7 +2629,16 @@ function renderNav() {
 
 /* ---------- STRANICA BELEŠKE ---------- */
 const npState = { who: 'all', status: 'open', area: 'all', sort: 'new', editId: null };
-const notePlace = (x) => x.area === 'story' ? 'Brand story' : (x.area || '').startsWith('promo:') ? ('Promocija: ' + (state.promos.find(p => p.id === x.area.split(':')[1])?.name || '')) : 'Opšta';
+const NOTE_AREAS = [['general', 'Ostalo'], ['orders', 'Porudžbine'], ['customers', 'Kupci'], ['products', 'Garderoba'], ['returns', 'Povrati'], ['promos', 'Promocije'], ['posts', 'Objave + reklame'], ['packaging', 'Pakovanje'], ['site', 'Sajt'], ['story', 'Brand story'], ['ads', 'Reklame']];
+const areaSec = (a) => (a || '').startsWith('promo:') ? 'Promocije' : (NOTE_AREAS.find(x => x[0] === (a || 'general')) || [])[1] || 'Ostalo';
+const TAB_AREA = { orders: 'orders', customers: 'customers', products: 'products', returns: 'returns', promos: 'promos', posts: 'posts', packaging: 'packaging', site: 'site', story: 'story', ads: 'ads' };
+function fillAreaSelects() {
+  const opts = NOTE_AREAS.map(([v, l]) => `<option value="${v}">${v === 'general' ? 'Ostalo (bez sekcije)' : l}</option>`).join('');
+  $('qn_area').innerHTML = `<optgroup label="Beleška ili zadatak za sekciju">${opts}</optgroup><optgroup label="Istorija"><option value="milestone">Događaj sa datumom u Istoriji (nije zadatak)</option></optgroup>`;
+  $('np_area').innerHTML = opts;
+  $('npArea').innerHTML = `<option value="all">Sve sekcije</option>` + NOTE_AREAS.map(([v, l]) => `<option value="${v === 'promos' ? 'promo' : v}">${l}</option>`).join('');
+}
+const notePlace = (x) => (x.area || '').startsWith('promo:') ? ('Promocija: ' + (state.promos.find(p => p.id === x.area.split(':')[1])?.name || '')) : x.area && x.area !== 'general' ? areaSec(x.area) : 'Ostalo';
 const seenKey = () => 'crm_notes_seen_' + who();
 function notesUnread() { const seen = LS.get(seenKey(), ''); return state.notes.filter(x => x.author !== who() && !x.done && (!seen || x.created_at > seen)).length; }
 function renderNotesBadge() { const b = $('notesBadge'); if (b) b.style.display = 'none'; return; const n = notesUnread(); b.style.display = n && state.tab !== 'notes' ? '' : 'none'; b.textContent = n; }
@@ -2643,7 +2668,7 @@ function renderNotesPage() {
   document.querySelectorAll('#npWriter button').forEach(b => b.classList.toggle('active', b.dataset.npw === w));
   let list = all.filter(x => (npState.who === 'all' || x.author === npState.who)
     && (npState.status === 'all' || (npState.status === 'done' ? x.done : !x.done))
-    && (npState.area === 'all' || (npState.area === 'promo' ? (x.area || '').startsWith('promo:') : x.area === npState.area))
+    && (npState.area === 'all' || (npState.area === 'promo' ? ((x.area || '').startsWith('promo:') || x.area === 'promos') : (x.area || 'general') === npState.area))
     && (!qn || fold(x.body + ' ' + personName(x.author) + ' ' + notePlace(x)).includes(qn)));
   list.sort((a, b) => npState.sort === 'old' ? a.created_at.localeCompare(b.created_at) : b.created_at.localeCompare(a.created_at));
   $('npCount').textContent = `${list.length} beleški`;
@@ -2829,7 +2854,7 @@ function bindEvents() {
     if (e.key === '/') { e.preventDefault(); openCmd(); }
     else if (/^[1-9]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) { const sct = SECTIONS[+e.key - 1]; if (sct) setTab(sct.tab); }
     else if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey) { openOrderModal(); }
-    else if (e.key.toLowerCase() === 'b' && !e.metaKey && !e.ctrlKey) { openNoteModal('general'); }
+    else if (e.key.toLowerCase() === 'b' && !e.metaKey && !e.ctrlKey) { openNoteModal('auto'); }
   });
   if (!/Mac|iPhone|iPad/.test(navigator.platform)) $('cmdKbd').textContent = 'Ctrl K';
   // mobilni meni
@@ -2862,7 +2887,7 @@ function bindEvents() {
   });
   $('npList').addEventListener('keydown', (e) => { if (e.target.id === 'npEdit' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); npSaveEdit(npState.editId); } if (e.target.id === 'npEdit' && e.key === 'Escape') { e.stopPropagation(); npState.editId = null; e.target.blur(); renderNotesPage(); } });
   // brza beleška
-  $('quickNoteBtn').addEventListener('click', () => openNoteModal('general'));
+  $('quickNoteBtn').addEventListener('click', () => openNoteModal('auto'));
   $('qnSave').addEventListener('click', saveQuickNote);
   $('noteModal').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveQuickNote(); } });
   $('qnWriter').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.writer = b.dataset.qw; document.querySelectorAll('#qnWriter button').forEach(x => x.classList.toggle('active', x === b)); });
@@ -3000,11 +3025,13 @@ function bindEvents() {
   $('tkState').addEventListener('click', (e) => { const b = e.target.closest('[data-ts]'); if (!b) return; tkState.st = b.dataset.ts; renderTasks(); });
   $('tkSec').addEventListener('change', (e) => { tkState.sec = e.target.value; renderTasks(); });
   $('tkQ').addEventListener('input', () => renderTasks());
-  $('newTaskBtn').addEventListener('click', () => openNoteModal('general', true));
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-sectk]'); if (!b) return; tkState.sec = b.dataset.sectk; tkState.who = 'all'; tkState.st = 'open'; setTab('tasks'); });
+  $('newTaskBtn').addEventListener('click', () => openNoteModal('auto', true));
   $('tmSave').addEventListener('click', saveTaskModal);
   $('tmOpen').addEventListener('click', () => { if (!tmCtx) return; const { src, x } = tmCtx; $('taskModal').classList.remove('open'); const ref = src.ref(x); if (ref.startsWith('tab:')) setTab(ref.slice(4)); else if (src.k === 'cust') openCustModal(x.id); else openRef(ref); });
   $('qn_area').addEventListener('change', (e) => { $('qt_task').style.display = e.target.value === 'milestone' ? 'none' : ''; });
   taskSet('nt', null, taskSrcOf('note'));
+  fillAreaSelects();
   document.addEventListener('click', (e) => { const b = e.target.closest('.who-pick .wp'); if (!b) return; b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); });
   $('po_purposeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-pp]'); if (b) setPostPurpose(b.dataset.pp); });
   $('newSiteBtn').addEventListener('click', () => openIdeaModal(null, 'site'));
@@ -3130,7 +3157,7 @@ function botTasks(t) {
   const nm = forK === me ? 'Tvoji' : `${personName(forK)}:`;
   if (!list.length) return botSay(`${forK === me ? 'Nemaš otvorenih zadataka.' : personName(forK) + ' nema otvorenih zadataka.'} 👌`, [['Taskovi', 'tab:tasks'], ['Nov zadatak', 'act:Nov zadatak']]);
   const late = list.filter(x => dueInfo(x.due)?.level === 'late').length;
-  botSay(`<div class="bt-cap" style="margin-bottom:6px">${nm} ${list.length} ${bpl(list.length, 'otvoren zadatak', 'otvorena zadatka', 'otvorenih zadataka')}${late ? `, <span class="bt-red">${late} kasni</span>` : ''}</div><div class="bt-list">${list.slice(0, 8).map(x => { const d = dueInfo(x.due); return botItem(esc(tcut(x.src.title(x.x), 60)), `${esc(x.src.label)}${d ? ` · <span class="${d.level === 'late' ? 'bt-red' : d.level === 'today' ? 'bt-amber' : ''}">${d.txt}</span>` : ''}`, x.src.k === 'note' || x.src.k === 'story' ? 'tab:tasks' : 'ref:' + x.src.ref(x.x), x.src.ic); }).join('')}</div>`, [['Taskovi', 'tab:tasks'], ['Nov zadatak', 'act:Nov zadatak']]);
+  botSay(`<div class="bt-cap" style="margin-bottom:6px">${nm} ${list.length} ${bpl(list.length, 'otvoren zadatak', 'otvorena zadatka', 'otvorenih zadataka')}${late ? `, <span class="bt-red">${late} kasni</span>` : ''}</div><div class="bt-list">${list.slice(0, 8).map(x => { const d = dueInfo(x.due); return botItem(esc(tcut(x.src.title(x.x), 60)), `${esc(x.sec)}${d ? ` · <span class="${d.level === 'late' ? 'bt-red' : d.level === 'today' ? 'bt-amber' : ''}">${d.txt}</span>` : ''}`, x.src.k === 'note' || x.src.k === 'story' ? 'tab:tasks' : 'ref:' + x.src.ref(x.x), x.src.ic); }).join('')}</div>`, [['Taskovi', 'tab:tasks'], ['Nov zadatak', 'act:Nov zadatak']]);
 }
 function botItem(title, sub, go, ic) { return `<button class="bt-item" data-bgo="${esc(go)}"><span class="bi-ic">${ic || '›'}</span><span class="bi-t"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span></button>`; }
 function botPush(from, html, btns) { BOT.msgs.push({ from, html, btns: btns || [], at: Date.now() }); botSave(); renderBot(); }
@@ -3521,7 +3548,7 @@ function aiSnapshot() {
   state.promos.slice().sort((a, b) => b.starts_at.localeCompare(a.starts_at)).forEach(p => { const x = promoResults(p); row(p.id, p.name, p.type, d(p.starts_at), p.ends_at ? d(p.ends_at) : 'traje', ST[promoStatus(p)], p.code, p.discount_pct ? p.discount_pct + '%' : p.discount_rsd ? R(p.discount_rsd) + ' RSD' : '', p.channel, R(p.budget) || '', cut(p.goal, 60), x.orders, R(x.revenue), x.withCode, x.lift == null ? '' : Math.round(x.lift * 100) + '%', R(x.spend), R(x.net), cut(p.description, 100), cut(p.result_note, 80), promoNotes(p.id).map(z => `${personName(z.author)}: ${cut(z.body, 60)}`).join(' / ')); });
 
   L.push(`\n## TASKOVI (otvoreni zadaci, iz svih sekcija)\nsekcija|stavka|zaduženi|rok|dodelio`);
-  allTasks().filter(t => !t.done).forEach(t => row(t.src.label, cut(t.src.title(t.x), 90), t.as.map(personName).join(', '), t.due || '', t.x.task_by ? personName(t.x.task_by) : ''));
+  allTasks().filter(t => !t.done).forEach(t => row(t.sec, cut(t.src.title(t.x), 90), t.as.map(personName).join(', '), t.due || '', t.x.task_by ? personName(t.x.task_by) : ''));
   L.push(`\n## OBJAVE + REKLAME\nid|naslov|namena|faza|format|datum|zadužen|hook|skripta|caption|drive link|inspiracija`);
   state.posts.forEach(p => row(p.id, p.title, PURPOSE[ppOf(p)], ST[p.status], FMT[p.format] || p.format, dt(p.publish_at), assigneeNames(p), cut(p.hook, 90), cut(p.concept, 260), cut(p.caption, 80), p.drive_link ? 'ima' : 'nema', inspoLinks(p).join(' ')));
 

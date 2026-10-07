@@ -488,6 +488,9 @@ tbody tr{transition:background .15s}
 .tm-item{background:#f6f3ea;border-radius:10px;padding:10px 12px;margin:-4px 0 12px;font-size:13.5px;line-height:1.45}
 .tm-item small{display:block;color:var(--muted);font-size:11.5px;margin-bottom:2px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
 .tab-badge.soft{background:#c99a3b}
+.sec-tk{display:inline-flex;align-items:center;gap:5px;margin-left:12px;vertical-align:middle;border:1px solid var(--line);background:#fff;border-radius:99px;padding:3px 10px;font:700 12px var(--font-ui);color:#1B2620;cursor:pointer;transition:border-color .15s,background .15s}
+.sec-tk:hover{border-color:#1B2620;background:#f1f3ec}
+.sec-tk.late{border-color:#e7b4b4;color:#a32c2c}
 .cust-quick .mini-btn.wa{color:#128c4b;border-color:#bfe3cc}
 .cust-quick .mini-btn.wa:hover{background:#e9f7ee}
 .tk-bar .seg{flex-wrap:wrap}
@@ -1296,7 +1299,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
           <textarea id="np_body" placeholder="Nova beleška… (Ctrl + Enter za čuvanje)"></textarea>
           <div class="np-row">
             <div class="writer" id="npWriter" style="margin:0"><span>Piše:</span><button data-npw="konstantin">Konstantin</button><button data-npw="stasa">Staša</button><button data-npw="marjan">Marjan</button></div>
-            <div class="select-wrap"><select id="np_area"><option value="general">Opšta</option><option value="story">Brand story</option></select></div>
+            <div class="select-wrap"><select id="np_area" title="Za koju sekciju je beleška"></select></div>
             <label class="threshold"><input type="checkbox" id="np_pin" style="width:auto"> zakači</label>
             <button class="btn-gold" id="npSave" style="margin-left:auto">Sačuvaj belešku</button>
           </div>
@@ -1305,7 +1308,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         <div class="np-people" id="npPeople"></div>
         <div class="toolbar">
           <div class="seg" id="npStatus"><button data-s="open" class="active">Otvorene</button><button data-s="done">Završene</button><button data-s="all">Sve</button></div>
-          <div class="select-wrap"><select id="npArea"><option value="all">Sva mesta</option><option value="general">Opšte</option><option value="story">Brand story</option><option value="promo">Promocije</option></select></div>
+          <div class="select-wrap"><select id="npArea"></select></div>
           <div class="select-wrap"><select id="npSort"><option value="new">Najnovije prvo</option><option value="old">Najstarije prvo</option></select></div>
           <input class="inline-input" id="npQ" placeholder="traži u beleškama…" style="width:200px">
           <div class="count" id="npCount"></div>
@@ -1969,7 +1972,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
     <textarea id="qn_body" placeholder="Šta treba da se zapamti…"></textarea>
     <div class="writer" id="qnWriter"><span>Piše:</span><button data-qw="konstantin">Konstantin</button><button data-qw="stasa">Staša</button><button data-qw="marjan">Marjan</button></div>
     <div class="frow" style="margin-top:12px">
-      <div class="field" style="margin:0"><label>Gde ide</label><select id="qn_area"><option value="general">Beleške (opšta)</option><option value="story">Beleške + Brand story</option><option value="milestone">Istorija (događaj sa datumom, nije beleška)</option></select></div>
+      <div class="field" style="margin:0"><label>Sekcija</label><select id="qn_area"></select></div>
       <div class="field" style="margin:0;display:flex;align-items:flex-end"><label class="check" style="margin:0;display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="qn_pin"> Zakači na vrh</label></div>
     </div>
     <div class="task-row compact" id="qt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="qt_assignees"></div><label class="tr-due">Rok <input type="date" id="qt_due"></label></div><div class="tr-state" id="qt_tstate"></div></div>
@@ -1995,8 +1998,8 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610072207"></script>
-<script>window.HTML_BUILD="202610072207";</script>
-<script src="app.js?v=202610072207"></script>
+<script src="config.js?v=202610072214"></script>
+<script>window.HTML_BUILD="202610072214";</script>
+<script src="app.js?v=202610072214"></script>
 </body>
 </html>
