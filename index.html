@@ -464,11 +464,17 @@ tbody tr{transition:background .15s}
 .pp-badge.ad{background:#1B2620;color:#E8E4D9}
 .p-links a.inspo{background:#f3eefb;color:#5b3fa0}
 .cal-chip.pp-ad,.cal-chip.pp-both{box-shadow:inset 0 -2px 0 #c99a3b}
+.script-card{border:1px solid var(--line);border-radius:10px;background:#fdfcfa;overflow:hidden;transition:border-color .15s,box-shadow .15s}
+.script-card:focus-within{border-color:var(--gold);box-shadow:0 0 0 3px rgba(27,38,32,.10)}
+.modal .field .script-hook{display:flex;align-items:center;gap:10px;margin:0;padding:8px 12px;border-bottom:1px dashed var(--line);background:#f7f3e8;cursor:text}
+.modal .field .script-hook span{flex:none;font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#7a5410;background:#f6ead0;border-radius:5px;padding:2px 7px}
+.modal .field .script-hook input{flex:1;min-width:0;width:auto;border:0;outline:0;box-shadow:none;border-radius:0;background:transparent;font:600 14px var(--font-ui);color:var(--ink);padding:4px 0}
+.modal .field .script-card textarea{border:0;border-radius:0;background:transparent;min-height:130px;outline:0;resize:vertical}
 .pp-seg{display:flex;flex-wrap:wrap}
 .pp-seg button{flex:1 1 auto}
 .inspo-list{display:flex;flex-direction:column;gap:3px;margin-top:4px}
 .p-links a{white-space:nowrap}
-@media (max-width:640px){#postPurposeSeg{display:flex;flex-wrap:wrap;width:100%}#postPurposeSeg button{flex:1 1 auto;padding:7px 10px}}
+@media (max-width:640px){.modal .field .script-hook input{font-size:16px}#postPurposeSeg{display:flex;flex-wrap:wrap;width:100%}#postPurposeSeg button{flex:1 1 auto;padding:7px 10px}}
 .p-links{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 .p-links a{font-size:11.5px;font-weight:600;text-decoration:none;padding:3px 8px;border-radius:6px;background:#eef1f4;color:#3f4a56}
 .p-links a.drive{background:#e2f3ee;color:#0d6b4f}
@@ -1354,7 +1360,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       <!-- OBJAVE -->
       <div class="view" id="v-posts">
         <div class="page-head">
-          <div><div class="page-title">Objave + reklame</div><div class="page-sub">Ideje za objave i reklame, inspiracija, koncepti, datumi i snimci na Drive-u.</div></div>
+          <div><div class="page-title">Objave + reklame</div><div class="page-sub">Ideje za objave i reklame, inspiracija, skripte, datumi i snimci na Drive-u.</div></div>
           <button class="btn-gold" id="newPostBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Nova ideja</button>
         </div>
         <div class="week-strip" id="weekStrip"></div>
@@ -1567,8 +1573,11 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       <div class="field"><label>Ideja *</label><input id="po_title" required placeholder="npr. Pakujemo prvu porudžbinu"></div>
       <div class="field"><label>Gde se koristi</label><div class="seg pp-seg" id="po_purposeSeg"><button type="button" data-pp="post">Samo objava</button><button type="button" data-pp="both">Objava + reklama</button><button type="button" data-pp="ad">Samo reklama</button></div><input type="hidden" id="po_purpose" value="post"></div>
       <div class="field"><label>Inspiracija (link videa ili objave koju smo videli, može više, svaki u novom redu)</label><textarea id="po_inspo" rows="2" placeholder="https://www.instagram.com/reel/…&#10;https://www.tiktok.com/@…"></textarea></div>
-      <div class="field"><label>Koncept</label><textarea id="po_concept" placeholder="Šta se vidi, kojim redom, koja muzika, koja poruka"></textarea></div>
-      <div class="field"><label>Hook (prve 2 sekunde)</label><input id="po_hook"></div>
+      <div class="field"><label for="po_concept">Skripta</label>
+        <div class="script-card">
+          <label class="script-hook"><span>Hook</span><input id="po_hook" placeholder="Prve 2 sekunde: rečenica ili kadar koji zaustavlja skrol (nije obavezno)"></label>
+          <textarea id="po_concept" rows="6" placeholder="Šta se vidi i šta se govori, kojim redom, koja muzika, koja poruka i poziv na kraju"></textarea>
+        </div></div>
       <div class="frow3">
         <div class="field"><label>Format</label><select id="po_format"><option value="reel">Reel</option><option value="carousel">Carousel</option><option value="story">Story</option><option value="post">Post</option><option value="tiktok">TikTok</option></select></div>
         <div class="field"><label>Status</label><select id="po_status"></select></div>
@@ -1894,8 +1903,8 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610072131"></script>
-<script>window.HTML_BUILD="202610072131";</script>
-<script src="app.js?v=202610072131"></script>
+<script src="config.js?v=202610072135"></script>
+<script>window.HTML_BUILD="202610072135";</script>
+<script src="app.js?v=202610072135"></script>
 </body>
 </html>
