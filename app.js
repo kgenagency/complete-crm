@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610072214';
+const APP_BUILD = '202610072231';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -23,6 +23,9 @@ const NO_STOCK = ['cancelled', 'returned'];           // ove porudžbine ne drž
 const NO_REVENUE = ['cancelled', 'returned'];
 const TODO = ['new', 'confirmed', 'packed'];
 const CH = { shopify: 'Shopify', instagram: 'Instagram', other: 'Drugo' };
+// izvor porudžbine (atribucija); organic = ručno uneto ili nepoznat izvor
+const OSRC = { organic: 'Organic', meta: 'Meta Ads', tiktok: 'TikTok Ads', google: 'Google Ads' };
+const srcOf = (o) => (o && OSRC[o.source]) ? o.source : 'organic';
 const PAY = { cod: 'Pouzeće', card: 'Kartica', bank: 'Uplata' };
 const POST_ST = [
   { key: 'idea', label: 'Ideja' }, { key: 'scripting', label: 'Scenario' }, { key: 'filming', label: 'Snimanje' },
@@ -63,7 +66,7 @@ let state = {
   audit: [], nfGroups: [], nfState: null, chgShow: {}, chgAll: {}, trayHidden: false, nfWho: 'others',
   custView: LS.get('crm_cview', 'list'), custSeg: 'all', custSort: 'spend', custTab: 'profile', editCustId: null, editCodeId: null, promoF: 'all', histF: 'all', histMonth: 'all', histLimit: 150, editPromoId: null, editMsId: null,
   orderView: LS.get('crm_oview', 'table'),
-  ch: 'all', status: 'all', q: '',
+  ch: 'all', src: LS.get('crm_osrc', 'all'), status: 'all', q: '',
   openOrderId: null, dTab: 'info',
   editOrderId: null, editProductId: null,
   attach: null,
@@ -82,6 +85,7 @@ function linkify(t) { return esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$
 function toast(msg, ms) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms || 2400); }
 function pill(s) { return `<span class="pill st-${s}"><span class="pdot"></span>${ST[s] || s}</span>`; }
 function chBadge(c) { return `<span class="ch-badge ch-${c}">${CH[c] || c}</span>`; }
+function srcBadge(o) { const s = srcOf(o); return `<span class="ch-badge src-${s}" title="Izvor porudžbine">${OSRC[s]}</span>`; }
 /* greške baze na srpskom, da se zna šta da se uradi (original ostaje u konzoli) */
 function errText(e) {
   const m = String(e?.message || e || '');
@@ -150,6 +154,7 @@ async function loadData() {
     q(sb.from('h_discount_codes').select('*').is('deleted_at', null)),
   ]);
   Object.assign(state, { products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets, settings, promos, milestones, daily, customers, levents, codes });
+  try { state.notesDel = await q(sb.from('h_notes').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(300)); } catch (e) { state.notesDel = state.notesDel || []; }
 }
 
 async function log(fields) {
@@ -254,10 +259,11 @@ function renderOverview() {
 }
 
 /* ---------------- render: orders ---------------- */
-function filteredOrders() {
+function filteredOrders(skipSrc) {
   const qq = state.q.toLowerCase();
   return state.orders.filter(o => {
     if (state.ch !== 'all' && o.channel !== state.ch) return false;
+    if (!skipSrc && state.src !== 'all' && srcOf(o) !== state.src) return false;
     if (state.status !== 'all' && o.status !== state.status) return false;
     if (qq) {
       const hay = [o.order_no, o.customer_name, o.phone, o.instagram, o.email, o.city, o.tracking_no, ...itemsOf(o.id).map(i => i.name)].join(' ').toLowerCase();
@@ -269,7 +275,10 @@ function filteredOrders() {
 function itemsSummary(o) { return itemsOf(o.id).map(i => `${esc(i.name)} ${esc(i.size || '')}${i.qty > 1 ? ' ×' + i.qty : ''}`).join(', ') || '—'; }
 function renderOrders() {
   const list = filteredOrders();
-  $('orderCount').textContent = `${list.length} porudžbina`;
+  { const base = filteredOrders(true), cnt = { all: base.length }; base.forEach(o => { const k = srcOf(o); cnt[k] = (cnt[k] || 0) + 1; });
+    document.querySelectorAll('#srcSeg button').forEach(b => { b.classList.toggle('active', b.dataset.src === state.src); const k = b.dataset.src; b.innerHTML = `${k === 'all' ? 'Svi izvori' : OSRC[k]}${cnt[k] ? ` <span class="seg-n">${cnt[k]}</span>` : ''}`; }); }
+  const rev = list.filter(o => !NO_REVENUE.includes(o.status)).reduce((a, o) => a + totals(o).revenue, 0);
+  $('orderCount').textContent = `${list.length} porudžbina${list.length ? ' · ' + rsd(rev) : ''}`;
   const isTable = state.orderView === 'table';
   $('orderTableCard').style.display = isTable ? '' : 'none';
   $('kanban').style.display = isTable ? 'none' : 'flex';
@@ -281,7 +290,7 @@ function renderOrders() {
         <td><b>${esc(o.order_no || '—')}</b></td>
         <td><div class="lead-name">${esc(o.customer_name)} ${taskChip(o, 'order')}</div><div class="lead-social">${esc(o.instagram || o.phone || '')}${o.city ? ' · ' + esc(o.city) : ''}</div></td>
         <td class="activity-cell" title="${itemsSummary(o)}">${itemsSummary(o)}</td>
-        <td>${chBadge(o.channel)}</td>
+        <td><div class="ch-src">${chBadge(o.channel)}${srcBadge(o)}</div></td>
         <td>${pill(o.status)}</td>
         <td class="num">${rsd(t.revenue)}</td>
         <td class="num ${t.profit >= 0 ? 'pos' : 'neg'}">${rsd(t.profit)}</td>
@@ -295,7 +304,7 @@ function renderOrders() {
         <div class="kb-cards">${col.map(o => `<div class="kb-card is-organic" data-id="${o.id}" data-order="${o.id}">
           <div class="kb-card-head"><div class="kb-name">${esc(o.customer_name)}</div><b class="page-sub">${esc(o.order_no || '')}</b></div>
           <div class="kb-social">${itemsSummary(o)}</div>
-          <div class="kb-meta">${chBadge(o.channel)}${taskChip(o, 'order')}<span class="kb-fu">${rsd(totals(o).revenue)}</span></div></div>`).join('') || '<div class="kb-empty">Prazno</div>'}</div></div>`;
+          <div class="kb-meta">${chBadge(o.channel)}${srcOf(o) !== 'organic' ? srcBadge(o) : ''}${taskChip(o, 'order')}<span class="kb-fu">${rsd(totals(o).revenue)}</span></div></div>`).join('') || '<div class="kb-empty">Prazno</div>'}</div></div>`;
     }).join('');
   }
 }
@@ -423,7 +432,7 @@ function renderDrawer() {
   const t = totals(o);
   $('dTitle').textContent = o.customer_name;
   $('dSub').textContent = `${o.order_no || ''} · ${fmtDT(o.created_at)}`;
-  $('dBadges').innerHTML = pill(o.status) + chBadge(o.channel) + `<span class="ch-badge ch-other">${PAY[o.payment]}</span>`;
+  $('dBadges').innerHTML = pill(o.status) + chBadge(o.channel) + srcBadge(o) + `<span class="ch-badge ch-other">${PAY[o.payment]}</span>`;
   document.querySelectorAll('#dTabs button').forEach(b => b.classList.toggle('active', b.dataset.dt === state.dTab));
   $('composer').style.display = state.dTab === 'activity' ? '' : 'none';
   if (state.dTab === 'info') {
@@ -548,13 +557,14 @@ function orderSum() {
   const t = totals(fake); state.items = saved;
   $('orderSum').innerHTML = `<div><span>Kupac plaća</span><b>${rsd(t.revenue)}</b></div><div><span>Profit</span><b class="${t.profit >= 0 ? 'pos' : 'neg'}">${rsd(t.profit)}</b></div>`;
 }
-const OF = { o_name: 'customer_name', o_phone: 'phone', o_ig: 'instagram', o_email: 'email', o_addr: 'address', o_city: 'city', o_zip: 'postal_code', o_channel: 'channel', o_pay: 'payment', o_no: 'order_no', o_shipPrice: 'shipping_price', o_shipCost: 'shipping_cost', o_pack: 'packaging_cost', o_disc: 'discount', o_code: 'discount_code', o_courier: 'courier', o_track: 'tracking_no', o_note: 'note' };
+const OF = { o_name: 'customer_name', o_phone: 'phone', o_ig: 'instagram', o_email: 'email', o_addr: 'address', o_city: 'city', o_zip: 'postal_code', o_channel: 'channel', o_source: 'source', o_pay: 'payment', o_no: 'order_no', o_shipPrice: 'shipping_price', o_shipCost: 'shipping_cost', o_pack: 'packaging_cost', o_disc: 'discount', o_code: 'discount_code', o_courier: 'courier', o_track: 'tracking_no', o_note: 'note' };
 function openOrderModal(id) {
   const o = id ? order(id) : null;
   state.editOrderId = id || null;
   $('omTitle').textContent = o ? `Izmena ${o.order_no}` : 'Nova porudžbina';
-  const def = { channel: 'instagram', payment: 'cod', shipping_price: LS.get('crm_ship_price', 0), shipping_cost: LS.get('crm_ship_cost', 0), packaging_cost: packCostPerOrder() || LS.get('crm_pack', 0), discount: 0 };
+  const def = { channel: 'instagram', source: 'organic', payment: 'cod', shipping_price: LS.get('crm_ship_price', 0), shipping_cost: LS.get('crm_ship_cost', 0), packaging_cost: packCostPerOrder() || LS.get('crm_pack', 0), discount: 0 };
   Object.entries(OF).forEach(([el, f]) => { $(el).value = (o ? o[f] : def[f]) ?? ''; });
+  setOrderSrc(o ? srcOf(o) : 'organic');
   let dl = $('custDl'); if (!dl) { dl = document.createElement('datalist'); dl.id = 'custDl'; document.body.appendChild(dl); $('o_name').setAttribute('list', 'custDl'); }
   dl.innerHTML = state.customers.map(c => `<option value="${esc(c.name)}">${esc(c.phone || c.instagram || '')}</option>`).join('');
   $('itemRows').innerHTML = '';
@@ -564,6 +574,11 @@ function openOrderModal(id) {
   $('orderModal').classList.add('open');
   $('o_name').focus();
 }
+function setOrderSrc(v) {
+  v = OSRC[v] ? v : 'organic'; $('o_source').value = v;
+  document.querySelectorAll('#o_srcSeg button').forEach(b => b.classList.toggle('active', b.dataset.osrc === v));
+  const h = $('o_srcHint'); if (h) h.textContent = v === 'organic' ? 'Ručno uneta ili ne znamo tačno odakle je došla.' : `Kupac je došao preko ${OSRC[v]} reklame.`;
+}
 async function saveOrder(e) {
   e.preventDefault();
   const its = readItems();
@@ -571,6 +586,7 @@ async function saveOrder(e) {
   const f = {};
   Object.entries(OF).forEach(([el, k]) => { const v = $(el).value.trim(); f[k] = v === '' ? null : v; });
   ['shipping_price', 'shipping_cost', 'packaging_cost', 'discount'].forEach(k => f[k] = n(f[k]));
+  f.source = OSRC[f.source] ? f.source : 'organic';
   if (f.customer_name === null) return;
   Object.assign(f, taskGet('ot'));
   $('omSave').disabled = true;
@@ -603,7 +619,7 @@ async function saveOrder(e) {
     $('orderModal').classList.remove('open');
     renderAll();
     if (state.openOrderId) renderDrawer();
-    toast(`${o.order_no} sačuvana ✓`);
+    toast(`${o.order_no} sačuvana ✓`); taskAfterSave('ot', `${o.order_no || ''} · ${o.customer_name || ''}`);
   } catch (err) { fail(err); }
   $('omSave').disabled = false;
 }
@@ -699,7 +715,7 @@ async function saveProduct(e) {
     state.variants = await q(sb.from('h_variants').select('*').is('deleted_at', null));
     await log({ product_id: p.id, type: 'system', body: `${p.name} ${wasNew ? 'dodat' : 'izmenjen'}` });
     $('prodModal').classList.remove('open');
-    renderAll(); toast(`${p.name} sačuvan ✓`);
+    renderAll(); toast(`${p.name} sačuvan ✓`); taskAfterSave('pt', p.name);
   } catch (err) {
     fail(err);
     // šta god da je stiglo u bazu, prikaži ga odmah da se vidi dokle je stiglo
@@ -799,8 +815,55 @@ function taskGet(px, legacy) {
   if (legacy) f.assignee = as.length ? as.map(personName).join(', ') : null;
   if (mode === 'done') Object.assign(f, { task_done_at: new Date().toISOString(), task_done_by: who() });
   if (mode === 'reopen') Object.assign(f, { task_done_at: null, task_done_by: null });
+  if (TASK_CTX[px]) TASK_CTX[px].last = { before: TASK_CTX[px].x ? assigneesOf(TASK_CTX[px].x) : [], after: as, due: f.task_due, mode };
   return f;
 }
+/* ---------- iskačuća kartica + „ting“ kad napraviš ili završiš zadatak ---------- */
+let AUD = null;
+function audioCtx() { try { AUD = AUD || new (window.AudioContext || window.webkitAudioContext)(); if (AUD.state === 'suspended') AUD.resume(); return AUD; } catch (e) { return null; } }
+const soundOn = () => LS.get('crm_sound', '1') !== '0';
+/* zvuk se pravi u pretraživaču (bez fajla): dva čista tona kao zvonce; „gotovo“ je tri tona naviše */
+function ting(kind) {
+  if (!soundOn()) return;
+  const a = audioCtx(); if (!a) return;
+  const t0 = a.currentTime + 0.01, out = a.createGain(); out.gain.value = kind === 'soft' ? 0.5 : 0.85; out.connect(a.destination);
+  const notes = kind === 'done' ? [[1046.5, 0], [1318.5, 0.09], [1568, 0.18]] : kind === 'soft' ? [[1568, 0]] : [[1318.5, 0], [1975.5, 0.075]];
+  notes.forEach(([f, d]) => [[f, 0.2, 1.1], [f * 2.76, 0.045, 0.35]].forEach(([fr, peak, len]) => {
+    const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.value = fr;
+    g.gain.setValueAtTime(0.0001, t0 + d); g.gain.exponentialRampToValueAtTime(peak, t0 + d + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + len);
+    o.connect(g); g.connect(out); o.start(t0 + d); o.stop(t0 + d + len + 0.05);
+  }));
+  try { if (navigator.vibrate) navigator.vibrate(kind === 'done' ? [12, 40, 12] : 14); } catch (e) {}
+}
+let tpopT = null;
+function tpopHide() { const el = $('tpop'); if (el) el.classList.remove('in'); document.body.classList.remove('tpop-on'); }
+function taskPop(kind, info) {
+  let el = $('tpop');
+  if (!el) { el = document.createElement('div'); el.id = 'tpop'; el.className = 'tpop'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
+  const me = PEOPLE[who()], f = me?.f, done = kind === 'done';
+  const head = done ? (f ? 'Bravo, završila si zadatak' : 'Bravo, završio si zadatak') : kind === 'assign' ? (f ? 'Upravo si dodelila zadatak' : 'Upravo si dodelio zadatak') : (f ? 'Upravo si napravila zadatak' : 'Upravo si napravio zadatak');
+  const d = !done && dueInfo(info.due);
+  const parts = Array.from({ length: 10 }, (_, i) => { const ang = (i / 10) * Math.PI * 2 + Math.random() * 0.5, r = 34 + Math.random() * 22; return `<i style="--dx:${Math.cos(ang) * r}px;--dy:${Math.sin(ang) * r}px;--d:${Math.random() * 90}ms"></i>`; }).join('');
+  el.className = 'tpop ' + (done ? 'done' : '');
+  el.innerHTML = `<div class="tp-ic"><span class="tp-burst">${parts}</span><svg viewBox="0 0 36 36" width="36" height="36" aria-hidden="true"><circle cx="18" cy="18" r="16" class="tp-c"/><path d="M11 18.5l4.6 4.6L25.5 13" class="tp-k"/></svg></div>
+    <div class="tp-body"><div class="tp-h">${head}</div><div class="tp-t">${esc(tcut(info.title, 90))}</div>
+      <div class="tp-m">${info.sec ? `<span class="tk-sec">${esc(info.sec)}</span>` : ''}${(info.as || []).map((k, i) => `<span class="tp-av n-av ${PEOPLE[k] ? k : 'system'}" style="--i:${i}" title="${esc(personName(k))}">${esc(personName(k).charAt(0))}</span>`).join('')}${(info.as || []).length ? `<span class="tp-who">${esc(info.as.map(personName).join(', '))}</span>` : ''}${d ? `<span class="tk-due ${d.level}">⏱ ${d.txt}</span>` : ''}</div></div>
+    <div class="tp-side"><button type="button" class="tp-btn" data-tpsound title="${soundOn() ? 'Isključi zvuk' : 'Uključi zvuk'}">${soundOn() ? '🔔' : '🔕'}</button><button type="button" class="tp-btn" data-tpclose title="Zatvori">✕</button></div>
+    <div class="tp-bar"></div>`;
+  $('toast').classList.remove('show');
+  void el.offsetWidth; el.classList.add('in'); document.body.classList.add('tpop-on');
+  ting(done ? 'done' : 'new');
+  clearTimeout(tpopT); tpopT = setTimeout(tpopHide, 5200);
+}
+/* posle čuvanja: da li je ovim čuvanjem nastao, dodeljen ili završen zadatak */
+function taskAfterSave(px, title, sec) {
+  const c = TASK_CTX[px], L = c && c.last; if (!L) return; c.last = null;
+  if (L.mode === 'done') return taskPop('done', { title, sec });
+  const added = L.after.filter(k => !L.before.includes(k));
+  if (!added.length || L.mode === 'reopen') return;
+  taskPop(L.before.length ? 'assign' : 'new', { title, sec: sec || c.src?.label || '', as: L.after, due: L.due });
+}
+
 /* opšti prozor za zadatak (beleške, kupci, priča, izmena iz Taskova) */
 let tmCtx = null;
 function openTaskModal(k, id) {
@@ -817,7 +880,7 @@ async function saveTaskModal() {
   if (src.k === 'note' && 'task_done_at' in f) Object.assign(f, f.task_done_at ? { done: true, done_by: who() } : { done: false });
   try {
     const r = await q(sb.from(src.tbl).update(f).eq('id', x.id).select().single());
-    Object.assign(x, r); $('taskModal').classList.remove('open'); renderAll(); toast('Zadatak sačuvan ✓');
+    Object.assign(x, r); $('taskModal').classList.remove('open'); renderAll(); toast('Zadatak sačuvan ✓'); taskAfterSave('tm', src.title(x), src.sec ? src.sec(x) : src.label);
   } catch (e) { fail(e); }
 }
 /* klik na kružić u Taskovima: gotovo / vrati */
@@ -829,7 +892,7 @@ async function taskToggle(key) {
   if (k === 'note') Object.assign(patch, done ? { done: false } : { done: true, done_by: who() });
   try {
     await q(sb.from(src.tbl).update(patch).eq('id', id)); Object.assign(x, patch);
-    renderAll(); toast(done ? 'Vraćeno u otvorene' : `Gotovo ✓ ${tcut(src.title(x), 40)}`);
+    renderAll(); if (done) toast('Vraćeno u otvorene'); else taskPop('done', { title: src.title(x), sec: src.sec ? src.sec(x) : src.label });
   } catch (e) { fail(e); }
 }
 /* stranica Taskovi */
@@ -1105,7 +1168,7 @@ async function savePost(e) {
       state.posts.push(r);
       await log({ post_id: r.id, type: 'system', body: 'Ideja dodata' });
     }
-    $('postModal').classList.remove('open'); renderAll(); toast(`Ideja sačuvana ✓${f.purpose !== 'post' ? ' · ' + PURPOSE[f.purpose] : ''}`);
+    $('postModal').classList.remove('open'); renderAll(); toast(`Ideja sačuvana ✓${f.purpose !== 'post' ? ' · ' + PURPOSE[f.purpose] : ''}`); taskAfterSave('po', f.title);
   } catch (err) { fail(err); }
 }
 async function deletePost() {
@@ -1185,7 +1248,7 @@ async function saveIdea(e) {
       const r = await q(sb.from('h_site_ideas').insert(f).select().single());
       state.ideas.unshift(r);
     }
-    $('siteModal').classList.remove('open'); renderAll(); toast('Predlog sačuvan ✓');
+    $('siteModal').classList.remove('open'); renderAll(); toast('Predlog sačuvan ✓'); taskAfterSave('st', f.title);
   } catch (err) { fail(err); }
 }
 async function deleteIdea() {
@@ -1255,7 +1318,7 @@ async function savePack(e) {
   try {
     if (state.editPackId) { const r = await q(sb.from('h_packaging').update(f).eq('id', state.editPackId).select().single()); Object.assign(state.pack.find(p => p.id === r.id), r); }
     else state.pack.push(await q(sb.from('h_packaging').insert(f).select().single()));
-    $('packModal').classList.remove('open'); renderAll(); toast('Sačuvano ✓');
+    $('packModal').classList.remove('open'); renderAll(); toast('Sačuvano ✓'); taskAfterSave('kt', f.name);
   } catch (err) { fail(err); }
 }
 async function deletePack() {
@@ -1320,10 +1383,15 @@ async function addNote() {
   try { state.notes.push(await q(sb.from('h_notes').insert({ area: 'story', author: state.writer || who(), body }).select().single())); $('noteInput').value = ''; renderNotes(); } catch (e) { fail(e); }
 }
 async function noteAction(id, act) {
+  if (act === 'restore') {
+    const d = (state.notesDel || []).find(z => z.id === id); if (!d) return;
+    try { await q(sb.from('h_notes').update({ deleted_at: null, deleted_by: null }).eq('id', id)); state.notesDel = state.notesDel.filter(z => z.id !== id); Object.assign(d, { deleted_at: null, deleted_by: null }); if (!state.notes.some(z => z.id === id)) state.notes.push(d); toast('Beleška vraćena ✓'); renderAll(); } catch (e) { fail(e); }
+    return;
+  }
   const x = state.notes.find(z => z.id === id); if (!x) return;
   try {
-    if (act === 'del') { if (!confirm('Beleška ide u arhivu. Nastaviti?')) return; await softDelete('h_notes', id); state.notes = state.notes.filter(z => z.id !== id); }
-    else { const f = act === 'pin' ? 'pinned' : 'done'; const patch = { [f]: !x[f] }; if (f === 'done') patch.done_by = !x.done ? who() : null; await q(sb.from('h_notes').update(patch).eq('id', id)); Object.assign(x, patch); }
+    if (act === 'del') { if (!confirm('Beleška ide u istoriju beleški (može da se vrati). Nastaviti?')) return; await softDelete('h_notes', id); state.notes = state.notes.filter(z => z.id !== id); state.notesDel = [{ ...x, deleted_at: new Date().toISOString(), deleted_by: state.user.display }, ...(state.notesDel || []).filter(z => z.id !== id)]; }
+    else { const f = act === 'pin' ? 'pinned' : 'done'; const patch = { [f]: !x[f] }; if (f === 'done') { patch.done_by = !x.done ? who() : null; patch.done_at = !x.done ? new Date().toISOString() : null; } await q(sb.from('h_notes').update(patch).eq('id', id)); Object.assign(x, patch); if (f === 'done' && patch.done) toast('Završeno ✓ beleška je sada u Beleške → Istorija'); }
     renderNotes(); renderHomeNotes(); renderNotesPage(); renderNotesBadge(); if (state.editPromoId && $('promoModal').classList.contains('open')) { renderPromoNotes(state.editPromoId); renderPromos(); }
   } catch (e) { fail(e); }
 }
@@ -1550,7 +1618,7 @@ async function saveRet(e) {
       state.rets.unshift(r);
       await log({ return_id: r.id, type: 'system', body: 'Prijava uneta ručno' });
     }
-    $('retModal').classList.remove('open'); renderAll(); toast('Prijava sačuvana ✓');
+    $('retModal').classList.remove('open'); renderAll(); toast('Prijava sačuvana ✓'); taskAfterSave('rt', `${f.case_no || 'Prijava'} · ${f.customer_name || ''}`);
   } catch (err) { fail(err); }
 }
 async function deleteRet() {
@@ -1720,7 +1788,7 @@ async function savePromo(e) {
   try {
     if (state.editPromoId) { const r = await q(sb.from('h_promotions').update(f).eq('id', state.editPromoId).select().single()); Object.assign(state.promos.find(x => x.id === r.id), r); }
     else { f.created_by = state.user.display; const r = await q(sb.from('h_promotions').insert(f).select().single()); state.promos.push(r); await log({ promo_id: r.id, type: 'system', body: `Promocija „${r.name}“ dodata (${fmtDate(r.starts_at)} → ${r.ends_at ? fmtDate(r.ends_at) : 'traje'})` }); }
-    $('promoModal').classList.remove('open'); renderAll(); toast('Promocija sačuvana ✓');
+    $('promoModal').classList.remove('open'); renderAll(); toast('Promocija sačuvana ✓'); taskAfterSave('mt', f.name);
   } catch (err) { fail(err); }
 }
 async function deletePromo() {
@@ -2168,7 +2236,7 @@ async function deleteCust() {
 
 /* ---------- OBAVEŠTENJA: ko je šta kad menjao ---------- */
 const NF_FIELD = { task_due: 'rok', assignees: 'zaduženi', purpose: 'namena', inspo: 'inspiracija', status: 'status', courier: 'kurir', tracking_no: 'broj pošiljke', sell_price: 'prodajna', buy_price: 'nabavna', compare_price: '„bila“ cena', stock: 'stanje', publish_at: 'datum objave', drive_link: 'Drive link', assignee: 'zadužen', priority: 'prioritet', title: 'naslov', body: 'tekst', value: 'vrednost', note: 'napomena', refund_amount: 'vraćeno kupcu', return_shipping_cost: 'trošak slanja', resolution_note: 'rešenje', improve: 'šta da popravimo', vip: 'VIP', tags: 'oznake', points_adj: 'poeni', name: 'ime', phone: 'telefon', city: 'grad', address: 'adresa', postal_code: 'poštanski broj', payment: 'plaćanje', shipping_price: 'dostava (kupac)', shipping_cost: 'dostava (kurir)', packaging_cost: 'pakovanje', discount: 'popust', discount_code: 'kod', channel: 'kanal', category: 'kategorija', supplier: 'dobavljač', material: 'materijal', image_url: 'slika', concept: 'skripta', hook: 'hook', caption: 'opis', format: 'format', post_url: 'link objave', views: 'pregledi', likes: 'lajkovi', saves: 'sačuvano', description: 'opis', link: 'link', votes: 'glasovi', code: 'kod', pct: 'popust %', rsd: 'popust RSD', valid_to: 'važi do', valid_from: 'važi od', active: 'aktivan', max_uses: 'maks. upotreba', starts_at: 'početak', ends_at: 'kraj', budget: 'budžet', goal: 'cilj', result_note: 'zaključak', happened_at: 'datum', kind: 'vrsta', min_stock: 'granica', per_order: 'po paketu', unit_price: 'cena', spend: 'potrošeno', purchases: 'kupovine', revenue: 'prihod', reason: 'razlog', package_received_at: 'paket stigao', resolution_wanted: 'kupac želi', restocked: 'vraćeno na stanje', size: 'veličina', color: 'boja', qty: 'količina', email: 'email', instagram: 'instagram', birthday: 'rođendan', source: 'izvor', position: 'redosled', pinned: 'zakačeno', done: 'završeno', delivered_on: 'paket primljen', shipped_at: 'poslato', delivered_at: 'isporučeno', photos: 'fotografije', order_no: 'broj', exchange_details: 'želi umesto toga', item: 'komad', rating: 'ocena', customer_name: 'kupac', type: 'tip', discount_pct: 'popust %', discount_rsd: 'popust RSD', deleted_at: '__del' };
-const NF_SKIP = new Set(['assignee', 'task_at', 'task_by', 'task_done_by', 'updated_at', 'updated_by', 'created_at', 'created_by', 'deleted_by', 'phone_norm', 'first_order_at', 'customer_id', 'product_id', 'variant_id', 'order_id', 'code_id', 'consent', 'case_no', 'id', 'bank_account', 'shopify_order_id', 'shopify_product_id', 'shopify_variant_id', 'resolved_at', 'area', 'author']);
+const NF_SKIP = new Set(['assignee', 'done_at', 'done_by', 'task_at', 'task_by', 'task_done_by', 'updated_at', 'updated_by', 'created_at', 'created_by', 'deleted_by', 'phone_norm', 'first_order_at', 'customer_id', 'product_id', 'variant_id', 'order_id', 'code_id', 'consent', 'case_no', 'id', 'bank_account', 'shopify_order_id', 'shopify_product_id', 'shopify_variant_id', 'resolved_at', 'area', 'author']);
 const prodName = (id) => product(id)?.name || 'komad';
 const custName = (id) => state.customers.find(c => c.id === id)?.name || 'kupac';
 const NF_TBL = {
@@ -2209,6 +2277,7 @@ function nfVal(field, v) {
   if (field === 'resolution_wanted') return RES_W[v] || v;
   if (field === 'payment') return PAY[v] || v;
   if (field === 'channel') return CH[v] || v;
+  if (field === 'source' && OSRC[v]) return OSRC[v];
   if (/_at$|_on$|publish_at/.test(field) && /^\d{4}-\d{2}-\d{2}/.test(String(v))) return String(v).length > 10 ? fmtDT(v) : fmtDate(v + 'T12:00:00');
   if (/price|cost|discount$|budget|spend|revenue|refund_amount|rsd|min_order|discount_rsd/.test(field) && typeof v === 'number') return rsd(v);
   if (field === 'loyalty' || (typeof v === 'string' && v.startsWith('{'))) return 'nova pravila';
@@ -2353,6 +2422,7 @@ function applyAuditRow(a) {
     const lists = { h_notes: 'notes', h_orders: 'orders', h_products: 'products', h_variants: 'variants', h_posts: 'posts', h_returns: 'rets', h_promotions: 'promos', h_milestones: 'milestones', h_customers: 'customers', h_site_ideas: 'ideas', h_packaging: 'pack', h_discount_codes: 'codes', h_activities: 'acts', h_order_items: 'items', h_ad_spend: 'ads', h_loyalty_events: 'levents' };
     const key = lists[a.tbl]; if (!key || !Array.isArray(state[key])) return;
     const arr = state[key]; const i = arr.findIndex(x => x.id === row.id);
+    if (key === 'notes') { state.notesDel = (state.notesDel || []).filter(x => x.id !== row.id); if (row.deleted_at) state.notesDel.unshift(row); }
     if (row.deleted_at) { if (i >= 0) arr.splice(i, 1); }
     else if (i >= 0) Object.assign(arr[i], row);
     else if (['products', 'orders', 'rets', 'ideas', 'ads'].includes(key)) arr.unshift(row); // ove liste su najnovije prvo
@@ -2367,6 +2437,7 @@ function onAuditLive(row) {
   if (row.actor !== who()) {
     const g = state.nfGroups.find(x => x.ids.includes(row.id)); if (g) { g.live = true; const s = nfState(); s.dismissed = s.dismissed.filter(k => k !== g.key); }
     renderTray();
+    { const dd = describeAudit(row); if (dd && dd.prio === 30) ting('soft'); }
     applyAuditRow(row);
     chgLive(row);
     clearTimeout(nfReloadT);
@@ -2596,7 +2667,7 @@ async function saveQuickNote() {
       const r = await q(sb.from('h_notes').insert({ area, author, body, pinned: $('qn_pin').checked, ...tf }).select().single());
       state.notes.push(r);
     }
-    $('noteModal').classList.remove('open'); renderAll(); toast(whoPicked('qt_assignees').length && area !== 'milestone' ? 'Zadatak dodat ✓ vidi se u Taskovima' : 'Zabeleženo ✓');
+    $('noteModal').classList.remove('open'); renderAll(); toast(whoPicked('qt_assignees').length && area !== 'milestone' ? 'Zadatak dodat ✓ vidi se u Taskovima' : 'Zabeleženo ✓'); if (area !== 'milestone') taskAfterSave('qt', body, areaSec(area));
   } catch (e) { fail(e); }
 }
 
@@ -2642,10 +2713,23 @@ const notePlace = (x) => (x.area || '').startsWith('promo:') ? ('Promocija: ' + 
 const seenKey = () => 'crm_notes_seen_' + who();
 function notesUnread() { const seen = LS.get(seenKey(), ''); return state.notes.filter(x => x.author !== who() && !x.done && (!seen || x.created_at > seen)).length; }
 function renderNotesBadge() { const b = $('notesBadge'); if (b) b.style.display = 'none'; return; const n = notesUnread(); b.style.display = n && state.tab !== 'notes' ? '' : 'none'; b.textContent = n; }
+const personKey = (n) => { if (!n) return ''; if (PEOPLE[n]) return n; return Object.keys(PEOPLE).find(k => PEOPLE[k].name === n || k === fold(n)) || n; };
+const histAt = (x) => x.deleted_at || x.done_at || x.updated_at || x.created_at;
+function npHistTag(x) {
+  const g = (k, m, f) => PEOPLE[k] && PEOPLE[k].f ? f : m;
+  if (x.deleted_at) { const k = personKey(x.deleted_by); return `<div class="np-hist del">🗑 ${k ? `${g(k, 'obrisao', 'obrisala')} ${esc(personName(k))}` : 'obrisano'} · <span title="${fmtDT(x.deleted_at)}">${relTime(x.deleted_at)}</span></div>`; }
+  if (x.done) { const k = x.done_by || ''; const at = x.done_at || x.updated_at; return `<div class="np-hist ok">✓ ${k ? `${g(k, 'završio', 'završila')} ${esc(personName(k))}` : 'završeno'}${at ? ` · <span title="${fmtDT(at)}">${relTime(at)}</span>` : ''}</div>`; }
+  return '';
+}
 function npCard(x, i) {
   const editing = npState.editId === x.id;
   const p = PEOPLE[x.author];
-  return `<div class="np-note ${x.pinned ? 'pinned' : ''} ${x.done ? 'done' : ''}" style="animation-delay:${Math.min(i, 20) * 25}ms" data-npid="${x.id}">
+  if (x.deleted_at) return `<div class="np-note deleted" style="animation-delay:${Math.min(i, 20) * 25}ms" data-npid="${x.id}">${npHistTag(x)}
+    <div class="txt">${esc(x.body)}</div>
+    <div class="np-meta"><span class="n-av ${p ? x.author : 'system'}">${esc((p ? p.name : x.author).charAt(0))}</span><b>${esc(personName(x.author))}</b>
+      <span title="${fmtDT(x.created_at)}">napisano ${relTime(x.created_at)}</span><span class="place">${esc(notePlace(x))}</span></div>
+    <div class="np-acts"><button data-note="${x.id}" data-act="restore" class="on">↩ Vrati u beleške</button></div></div>`;
+  return `<div class="np-note ${x.pinned ? 'pinned' : ''} ${x.done ? 'done' : ''}" style="animation-delay:${Math.min(i, 20) * 25}ms" data-npid="${x.id}">${npState.status !== 'open' ? npHistTag(x) : ''}
     ${editing ? `<textarea id="npEdit">${esc(x.body)}</textarea>` : `<div class="txt">${esc(x.body)}</div>`}
     <div class="np-meta"><span class="n-av ${p ? x.author : 'system'}">${esc((p ? p.name : x.author).charAt(0))}</span><b>${esc(personName(x.author))}</b>
       <span title="${fmtDT(x.created_at)}">${relTime(x.created_at)}</span><span class="place">${esc(notePlace(x))}</span>
@@ -2666,23 +2750,28 @@ function renderNotesPage() {
   document.querySelectorAll('#npStatus button').forEach(b => b.classList.toggle('active', b.dataset.s === npState.status));
   const w = state.writer || who();
   document.querySelectorAll('#npWriter button').forEach(b => b.classList.toggle('active', b.dataset.npw === w));
-  let list = all.filter(x => (npState.who === 'all' || x.author === npState.who)
-    && (npState.status === 'all' || (npState.status === 'done' ? x.done : !x.done))
+  const hist = npState.status === 'history';
+  const src = hist ? [...all.filter(x => x.done), ...(state.notesDel || [])] : all;
+  let list = src.filter(x => (npState.who === 'all' || x.author === npState.who)
+    && (npState.status === 'all' || hist || !x.done)
     && (npState.area === 'all' || (npState.area === 'promo' ? ((x.area || '').startsWith('promo:') || x.area === 'promos') : (x.area || 'general') === npState.area))
     && (!qn || fold(x.body + ' ' + personName(x.author) + ' ' + notePlace(x)).includes(qn)));
-  list.sort((a, b) => npState.sort === 'old' ? a.created_at.localeCompare(b.created_at) : b.created_at.localeCompare(a.created_at));
-  $('npCount').textContent = `${list.length} beleški`;
-  const pinned = list.filter(x => x.pinned && !x.done), rest = list.filter(x => !(x.pinned && !x.done));
+  const tKey = hist ? histAt : (x) => x.created_at;
+  list.sort((a, b) => npState.sort === 'old' ? tKey(a).localeCompare(tKey(b)) : tKey(b).localeCompare(tKey(a)));
+  const nHist = all.filter(x => x.done).length + (state.notesDel || []).length;
+  const hb = document.querySelector('#npStatus [data-s="history"]'); if (hb) hb.innerHTML = `Istorija${nHist ? ` <span class="seg-n">${nHist}</span>` : ''}`;
+  $('npCount').textContent = hist ? `${list.length} u istoriji` : `${list.length} beleški`;
+  const pinned = hist ? [] : list.filter(x => x.pinned && !x.done), rest = hist ? list : list.filter(x => !(x.pinned && !x.done));
   let html = '', i = 0;
   if (pinned.length) html += `<div class="np-day">Zakačeno <span>${pinned.length}</span></div><div class="np-grid">${pinned.map(x => npCard(x, i++)).join('')}</div>`;
   const groups = []; let cur = null;
-  rest.forEach(x => { const d = dayStr(new Date(x.created_at)); if (!cur || cur.d !== d) { cur = { d, items: [] }; groups.push(cur); } cur.items.push(x); });
+  rest.forEach(x => { const d = dayStr(new Date(tKey(x))); if (!cur || cur.d !== d) { cur = { d, items: [] }; groups.push(cur); } cur.items.push(x); });
   groups.forEach(g => { const dt = new Date(g.d + 'T12:00:00'), today = dayStr(new Date()), y = new Date(); y.setDate(y.getDate() - 1);
     const lbl = g.d === today ? 'Danas' : g.d === dayStr(y) ? 'Juče' : dt.toLocaleDateString('sr-Latn-RS', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     html += `<div class="np-day">${lbl} <span>${g.items.length}</span></div><div class="np-grid">${g.items.map(x => npCard(x, i++)).join('')}</div>`; });
   const prevEdit = document.activeElement && document.activeElement.id === 'npEdit' ? document.activeElement.value : null;
   if (prevEdit !== null) return; // ne prekidaj izmenu dok neko kuca
-  $('npList').innerHTML = html || `<div class="panel"><div class="page-sub">${all.length ? 'Nema beleški za ovaj filter.' : 'Još nema beleški. Upiši prvu gore.'}</div></div>`;
+  $('npList').innerHTML = (hist && list.length ? `<div class="np-hist-info">Ovde se talože završene i obrisane beleške, poređane po danu kad su skinute. Svaka može da se vrati.</div>` : '') + (html || `<div class="panel"><div class="page-sub">${hist ? 'Istorija je prazna. Kad neko označi belešku sa ✓ Završeno ili je obriše, pojaviće se ovde.' : all.length ? 'Nema beleški za ovaj filter.' : 'Još nema beleški. Upiši prvu gore.'}</div></div>`);
   if (npState.editId) { const t = $('npEdit'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }
 }
 async function npSaveNew() {
@@ -2690,7 +2779,7 @@ async function npSaveNew() {
   try {
     const tf = taskGet('nt');
     const r = await q(sb.from('h_notes').insert({ area: $('np_area').value, author: state.writer || who(), body, pinned: $('np_pin').checked, ...tf }).select().single());
-    state.notes.push(r); $('np_body').value = ''; $('np_pin').checked = false; taskSet('nt', null, taskSrcOf('note')); renderAll(); toast(tf.assignees.length ? 'Beleška sačuvana ✓ i dodata u Taskove' : 'Beleška sačuvana ✓');
+    state.notes.push(r); $('np_body').value = ''; $('np_pin').checked = false; taskAfterSave('nt', body, areaSec($('np_area').value)); taskSet('nt', null, taskSrcOf('note')); renderAll(); toast(tf.assignees.length ? 'Beleška sačuvana ✓ i dodata u Taskove' : 'Beleška sačuvana ✓');
   } catch (e) { fail(e); }
 }
 async function npSaveEdit(id) {
@@ -2921,6 +3010,8 @@ function bindEvents() {
   $('custSort').addEventListener('change', (e) => { state.custSort = e.target.value; renderCustomers(); });
   $('custTabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.custTab = b.dataset.ct; renderCustBody(); document.querySelectorAll('#custTabs button').forEach(x => x.classList.toggle('active', x === b)); });
   $('orderViewSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.orderView = b.dataset.view; LS.set('crm_oview', b.dataset.view); renderOrders(); });
+  $('srcSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-src]'); if (!b) return; state.src = b.dataset.src; LS.set('crm_osrc', state.src); renderOrders(); });
+  $('o_srcSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-osrc]'); if (b) setOrderSrc(b.dataset.osrc); });
   $('chSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.ch = b.dataset.ch; document.querySelectorAll('#chSeg button').forEach(x => x.classList.toggle('active', x === b)); renderOrders(); });
   $('orderStatusFilter').innerHTML = `<option value="all">Svi statusi</option>` + STATUSES.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
   $('orderStatusFilter').addEventListener('change', (e) => { state.status = e.target.value; renderOrders(); });
@@ -3025,6 +3116,14 @@ function bindEvents() {
   $('tkState').addEventListener('click', (e) => { const b = e.target.closest('[data-ts]'); if (!b) return; tkState.st = b.dataset.ts; renderTasks(); });
   $('tkSec').addEventListener('change', (e) => { tkState.sec = e.target.value; renderTasks(); });
   $('tkQ').addEventListener('input', () => renderTasks());
+  const unlockAudio = () => { if (soundOn()) audioCtx(); window.removeEventListener('pointerdown', unlockAudio, true); window.removeEventListener('keydown', unlockAudio, true); };
+  window.addEventListener('pointerdown', unlockAudio, true); window.addEventListener('keydown', unlockAudio, true);
+  document.addEventListener('click', (e) => {
+    const pop = e.target.closest('#tpop'); if (!pop) return;
+    if (e.target.closest('[data-tpsound]')) { LS.set('crm_sound', soundOn() ? '0' : '1'); const b = e.target.closest('[data-tpsound]'); b.textContent = soundOn() ? '🔔' : '🔕'; b.title = soundOn() ? 'Isključi zvuk' : 'Uključi zvuk'; if (soundOn()) ting('soft'); return; }
+    tpopHide(); clearTimeout(tpopT);
+    if (!e.target.closest('[data-tpclose]') && state.tab !== 'tasks') setTab('tasks');
+  });
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-sectk]'); if (!b) return; tkState.sec = b.dataset.sectk; tkState.who = 'all'; tkState.st = 'open'; setTab('tasks'); });
   $('newTaskBtn').addEventListener('click', () => openNoteModal('auto', true));
   $('tmSave').addEventListener('click', saveTaskModal);
@@ -3140,6 +3239,8 @@ const BOT_FAQ = [
   { g: [['ne radi', 'ne mogu', 'ne ucitav', 'zablok', 'zapel', 'zaglav', 'gresk', 'bug', 'ne otvar', 'ne cuva', 'ne sacuv', 'ne pokaz', 'ne vidim']], a: 'Prvo probaj osvežavanje: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> (na telefonu zatvori i ponovo otvori stranicu). Ako i dalje ne radi, pošalji timu kratak opis dugmetom ispod, pa će neko da pogleda.', b: [['Pošalji timu', 'teamlast']] },
   { g: [['backup', 'rezerv', 'sigurn', 'bezbed']], a: 'Podaci se čuvaju zauvek: obrisano ide u arhivu, svaka promena se beleži, a svake noći u 03:30 pravi se rezervna kopija cele baze na GitHub-u.', b: [['Istorija', 'tab:history']] },
   { g: [['istorij', 'prekretnic', 'dogadja', 'vremensk']], a: 'Istorija je vremenska linija svega. Važan događaj (lansiranje, nova kolekcija…) dodaješ dugmetom <b>Zabeleži događaj</b>.', b: [['Zabeleži događaj', 'act:Zabeleži događaj u istoriji'], ['Istorija', 'tab:history']] },
+  { g: [['izvor', 'organic', 'organsk', 'meta ads', 'tiktok', 'tik tok', 'google ads', 'atribuc', 'odakle je dosl']], a: 'Svaka porudžbina ima <b>Izvor</b>: <b>Organic</b> (ručno uneta ili ne znamo odakle je došla), <b>Meta Ads</b>, <b>TikTok Ads</b> ili <b>Google Ads</b>. Biraš ga u formi porudžbine (podrazumevano Organic). U Porudžbinama je filter <b>Svi izvori</b> sa brojem porudžbina, a pored broja stoji ukupan iznos za taj izvor.', b: [['Porudžbine', 'tab:orders'], ['Nova porudžbina', 'act:Nova porudžbina']] },
+  { g: [['istorij', 'zavrsen', 'obrisan', 'otkac', 'skin', 'gde ide', 'gde su', 'gde odu'], ['beles', 'beleshk', 'belez', 'papiric']], a: 'Kad <b>otkačiš</b> belešku, ona ostaje među ostalima pod svojim datumom. Kad je označiš <b>✓ Završeno</b> ili obrišeš <b>✕</b>, ide u <b>Beleške → Istorija</b>, grupisano po danu, sa oznakom ko je završio ili obrisao. Svaka može da se vrati.', b: [['Beleške', 'tab:notes']] },
   { g: [['kupac', 'kupc', 'klijent'], ['dodam', 'dodaj', 'nov', 'napravi', 'unes', 'pravi', 'povez', 'spaja', 'kako da', 'kako se']], a: 'Kupac se sam pravi kad uneseš porudžbinu i povezuje se sa postojećim po telefonu, Instagramu, mejlu ili imenu. Ručno ga dodaješ preko <b>Novi kupac</b>.', b: [['Kupci', 'tab:customers'], ['Novi kupac', 'act:Novi kupac']] },
   { g: [['lozink', 'sifr', 'prijav', 'login', 'odjav']], a: 'Korisnička imena su konstantin, stasa i marjan. Odjava je dugme gore desno (na telefonu u meniju sa tri crtice). Za promenu lozinke javi Konstantinu.', b: [] },
 ];
@@ -3524,8 +3625,10 @@ function aiSnapshot() {
   state.items.forEach(i => { const o = order(i.order_id); if (!o || NO_REVENUE.includes(o.status)) return; const pid = i.product_id || variant(i.variant_id)?.product_id; if (!pid) return; soldMap[pid] = (soldMap[pid] || 0) + i.qty; if (new Date(o.created_at) >= d30) sold30[pid] = (sold30[pid] || 0) + i.qty; });
 
   const os = state.orders.slice().sort((a, b) => b.created_at.localeCompare(a.created_at));
-  L.push(`\n## PORUDŽBINE (najnovijih ${Math.min(60, os.length)} od ${os.length})\nid|broj|datum|kupac|grad|kanal|status|plaćanje|iznos|profit|popust|kod|kurir|broj pošiljke|stavke|napomena`);
-  os.slice(0, 60).forEach(o => { const T = totals(o); row(o.id, o.order_no, dt(o.created_at), o.customer_name, o.city, CH[o.channel] || o.channel, ST[o.status], PAY[o.payment] || o.payment, R(T.revenue), R(T.profit), R(o.discount) || '', o.discount_code, o.courier, o.tracking_no, itemsOf(o.id).map(i => `${i.name || prodName(i.product_id)} ${i.size || ''} x${i.qty}`).join(', '), cut(o.note, 80)); });
+  { const d30s = Date.now() - 30 * 864e5, agg = {}; state.orders.filter(o => !NO_REVENUE.includes(o.status)).forEach(o => { const k = srcOf(o), a = agg[k] = agg[k] || { n: 0, r: 0, n30: 0, r30: 0 }, rv = totals(o).revenue; a.n++; a.r += rv; if (new Date(o.created_at) >= d30s) { a.n30++; a.r30 += rv; } });
+    L.push(`\n## PORUDŽBINE PO IZVORU (bez otkazanih/vraćenih; Organic = ručno uneto ili nepoznat izvor)\n` + Object.keys(OSRC).map(k => { const a = agg[k] || { n: 0, r: 0, n30: 0, r30: 0 }; return `${OSRC[k]}: ukupno ${a.n} porudžbina / ${R(a.r)}; poslednjih 30 dana ${a.n30} / ${R(a.r30)}`; }).join('\n')); }
+  L.push(`\n## PORUDŽBINE (najnovijih ${Math.min(60, os.length)} od ${os.length})\nid|broj|datum|kupac|grad|kanal|izvor|status|plaćanje|iznos|profit|popust|kod|kurir|broj pošiljke|stavke|napomena`);
+  os.slice(0, 60).forEach(o => { const T = totals(o); row(o.id, o.order_no, dt(o.created_at), o.customer_name, o.city, CH[o.channel] || o.channel, OSRC[srcOf(o)], ST[o.status], PAY[o.payment] || o.payment, R(T.revenue), R(T.profit), R(o.discount) || '', o.discount_code, o.courier, o.tracking_no, itemsOf(o.id).map(i => `${i.name || prodName(i.product_id)} ${i.size || ''} x${i.qty}`).join(', '), cut(o.note, 80)); });
 
   L.push(`\n## GARDEROBA (${state.products.length} komada; upozorenje kad veličina ima ≤ ${lowT()} kom)\nid|naziv|kategorija|status|nabavna|prodajna|stara cena|marža %|dobavljač|materijal|veličine=stanje|prodato ukupno|prodato 30 dana|napomena`);
   state.products.forEach(p => row(p.id, p.name, p.category, { active: 'Aktivan', draft: 'Priprema', archived: 'Arhiviran' }[p.status] || p.status, R(p.buy_price), R(p.sell_price), R(p.compare_price) || '', n(p.sell_price) ? Math.round((1 - n(p.buy_price) / n(p.sell_price)) * 100) : '', p.supplier, p.material, variantsOf(p.id).map(v => `${v.size}${v.color ? ' ' + v.color : ''}=${v.stock}`).join(' '), soldMap[p.id] || 0, sold30[p.id] || 0, cut(p.note, 80)));

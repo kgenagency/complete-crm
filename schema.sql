@@ -654,3 +654,15 @@ drop trigger if exists h_task_trg on h_story_sections;  create trigger h_task_tr
 -- postojeći zaduženi (objave) dobijaju vreme dodele
 update h_posts set task_at = created_at, task_by = lower(coalesce(created_by, 'konstantin')) where coalesce(array_length(assignees,1),0) > 0 and task_at is null;
 update h_returns set task_at = created_at where coalesce(array_length(assignees,1),0) > 0 and task_at is null;
+
+-- v18: istorija beleški (kad je beleška završena)
+alter table h_notes add column if not exists done_at timestamptz;
+-- okidač h_note_done_fn: done = true upisuje done_at (i done_by ako fali), done = false ga briše
+
+-- Izvor porudžbine (atribucija): organic = ručno uneto ili nepoznat izvor
+alter table public.h_orders add column if not exists source text not null default 'organic';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'h_orders_source_chk') then
+    alter table public.h_orders add constraint h_orders_source_chk check (source in ('organic','meta','tiktok','google'));
+  end if;
+end $$;

@@ -331,6 +331,24 @@ body.kb-dragging{cursor:grabbing;-webkit-user-select:none;user-select:none}
 .ch-shopify{background:#e2f3ee;color:#0d6b4f}
 .ch-instagram{background:var(--gold-wash);color:var(--gold-text)}
 .ch-other{background:#eef1f4;color:#3f4a56}
+.src-organic{background:#ebf2e6;color:#3d6b2f}
+.src-meta{background:#e6edfb;color:#2a4f9e}
+.src-tiktok{background:#fbe6ee;color:#a1234f}
+.src-google{background:#fdf1d8;color:#8a5a00}
+.ch-src{display:flex;flex-wrap:wrap;gap:4px}
+.osrc-seg{display:grid;grid-template-columns:repeat(4,1fr);width:100%}
+.osrc-seg button{padding:9px 6px;white-space:nowrap}
+.osrc-seg button[data-osrc="meta"].active{color:#2a4f9e}.osrc-seg button[data-osrc="tiktok"].active{color:#a1234f}.osrc-seg button[data-osrc="google"].active{color:#8a5a00}.osrc-seg button[data-osrc="organic"].active{color:#3d6b2f}
+.osrc-hint{font-size:11.5px;color:var(--ink-3,#8a8574);margin-top:5px}
+.seg-x button{white-space:nowrap}
+@media (max-width:640px){
+  #v-orders .toolbar .seg-x{display:flex;max-width:100%;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  #v-orders .toolbar .seg-x::-webkit-scrollbar{display:none}
+  #v-orders .toolbar #srcSeg{flex:1 1 100%;order:3}
+  #v-orders .toolbar .seg-x button{flex:none;padding:8px 11px}
+  .osrc-seg{grid-template-columns:repeat(2,1fr)}
+  .osrc-seg button{padding:11px 6px;font-size:13.5px}
+}
 .sizes{display:flex;gap:6px;flex-wrap:wrap}
 .size-chip{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:9px;overflow:hidden;font-size:12.5px;background:#fff}
 .size-chip .sz{padding:4px 8px;font-weight:700;background:#f6f4ee}
@@ -487,6 +505,48 @@ tbody tr{transition:background .15s}
 .task-row.compact .tr-head .lbl-hint{display:none}
 .tm-item{background:#f6f3ea;border-radius:10px;padding:10px 12px;margin:-4px 0 12px;font-size:13.5px;line-height:1.45}
 .tm-item small{display:block;color:var(--muted);font-size:11.5px;margin-bottom:2px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+/* ===== iskačuća kartica za zadatke ===== */
+.tpop{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));z-index:120;width:min(440px,calc(100vw - 24px));display:flex;align-items:flex-start;gap:12px;padding:14px 12px 16px 14px;border-radius:18px;background:#1B2620;color:#E8E4D9;box-shadow:0 22px 50px -14px rgba(10,15,12,.6),0 0 0 1px rgba(232,228,217,.08);transform:translate(-50%,130%) scale(.92);opacity:0;pointer-events:none;transition:transform .5s cubic-bezier(.2,1.35,.35,1),opacity .25s ease;overflow:hidden;cursor:pointer;will-change:transform,opacity}
+.tpop.in{transform:translate(-50%,0) scale(1);opacity:1;pointer-events:auto}
+.tpop.done{background:linear-gradient(135deg,#1f3a26,#16251b)}
+.tp-ic{position:relative;flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center}
+.tp-ic svg{position:relative;z-index:1}
+.tp-c{fill:#c99a3b;transform-origin:center;transform:scale(.2);opacity:0}
+.tpop.done .tp-c{fill:#43a047}
+.tp-k{fill:none;stroke:#fff;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:24;stroke-dashoffset:24}
+.tpop.in .tp-c{animation:tpPop .45s .08s cubic-bezier(.2,1.6,.4,1) forwards}
+.tpop.in .tp-k{animation:tpDraw .38s .32s ease-out forwards}
+.tp-burst{position:absolute;left:50%;top:50%;width:0;height:0}
+.tp-burst i{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:#e8c87a;opacity:0}
+.tp-burst i:nth-child(3n){background:#E8E4D9;width:4px;height:4px}.tp-burst i:nth-child(4n){background:#8fbf7a}
+.tpop.in .tp-burst i{animation:tpBurst .7s calc(.18s + var(--d)) cubic-bezier(.15,.7,.3,1) forwards}
+.tp-body{min-width:0;flex:1}
+.tp-h{font-size:11.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#e8c87a}
+.tpop.done .tp-h{color:#a5d6a7}
+.tp-t{font-family:var(--font-display);font-size:19px;font-weight:700;line-height:1.2;margin-top:3px;overflow-wrap:anywhere;opacity:0;transform:translateY(6px)}
+.tpop.in .tp-t{animation:tpUp .4s .22s ease forwards}
+.tp-m{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;opacity:0}
+.tpop.in .tp-m{animation:tpUp .4s .32s ease forwards}
+.tp-m .tk-sec{background:rgba(232,228,217,.12);color:#E8E4D9}
+.tp-m .tk-due{background:rgba(232,228,217,.12);color:#E8E4D9}.tp-m .tk-due.late{background:#7a2020;color:#fff}.tp-m .tk-due.today{background:#6b5310;color:#fff}
+.tpop .tp-av.n-av{width:22px;height:22px;font-size:11px;border-radius:50%;margin:0;transform:scale(0);box-shadow:0 0 0 2px #1B2620,0 0 0 3.5px rgba(232,228,217,.55);flex:none}
+body.tpop-on .ntray{opacity:0;pointer-events:none;transition:opacity .2s}
+.tpop.in .tp-av.n-av{animation:tpAv .35s calc(.42s + var(--i) * 80ms) cubic-bezier(.2,1.6,.4,1) forwards}
+.tp-who{font-size:12px;color:#c9d2c4}
+.tp-side{display:flex;flex-direction:column;gap:6px;flex:none}
+.tp-btn{width:30px;height:30px;border-radius:9px;border:0;background:rgba(232,228,217,.08);color:#E8E4D9;font-size:13px;cursor:pointer}
+.tp-btn:active{transform:scale(.92)}
+.tp-bar{position:absolute;left:0;bottom:0;height:3px;width:100%;background:#c99a3b;transform-origin:left;transform:scaleX(0)}
+.tpop.done .tp-bar{background:#43a047}
+.tpop.in .tp-bar{animation:tpBar 5.2s linear forwards}
+@keyframes tpPop{0%{transform:scale(.2);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes tpDraw{to{stroke-dashoffset:0}}
+@keyframes tpBurst{0%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.4)}}
+@keyframes tpUp{to{opacity:1;transform:none}}
+@keyframes tpAv{to{transform:scale(1)}}
+@keyframes tpBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media (max-width:980px){.tpop{bottom:calc(78px + env(safe-area-inset-bottom));padding:12px 10px 14px 12px;border-radius:16px}.tp-t{font-size:17px}.tp-btn{width:34px;height:34px}}
+@media (prefers-reduced-motion:reduce){.tpop{transition:opacity .2s}.tpop,.tpop.in{transform:translate(-50%,0)}.tp-burst{display:none}.tpop.in .tp-c,.tpop.in .tp-k,.tpop.in .tp-t,.tpop.in .tp-m,.tpop.in .tp-av.n-av{animation-duration:.01s;animation-delay:0s}}
 .tab-badge.soft{background:#c99a3b}
 .sec-tk{display:inline-flex;align-items:center;gap:5px;margin-left:12px;vertical-align:middle;border:1px solid var(--line);background:#fff;border-radius:99px;padding:3px 10px;font:700 12px var(--font-ui);color:#1B2620;cursor:pointer;transition:border-color .15s,background .15s}
 .sec-tk:hover{border-color:#1B2620;background:#f1f3ec}
@@ -1020,6 +1080,14 @@ body.nav-open{overflow:hidden}
 .np-note.pinned{background-color:#f5ecc9}
 .np-note.pinned::before{content:"📌";position:absolute;top:-8px;right:14px;font-size:17px}
 .np-note.done{opacity:.6}
+.np-note.deleted{background-color:#f1ede2;background-image:none;opacity:.78}
+.np-note.deleted .txt{color:#5d6660}
+.np-hist{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;margin:-2px 0 8px}
+.np-hist.ok{background:#e3eedf;color:#2f6b3b}
+.np-hist.del{background:#f3e1dc;color:#9a3d2b}
+.np-note.done .np-hist{opacity:1}
+.np-hist-info{font-size:12.5px;color:var(--muted,#8a8574);margin:2px 0 12px}
+.seg-n{display:inline-block;min-width:18px;padding:0 5px;margin-left:3px;border-radius:9px;background:rgba(0,0,0,.08);font-size:11px;line-height:17px;text-align:center}
 .np-note.done .txt{text-decoration:line-through}
 .np-note .txt{font-family:'Caveat',cursive;font-size:23px;line-height:1.3;color:#26312b;white-space:pre-wrap;word-break:break-word}
 .np-note textarea{width:100%;border:1px solid #d9d2bc;border-radius:8px;background:#fffdf5;font-family:'Caveat',cursive;font-size:22px;line-height:1.3;padding:6px 8px;min-height:80px;resize:vertical}
@@ -1307,7 +1375,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         </div>
         <div class="np-people" id="npPeople"></div>
         <div class="toolbar">
-          <div class="seg" id="npStatus"><button data-s="open" class="active">Otvorene</button><button data-s="done">Završene</button><button data-s="all">Sve</button></div>
+          <div class="seg" id="npStatus"><button data-s="open" class="active">Otvorene</button><button data-s="history">Istorija</button><button data-s="all">Sve</button></div>
           <div class="select-wrap"><select id="npArea"></select></div>
           <div class="select-wrap"><select id="npSort"><option value="new">Najnovije prvo</option><option value="old">Najstarije prvo</option></select></div>
           <input class="inline-input" id="npQ" placeholder="traži u beleškama…" style="width:200px">
@@ -1324,12 +1392,13 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         </div>
         <div class="toolbar">
           <div class="seg" id="orderViewSeg"><button data-view="table" class="active">Tabela</button><button data-view="pipeline">Pipeline</button></div>
-          <div class="seg" id="chSeg"><button data-ch="all" class="active">Sve</button><button data-ch="instagram">Instagram</button><button data-ch="shopify">Shopify</button></div>
+          <div class="seg seg-x" id="chSeg"><button data-ch="all" class="active">Sve</button><button data-ch="instagram">Instagram</button><button data-ch="shopify">Shopify</button></div>
+          <div class="seg seg-x" id="srcSeg" title="Izvor porudžbine"><button data-src="all" class="active">Svi izvori</button><button data-src="organic">Organic</button><button data-src="meta">Meta Ads</button><button data-src="tiktok">TikTok Ads</button><button data-src="google">Google Ads</button></div>
           <div class="select-wrap"><select id="orderStatusFilter"><option value="all">Svi statusi</option></select></div>
           <div class="count" id="orderCount"></div>
         </div>
         <div class="table-card" id="orderTableCard"><table>
-          <thead><tr><th>Broj</th><th>Kupac</th><th>Artikli</th><th>Kanal</th><th>Status</th><th>Iznos</th><th>Profit</th><th>Datum</th></tr></thead>
+          <thead><tr><th>Broj</th><th>Kupac</th><th>Artikli</th><th>Kanal / izvor</th><th>Status</th><th>Iznos</th><th>Profit</th><th>Datum</th></tr></thead>
           <tbody id="orderTbody"></tbody>
         </table></div>
         <div class="kanban" id="kanban"></div>
@@ -1590,6 +1659,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         <div class="field"><label>Plaćanje</label><select id="o_pay"><option value="cod">Pouzeće</option><option value="card">Kartica</option><option value="bank">Uplata na račun</option></select></div>
         <div class="field"><label>Broj porudžbine</label><input id="o_no" placeholder="auto"></div>
       </div>
+      <div class="field"><label>Izvor porudžbine</label><div class="seg osrc-seg" id="o_srcSeg"><button type="button" data-osrc="organic" class="active">Organic</button><button type="button" data-osrc="meta">Meta Ads</button><button type="button" data-osrc="tiktok">TikTok Ads</button><button type="button" data-osrc="google">Google Ads</button></div><input type="hidden" id="o_source" value="organic"><div class="osrc-hint" id="o_srcHint">Ručno uneta ili ne znamo tačno odakle je došla.</div></div>
       <div class="sec-title">Artikli</div>
       <div id="itemRows"></div>
       <button type="button" class="mini-btn" id="addItemBtn">+ Dodaj artikal</button>
@@ -1998,8 +2068,8 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610072214"></script>
-<script>window.HTML_BUILD="202610072214";</script>
-<script src="app.js?v=202610072214"></script>
+<script src="config.js?v=202610072231"></script>
+<script>window.HTML_BUILD="202610072231";</script>
+<script src="app.js?v=202610072231"></script>
 </body>
 </html>
