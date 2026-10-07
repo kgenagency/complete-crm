@@ -592,3 +592,7 @@ alter table h_posts add column if not exists purpose text not null default 'post
 alter table h_posts drop constraint if exists h_posts_purpose_check;
 alter table h_posts add constraint h_posts_purpose_check check (purpose in ('post','ad','both'));
 alter table h_posts add column if not exists inspo text;
+
+-- v17: više zaduženih na zadacima (objave + reklame, povrati)
+alter table h_posts add column if not exists assignees text[] not null default '{}';
+alter table h_returns add column if not exists assignees text[] not null default '{}';

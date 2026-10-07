@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610072135';
+const APP_BUILD = '202610072145';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -722,6 +722,18 @@ async function deleteProduct() {
 /* ================= v2 sekcije ================= */
 const who = () => state.user.username;
 const personName = (k) => PEOPLE[k]?.name || k;
+/* više zaduženih: niz korisničkih imena u polju assignees; stari tekst u assignee se i dalje čita */
+function assigneesOf(x) {
+  if (!x) return [];
+  if (Array.isArray(x.assignees) && x.assignees.length) return x.assignees;
+  if (!x.assignee) return [];
+  return String(x.assignee).split(/\s*,\s*/).filter(Boolean).map(n => Object.keys(PEOPLE).find(k => PEOPLE[k].name === n || k === fold(n)) || n);
+}
+const assigneeNames = (x) => assigneesOf(x).map(personName).join(', ');
+const assigneeBadges = (x) => assigneesOf(x).map(k => `<span class="by ${PEOPLE[k] ? k : 'other'}" style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700">${esc(personName(k))}</span>`).join('');
+function whoPick(id, sel) { $(id).innerHTML = Object.keys(PEOPLE).map(k => `<button type="button" class="wp ${(sel || []).includes(k) ? 'on' : ''}" data-who="${k}" aria-pressed="${(sel || []).includes(k)}"><span class="n-av ${k}">${esc(PEOPLE[k].name.charAt(0))}</span>${esc(PEOPLE[k].name)}</button>`).join(''); }
+const whoPicked = (id) => [...$(id).querySelectorAll('.wp.on')].map(b => b.dataset.who);
+const assignFields = (arr) => ({ assignees: arr, assignee: arr.length ? arr.map(personName).join(', ') : null });
 function autosize(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
 function toLocalInput(iso) { if (!iso) return ''; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
 function boardCols(list, statuses, kind, cardFn, extraAttr = '') {
@@ -796,7 +808,7 @@ function filteredPosts() {
   const qq = state.q.toLowerCase();
   return state.posts.filter(p => (state.postFmt === 'all' || p.format === state.postFmt) &&
     (state.postPurpose === 'all' || (p.purpose || 'post') === state.postPurpose) &&
-    (!qq || [p.title, p.concept, p.hook, p.caption, p.assignee, p.inspo].join(' ').toLowerCase().includes(qq)));
+    (!qq || [p.title, p.concept, p.hook, p.caption, assigneeNames(p), p.inspo].join(' ').toLowerCase().includes(qq)));
 }
 function postDate(p, short) {
   if (!p.publish_at) return '<span class="p-date">bez datuma</span>';
@@ -806,7 +818,8 @@ function postDate(p, short) {
 /* namena ideje i linkovi za inspiraciju */
 const ppOf = (p) => p.purpose || 'post';
 const ppBadge = (p) => ppOf(p) === 'post' ? '' : `<span class="pp-badge ${ppOf(p)}" title="${PURPOSE[ppOf(p)]}">${ppOf(p) === 'ad' ? '◆ Reklama' : '◆ Objava + reklama'}</span>`;
-const inspoLinks = (p) => String(p.inspo || '').split(/\s+/).map(x => x.trim()).filter(x => /^https?:\/\//i.test(x));
+const okUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) && /\.[a-z]{2,}$/i.test(x.hostname); } catch (e) { return false; } };
+const inspoLinks = (p) => String(p.inspo || '').split(/\s+/).map(x => x.trim()).filter(x => /^https?:\/\//i.test(x) && okUrl(x));
 function inspoHost(u) { try { const h = new URL(u).hostname.replace(/^www\./, ''); return /instagram/.test(h) ? 'Instagram' : /tiktok/.test(h) ? 'TikTok' : /youtu/.test(h) ? 'YouTube' : /pinterest|pin\.it/.test(h) ? 'Pinterest' : /facebook|fb\.watch/.test(h) ? 'Facebook' : h; } catch (e) { return 'link'; } }
 const inspoA = (p) => { const seen = {}; return inspoLinks(p).map(u => { const h = inspoHost(u); seen[h] = (seen[h] || 0) + 1; return `<a class="inspo" href="${esc(u)}" target="_blank" rel="noopener" title="Inspiracija: ${esc(u)}">✦ ${esc(h)}${seen[h] > 1 ? ' ' + seen[h] : ''}</a>`; }).join(''); };
 function postCard(p) {
@@ -816,7 +829,7 @@ function postCard(p) {
     <div class="kb-card-head"><div class="kb-name">${esc(p.title)}</div><span class="fmt ${p.format}">${FMT[p.format] || p.format}</span></div>
     ${ppBadge(p) ? `<div style="margin-top:5px">${ppBadge(p)}</div>` : ''}
     ${p.hook ? `<div class="kb-social">„${esc(p.hook)}“</div>` : ''}
-    <div class="kb-meta">${postDate(p)}${p.assignee ? `<span class="by ${Object.keys(PEOPLE).find(k => PEOPLE[k].name === p.assignee) || 'other'}" style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700">${esc(p.assignee)}</span>` : ''}${pr ? `<span class="cat">${esc(pr.name)}</span>` : ''}</div>
+    <div class="kb-meta">${postDate(p)}${assigneeBadges(p)}${pr ? `<span class="cat">${esc(pr.name)}</span>` : ''}</div>
     ${(p.drive_link || p.post_url || ins) ? `<div class="p-links">${ins}${p.drive_link ? `<a class="drive" href="${esc(p.drive_link)}" target="_blank" rel="noopener">▲ Drive snimak</a>` : ''}${p.post_url ? `<a href="${esc(p.post_url)}" target="_blank" rel="noopener">↗ Objava</a>` : ''}</div>` : ''}
   </div>`;
 }
@@ -840,7 +853,7 @@ function renderPosts() {
   if (state.postView === 'calendar') renderCalendar(list);
   if (state.postView === 'list') {
     const sorted = list.slice().sort((a, b) => (a.publish_at || '9') < (b.publish_at || '9') ? -1 : 1);
-    $('postTbody').innerHTML = sorted.map(p => `<tr data-post="${p.id}"><td>${postDate(p)}</td><td><div class="lead-name">${esc(p.title)} ${ppBadge(p)}</div><div class="lead-social">${esc(p.concept || '')}</div>${inspoLinks(p).length ? `<div class="p-links" style="margin-top:4px">${inspoA(p)}</div>` : ''}</td><td><span class="fmt ${p.format}">${FMT[p.format]}</span></td><td>${pill(p.status)}</td><td>${esc(p.assignee || '—')}</td><td>${p.drive_link ? `<a href="${esc(p.drive_link)}" target="_blank" rel="noopener">Drive ↗</a>` : '<span class="page-sub">nema</span>'}</td></tr>`).join('')
+    $('postTbody').innerHTML = sorted.map(p => `<tr data-post="${p.id}"><td>${postDate(p)}</td><td><div class="lead-name">${esc(p.title)} ${ppBadge(p)}</div><div class="lead-social">${esc(p.concept || '')}</div>${inspoLinks(p).length ? `<div class="p-links" style="margin-top:4px">${inspoA(p)}</div>` : ''}</td><td><span class="fmt ${p.format}">${FMT[p.format]}</span></td><td>${pill(p.status)}</td><td><span class="as-list">${assigneeBadges(p) || '—'}</span></td><td>${p.drive_link ? `<a href="${esc(p.drive_link)}" target="_blank" rel="noopener">Drive ↗</a>` : '<span class="page-sub">nema</span>'}</td></tr>`).join('')
       || `<tr><td colspan="6" class="empty">${state.posts.length ? 'Nijedna ideja ne odgovara filteru.' : 'Još nema ideja. Klikni „Nova ideja“.'}</td></tr>`;
   }
 }
@@ -880,7 +893,7 @@ async function movePost(id, zone) {
     renderAll(); toast(`${p.title}: ${patch.status ? ST[patch.status] : fmtDate(patch.publish_at)}`);
   } catch (e) { fail(e); }
 }
-const POF = { po_title: 'title', po_purpose: 'purpose', po_inspo: 'inspo', po_concept: 'concept', po_hook: 'hook', po_format: 'format', po_status: 'status', po_assignee: 'assignee', po_product: 'product_id', po_drive: 'drive_link', po_caption: 'caption' };
+const POF = { po_title: 'title', po_purpose: 'purpose', po_inspo: 'inspo', po_concept: 'concept', po_hook: 'hook', po_format: 'format', po_status: 'status', po_product: 'product_id', po_drive: 'drive_link', po_caption: 'caption' };
 function setPostPurpose(v) {
   v = PURPOSE[v] ? v : 'post';
   $('po_purpose').value = v;
@@ -893,8 +906,9 @@ function openPostModal(id, dateStr) {
   $('poTitle').textContent = p ? p.title : 'Nova ideja';
   $('po_status').innerHTML = POST_ST.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
   $('po_product').innerHTML = '<option value="">—</option>' + state.products.filter(x => x.status !== 'archived').map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
-  Object.entries(POF).forEach(([el, f]) => { $(el).value = p ? (p[f] ?? '') : ({ format: 'reel', status: 'idea', assignee: state.user.display, purpose: state.postPurpose !== 'all' ? state.postPurpose : 'post' }[f] ?? ''); });
+  Object.entries(POF).forEach(([el, f]) => { $(el).value = p ? (p[f] ?? '') : ({ format: 'reel', status: 'idea', purpose: state.postPurpose !== 'all' ? state.postPurpose : 'post' }[f] ?? ''); });
   setPostPurpose($('po_purpose').value);
+  whoPick('po_assignees', p ? assigneesOf(p) : [who()]);
   $('po_date').value = p ? toLocalInput(p.publish_at) : (dateStr ? dateStr + 'T18:00' : '');
   $('poDelete').style.display = p ? '' : 'none';
   $('poComments').innerHTML = commentsBlock('post_id', state.editPostId);
@@ -906,8 +920,9 @@ async function savePost(e) {
   const f = {};
   Object.entries(POF).forEach(([el, k]) => { const v = $(el).value.trim(); f[k] = v === '' ? null : v; });
   f.purpose = PURPOSE[f.purpose] ? f.purpose : 'post';
+  Object.assign(f, assignFields(whoPicked('po_assignees')));
   // inspiracija: svaki link u svom redu, bez https:// dodajemo ga sami
-  f.inspo = f.inspo ? f.inspo.split(/\s+/).map(x => x.trim()).filter(Boolean).map(x => /^https?:\/\//i.test(x) ? x : 'https://' + x.replace(/^\/+/, '')).join('\n') : null;
+  f.inspo = f.inspo ? f.inspo.split(/\s+/).map(x => x.trim()).filter(Boolean).map(x => /^https?:\/\//i.test(x) ? x : 'https://' + x.replace(/^\/+/, '')).filter(okUrl).join('\n') || null : null;
   f.publish_at = $('po_date').value ? new Date($('po_date').value).toISOString() : null;
   if (f.drive_link && !/^https?:\/\//.test(f.drive_link)) return toast('Drive link mora da počinje sa https://');
   try {
@@ -1211,7 +1226,7 @@ function retCard(r) {
     <div class="kb-card-head"><div class="kb-name">${esc(r.customer_name)}</div><span class="rt-type ${r.type}">${RT[r.type]}</span></div>
     <div class="kb-social">${esc(r.case_no)}${r.item ? ' · ' + esc(r.item) : ''}${r.size ? ' ' + esc(r.size) : ''}</div>
     ${r.reason ? `<div class="kb-social">${esc(r.reason)}</div>` : ''}
-    <div class="kb-meta">${d ? `<span class="due ${d.level}">⏱ ${dueText(d)}</span>` : r.rating ? `<span class="due">${'★'.repeat(r.rating)}</span>` : ''}${r.photos?.length ? `<span class="cat">📷 ${r.photos.length}</span>` : ''}${r.assignee ? `<span class="cat">${esc(r.assignee)}</span>` : ''}</div>
+    <div class="kb-meta">${d ? `<span class="due ${d.level}">⏱ ${dueText(d)}</span>` : r.rating ? `<span class="due">${'★'.repeat(r.rating)}</span>` : ''}${r.photos?.length ? `<span class="cat">📷 ${r.photos.length}</span>` : ''}${assigneeBadges(r)}</div>
   </div>`;
 }
 function renderReturns() {
@@ -1282,7 +1297,7 @@ async function moveRet(id, status) {
     if (status === 'received' && !r.restocked && r.type !== 'feedback') setTimeout(() => { openRetModal(id); toast('Paket stigao. Vrati komad na stanje ako je ispravan.'); }, 300);
   } catch (e) { fail(e); }
 }
-const RTF = ['type', 'status', 'assignee', 'customer_name', 'phone', 'email', 'instagram', 'order_id', 'product_id', 'item', 'size', 'reason', 'resolution_wanted', 'description', 'exchange_details', 'bank_account', 'delivered_on', 'package_received_at', 'rating', 'refund_amount', 'return_shipping_cost', 'resolution_note', 'improve'];
+const RTF = ['type', 'status', 'customer_name', 'phone', 'email', 'instagram', 'order_id', 'product_id', 'item', 'size', 'reason', 'resolution_wanted', 'description', 'exchange_details', 'bank_account', 'delivered_on', 'package_received_at', 'rating', 'refund_amount', 'return_shipping_cost', 'resolution_note', 'improve'];
 async function openRetModal(id) {
   const r = id ? state.rets.find(x => x.id === id) : null;
   state.editRetId = id || null;
@@ -1294,11 +1309,12 @@ async function openRetModal(id) {
   $('rt_product_id').innerHTML = '<option value="">—</option>' + state.products.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   $('retReasons').innerHTML = [...new Set(state.rets.map(x => x.reason).filter(Boolean).concat(['Ne odgovara veličina', 'Oštećen komad', 'Greška u šivenju', 'Pogrešan komad ili veličina', 'Predomislila sam se']))].map(x => `<option>${esc(x)}</option>`).join('');
   RTF.forEach(f => {
-    let v = r ? r[f] : ({ type: 'return', status: 'new', assignee: state.user.display }[f]);
+    let v = r ? r[f] : ({ type: 'return', status: 'new' }[f]);
     if (f === 'package_received_at' && v) v = String(v).slice(0, 10);
     if (f === 'product_id' && r && !v && r.item) { const m = state.products.find(p => r.item.toUpperCase().includes(p.name)); if (m) v = m.id; }
     $('rt_' + f).value = v ?? '';
   });
+  whoPick('rt_assignees', r ? assigneesOf(r) : [who()]);
   $('rtDelete').style.display = r ? '' : 'none';
   $('rtIdea').style.display = r ? '' : 'none';
   $('rtPhotos').innerHTML = '';
@@ -1348,6 +1364,7 @@ async function saveRet(e) {
   f.rating = f.rating === null ? null : Math.min(5, Math.max(1, parseInt(f.rating)));
   if (f.package_received_at) f.package_received_at = new Date(f.package_received_at + 'T12:00:00').toISOString();
   if (f.order_id) f.order_no = order(f.order_id)?.order_no || null;
+  Object.assign(f, assignFields(whoPicked('rt_assignees')));
   try {
     if (state.editRetId) {
       const old = state.rets.find(x => x.id === state.editRetId);
@@ -1973,8 +1990,8 @@ async function deleteCust() {
 }
 
 /* ---------- OBAVEŠTENJA: ko je šta kad menjao ---------- */
-const NF_FIELD = { purpose: 'namena', inspo: 'inspiracija', status: 'status', courier: 'kurir', tracking_no: 'broj pošiljke', sell_price: 'prodajna', buy_price: 'nabavna', compare_price: '„bila“ cena', stock: 'stanje', publish_at: 'datum objave', drive_link: 'Drive link', assignee: 'zadužen', priority: 'prioritet', title: 'naslov', body: 'tekst', value: 'vrednost', note: 'napomena', refund_amount: 'vraćeno kupcu', return_shipping_cost: 'trošak slanja', resolution_note: 'rešenje', improve: 'šta da popravimo', vip: 'VIP', tags: 'oznake', points_adj: 'poeni', name: 'ime', phone: 'telefon', city: 'grad', address: 'adresa', postal_code: 'poštanski broj', payment: 'plaćanje', shipping_price: 'dostava (kupac)', shipping_cost: 'dostava (kurir)', packaging_cost: 'pakovanje', discount: 'popust', discount_code: 'kod', channel: 'kanal', category: 'kategorija', supplier: 'dobavljač', material: 'materijal', image_url: 'slika', concept: 'skripta', hook: 'hook', caption: 'opis', format: 'format', post_url: 'link objave', views: 'pregledi', likes: 'lajkovi', saves: 'sačuvano', description: 'opis', link: 'link', votes: 'glasovi', code: 'kod', pct: 'popust %', rsd: 'popust RSD', valid_to: 'važi do', valid_from: 'važi od', active: 'aktivan', max_uses: 'maks. upotreba', starts_at: 'početak', ends_at: 'kraj', budget: 'budžet', goal: 'cilj', result_note: 'zaključak', happened_at: 'datum', kind: 'vrsta', min_stock: 'granica', per_order: 'po paketu', unit_price: 'cena', spend: 'potrošeno', purchases: 'kupovine', revenue: 'prihod', reason: 'razlog', package_received_at: 'paket stigao', resolution_wanted: 'kupac želi', restocked: 'vraćeno na stanje', size: 'veličina', color: 'boja', qty: 'količina', email: 'email', instagram: 'instagram', birthday: 'rođendan', source: 'izvor', position: 'redosled', pinned: 'zakačeno', done: 'završeno', delivered_on: 'paket primljen', shipped_at: 'poslato', delivered_at: 'isporučeno', photos: 'fotografije', order_no: 'broj', exchange_details: 'želi umesto toga', item: 'komad', rating: 'ocena', customer_name: 'kupac', type: 'tip', discount_pct: 'popust %', discount_rsd: 'popust RSD', deleted_at: '__del' };
-const NF_SKIP = new Set(['updated_at', 'updated_by', 'created_at', 'created_by', 'deleted_by', 'phone_norm', 'first_order_at', 'customer_id', 'product_id', 'variant_id', 'order_id', 'code_id', 'consent', 'case_no', 'id', 'bank_account', 'shopify_order_id', 'shopify_product_id', 'shopify_variant_id', 'resolved_at', 'area', 'author']);
+const NF_FIELD = { assignees: 'zaduženi', purpose: 'namena', inspo: 'inspiracija', status: 'status', courier: 'kurir', tracking_no: 'broj pošiljke', sell_price: 'prodajna', buy_price: 'nabavna', compare_price: '„bila“ cena', stock: 'stanje', publish_at: 'datum objave', drive_link: 'Drive link', assignee: 'zadužen', priority: 'prioritet', title: 'naslov', body: 'tekst', value: 'vrednost', note: 'napomena', refund_amount: 'vraćeno kupcu', return_shipping_cost: 'trošak slanja', resolution_note: 'rešenje', improve: 'šta da popravimo', vip: 'VIP', tags: 'oznake', points_adj: 'poeni', name: 'ime', phone: 'telefon', city: 'grad', address: 'adresa', postal_code: 'poštanski broj', payment: 'plaćanje', shipping_price: 'dostava (kupac)', shipping_cost: 'dostava (kurir)', packaging_cost: 'pakovanje', discount: 'popust', discount_code: 'kod', channel: 'kanal', category: 'kategorija', supplier: 'dobavljač', material: 'materijal', image_url: 'slika', concept: 'skripta', hook: 'hook', caption: 'opis', format: 'format', post_url: 'link objave', views: 'pregledi', likes: 'lajkovi', saves: 'sačuvano', description: 'opis', link: 'link', votes: 'glasovi', code: 'kod', pct: 'popust %', rsd: 'popust RSD', valid_to: 'važi do', valid_from: 'važi od', active: 'aktivan', max_uses: 'maks. upotreba', starts_at: 'početak', ends_at: 'kraj', budget: 'budžet', goal: 'cilj', result_note: 'zaključak', happened_at: 'datum', kind: 'vrsta', min_stock: 'granica', per_order: 'po paketu', unit_price: 'cena', spend: 'potrošeno', purchases: 'kupovine', revenue: 'prihod', reason: 'razlog', package_received_at: 'paket stigao', resolution_wanted: 'kupac želi', restocked: 'vraćeno na stanje', size: 'veličina', color: 'boja', qty: 'količina', email: 'email', instagram: 'instagram', birthday: 'rođendan', source: 'izvor', position: 'redosled', pinned: 'zakačeno', done: 'završeno', delivered_on: 'paket primljen', shipped_at: 'poslato', delivered_at: 'isporučeno', photos: 'fotografije', order_no: 'broj', exchange_details: 'želi umesto toga', item: 'komad', rating: 'ocena', customer_name: 'kupac', type: 'tip', discount_pct: 'popust %', discount_rsd: 'popust RSD', deleted_at: '__del' };
+const NF_SKIP = new Set(['assignee', 'updated_at', 'updated_by', 'created_at', 'created_by', 'deleted_by', 'phone_norm', 'first_order_at', 'customer_id', 'product_id', 'variant_id', 'order_id', 'code_id', 'consent', 'case_no', 'id', 'bank_account', 'shopify_order_id', 'shopify_product_id', 'shopify_variant_id', 'resolved_at', 'area', 'author']);
 const prodName = (id) => product(id)?.name || 'komad';
 const custName = (id) => state.customers.find(c => c.id === id)?.name || 'kupac';
 const NF_TBL = {
@@ -2791,6 +2808,7 @@ function bindEvents() {
   $('postViewSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.postView = b.dataset.view; LS.set('crm_pview', b.dataset.view); renderPosts(); });
   $('postFmtFilter').addEventListener('change', (e) => { state.postFmt = e.target.value; renderPosts(); });
   $('postPurposeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-pp]'); if (!b) return; state.postPurpose = b.dataset.pp; LS.set('crm_ppurpose', state.postPurpose); renderPosts(); });
+  document.addEventListener('click', (e) => { const b = e.target.closest('.who-pick .wp'); if (!b) return; b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); });
   $('po_purposeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-pp]'); if (b) setPostPurpose(b.dataset.pp); });
   $('newSiteBtn').addEventListener('click', () => openIdeaModal(null, 'site'));
   $('newPackIdeaBtn').addEventListener('click', () => openIdeaModal(null, 'packaging'));
@@ -3290,13 +3308,13 @@ function aiSnapshot() {
   const rs = state.rets.slice().sort((a, b) => b.created_at.localeCompare(a.created_at));
   const openR = rs.filter(r => !retClosed(r)), closedR = rs.filter(r => retClosed(r)).slice(0, 20);
   L.push(`\n## POVRATI, ZAMENE, REKLAMACIJE, UTISCI (otvoreni ${openR.length} + poslednjih ${closedR.length} zatvorenih)\nid|broj|datum|tip|status|kupac|porudžbina|artikal|veličina|razlog|kupac želi|rok|ocena|vraćeno RSD|zadužen|opis|šta da popravimo`);
-  openR.concat(closedR).forEach(r => { const du = retDue(r); row(r.id, r.case_no, d(r.created_at), RT[r.type], ST[r.status] || r.status, r.customer_name, r.order_no, r.item, r.size, r.reason, r.resolution_wanted, du ? dueText(du) : '', r.rating, R(r.refund_amount) || '', r.assignee, cut(r.description, 160), cut(r.improve, 80)); });
+  openR.concat(closedR).forEach(r => { const du = retDue(r); row(r.id, r.case_no, d(r.created_at), RT[r.type], ST[r.status] || r.status, r.customer_name, r.order_no, r.item, r.size, r.reason, r.resolution_wanted, du ? dueText(du) : '', r.rating, R(r.refund_amount) || '', assigneeNames(r), cut(r.description, 160), cut(r.improve, 80)); });
 
   L.push(`\n## PROMOCIJE\nid|naziv|tip|od|do|status|kod|popust|kanal|budžet|cilj|porudžbine u periodu|prihod|sa kodom|rast vs prosek|reklame|neto|opis|rezultat|beleške`);
   state.promos.slice().sort((a, b) => b.starts_at.localeCompare(a.starts_at)).forEach(p => { const x = promoResults(p); row(p.id, p.name, p.type, d(p.starts_at), p.ends_at ? d(p.ends_at) : 'traje', ST[promoStatus(p)], p.code, p.discount_pct ? p.discount_pct + '%' : p.discount_rsd ? R(p.discount_rsd) + ' RSD' : '', p.channel, R(p.budget) || '', cut(p.goal, 60), x.orders, R(x.revenue), x.withCode, x.lift == null ? '' : Math.round(x.lift * 100) + '%', R(x.spend), R(x.net), cut(p.description, 100), cut(p.result_note, 80), promoNotes(p.id).map(z => `${personName(z.author)}: ${cut(z.body, 60)}`).join(' / ')); });
 
   L.push(`\n## OBJAVE + REKLAME\nid|naslov|namena|faza|format|datum|zadužen|hook|skripta|caption|drive link|inspiracija`);
-  state.posts.forEach(p => row(p.id, p.title, PURPOSE[ppOf(p)], ST[p.status], FMT[p.format] || p.format, dt(p.publish_at), p.assignee, cut(p.hook, 90), cut(p.concept, 260), cut(p.caption, 80), p.drive_link ? 'ima' : 'nema', inspoLinks(p).join(' ')));
+  state.posts.forEach(p => row(p.id, p.title, PURPOSE[ppOf(p)], ST[p.status], FMT[p.format] || p.format, dt(p.publish_at), assigneeNames(p), cut(p.hook, 90), cut(p.concept, 260), cut(p.caption, 80), p.drive_link ? 'ima' : 'nema', inspoLinks(p).join(' ')));
 
   L.push(`\n## PREDLOZI ZA SAJT I PAKOVANJE\nid|oblast|naslov|kategorija|prioritet|status|autor|glasovi|opis`);
   state.ideas.forEach(i => row(i.id, i.area === 'packaging' ? 'pakovanje' : 'sajt', i.title, CAT[i.category] || i.category, PRIO[i.priority] || i.priority, ST[i.status], i.created_by, (i.votes || []).length || '', cut(i.description, 140)));

@@ -470,6 +470,15 @@ tbody tr{transition:background .15s}
 .modal .field .script-hook span{flex:none;font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#7a5410;background:#f6ead0;border-radius:5px;padding:2px 7px}
 .modal .field .script-hook input{flex:1;min-width:0;width:auto;border:0;outline:0;box-shadow:none;border-radius:0;background:transparent;font:600 14px var(--font-ui);color:var(--ink);padding:4px 0}
 .modal .field .script-card textarea{border:0;border-radius:0;background:transparent;min-height:130px;outline:0;resize:vertical}
+.who-pick{display:flex;flex-wrap:wrap;gap:6px}
+.who-pick .wp{display:inline-flex;align-items:center;gap:7px;padding:5px 11px 5px 5px;border:1.5px solid var(--line);border-radius:99px;background:#fff;font:600 13px var(--font-ui);color:var(--ink-2);cursor:pointer;transition:all .15s}
+.who-pick .wp .n-av{width:24px;height:24px;font-size:13px;border-radius:50%;margin:0;transform:none;box-shadow:none;opacity:.45;transition:opacity .15s}
+.who-pick .wp:hover{border-color:var(--sage)}
+.who-pick .wp.on{border-color:#1B2620;background:#f1f3ec;color:#1B2620}
+.who-pick .wp.on .n-av{opacity:1}
+.who-pick .wp.on::after{content:"✓";font-size:12px;font-weight:800;margin-left:1px}
+.lbl-hint{font-weight:500;color:var(--muted)}
+.as-list{display:inline-flex;flex-wrap:wrap;gap:3px}
 .pp-seg{display:flex;flex-wrap:wrap}
 .pp-seg button{flex:1 1 auto}
 .inspo-list{display:flex;flex-direction:column;gap:3px;margin-top:4px}
@@ -1373,7 +1382,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         <div class="kanban" id="postBoard"></div>
         <div class="cal" id="postCal" style="display:none"></div>
         <div class="table-card" id="postList" style="display:none"><table>
-          <thead><tr><th>Datum objave</th><th>Ideja</th><th>Format</th><th>Status</th><th>Zadužen</th><th>Snimak</th></tr></thead>
+          <thead><tr><th>Datum objave</th><th>Ideja</th><th>Format</th><th>Status</th><th>Zaduženi</th><th>Snimak</th></tr></thead>
           <tbody id="postTbody"></tbody></table></div>
       </div>
 
@@ -1578,11 +1587,11 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
           <label class="script-hook"><span>Hook</span><input id="po_hook" placeholder="Prve 2 sekunde: rečenica ili kadar koji zaustavlja skrol (nije obavezno)"></label>
           <textarea id="po_concept" rows="6" placeholder="Šta se vidi i šta se govori, kojim redom, koja muzika, koja poruka i poziv na kraju"></textarea>
         </div></div>
-      <div class="frow3">
+      <div class="frow">
         <div class="field"><label>Format</label><select id="po_format"><option value="reel">Reel</option><option value="carousel">Carousel</option><option value="story">Story</option><option value="post">Post</option><option value="tiktok">TikTok</option></select></div>
         <div class="field"><label>Status</label><select id="po_status"></select></div>
-        <div class="field"><label>Zadužen</label><select id="po_assignee"><option value="">—</option><option>Konstantin</option><option>Staša</option><option>Marjan</option></select></div>
       </div>
+      <div class="field"><label>Zaduženi <span class="lbl-hint">(može više)</span></label><div class="who-pick" id="po_assignees"></div></div>
       <div class="frow">
         <div class="field"><label id="po_dateLbl">Datum i vreme objave</label><input id="po_date" type="datetime-local"></div>
         <div class="field"><label>Komad iz ponude</label><select id="po_product"></select></div>
@@ -1654,11 +1663,11 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
   <div class="modal wide" style="max-width:760px"><h3 id="rtTitle">Prijava</h3>
     <div id="rtHead" class="drawer-badges"></div>
     <form id="retForm">
-      <div class="frow3">
+      <div class="frow">
         <div class="field"><label>Tip</label><select id="rt_type"><option value="return">Povrat</option><option value="exchange">Zamena</option><option value="complaint">Reklamacija</option><option value="feedback">Utisak</option></select></div>
         <div class="field"><label>Status</label><select id="rt_status"></select></div>
-        <div class="field"><label>Zadužen</label><select id="rt_assignee"><option value="">—</option><option>Konstantin</option><option>Staša</option><option>Marjan</option></select></div>
       </div>
+      <div class="field"><label>Zaduženi <span class="lbl-hint">(može više)</span></label><div class="who-pick" id="rt_assignees"></div></div>
       <div class="frow">
         <div class="field"><label>Kupac *</label><input id="rt_customer_name" required></div>
         <div class="field"><label>Telefon</label><input id="rt_phone"></div>
@@ -1903,8 +1912,8 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610072135"></script>
-<script>window.HTML_BUILD="202610072135";</script>
-<script src="app.js?v=202610072135"></script>
+<script src="config.js?v=202610072145"></script>
+<script>window.HTML_BUILD="202610072145";</script>
+<script src="app.js?v=202610072145"></script>
 </body>
 </html>
