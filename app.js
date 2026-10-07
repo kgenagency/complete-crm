@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610072323';
+const APP_BUILD = '202610072357';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -917,7 +917,8 @@ const SFX = {
   error: { p: 3, vibe: [30, 40, 30], play(B, t) { [[233.08, 0], [196, 0.13]].forEach(([f, d]) => vOsc(B, { f, t: t + d, a: 0.006, d: 0.15, peak: 0.08, type: 'square', lp: 650, verb: 0.05 })); } },
   bye: { p: 8, play(B, t) { [G6, E6, C6, G5].forEach((f, i) => vBell(B, f, t + i * 0.09, 0.055, 1.2, 0.3 - i * 0.2, 0.55)); vOsc(B, { f: 130.81, t: t + 0.2, a: 0.2, d: 1.1, peak: 0.05, type: 'triangle', lp: 500, verb: 0.4 }); } },
 };
-let sfxLast = { t: 0, p: -1 };
+let sfxLast = { t: 0, p: -1 }, SFX_INTRO = null;
+function introFade() { const x = SFX_INTRO; if (!x) return; try { [x.out, x.vs].forEach(g => g.gain.setTargetAtTime(0, x.a.currentTime, 0.06)); } catch (e) {} SFX_INTRO = null; }
 function sfx(name, vol = 1, arg) {
   const s = SFX[name]; if (!s || !soundOn()) return false;
   const now = performance.now();
@@ -928,6 +929,7 @@ function sfx(name, vol = 1, arg) {
     if (a.state !== 'running') return;
     const B = sfxBus(a), out = a.createGain(), vs = a.createGain(), g = vol * (s.v || 1); out.gain.value = g; vs.gain.value = g; out.connect(B.master); vs.connect(B.verb);
     try { s.play({ a, master: out, verb: vs }, a.currentTime + 0.03, arg); } catch (e) {}
+    if (name === 'intro') SFX_INTRO = { a, out, vs };
   };
   // bez dodira korisnika pretraživač ne pušta zvuk; ako se ne odglavi odmah, preskačemo (da ne zakasni)
   if (a.state === 'running') go(); else a.resume().then(() => { if (performance.now() - now < 600) go(); }).catch(() => {});
@@ -1529,7 +1531,7 @@ function greet(u) {
 }
 /* pretraživač ne pušta zvuk dok se ekran ne dodirne; kad si već prijavljen (otvoriš ili osvežiš CRM),
    uvod čeka jedan dodir („Dodirni za ulaz“), pa kreće animacija sa zvukom. Sa ugašenim zvukom nema čekanja. */
-const audioReady = () => (AUD && AUD.state === 'running') || !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
+const audioReady = () => { const a = audioCtx(); return !!a && a.state === 'running'; };
 function playSplash(u, gate) {
   return new Promise(res => {
     const sp = $('splash');
@@ -3056,8 +3058,10 @@ function setTab(t) {
 function bindEvents() {
   $('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault(); $('loginErr').style.display = 'none'; if (soundOn()) audioCtx();
-    try { await enterApp(await signIn($('loginUser').value, $('loginPass').value)); }
-    catch (err) { console.error('login', err); $('loginErr').style.display = 'block'; }
+    const un = $('loginUser').value.trim().toLowerCase();
+    const pre = PEOPLE[un] ? playSplash({ username: un, display: PEOPLE[un].name }) : null; // odmah, dok traje klik: animacija + zvuk
+    try { await enterApp(await signIn($('loginUser').value, $('loginPass').value), false, pre); }
+    catch (err) { console.error('login', err); if (pre) { introFade(); const sp = $('splash'); if (sp) sp.classList.add('hide'); } $('loginErr').style.display = 'block'; }
   });
   $('logoutBtn').addEventListener('click', byeOut);
   $('projSel').addEventListener('change', (e) => {
@@ -3963,12 +3967,12 @@ function botLocalFirst(raw) {
 }
 
 async function byeOut() { const played = sfx('bye'); await Promise.all([sb.auth.signOut(), new Promise(r => setTimeout(r, played ? 800 : 0))]); location.reload(); }
-async function enterApp(user, restored) {
+async function enterApp(user, restored, pre) {
   state.user = user;
   $('userName').textContent = user.display;
   $('navUser').textContent = user.display; $('navAvatar').textContent = user.display.charAt(0).toUpperCase();
   $('avatar').textContent = user.display.charAt(0).toUpperCase();
-  const splash = playSplash(user, restored && soundOn() && !audioReady());
+  const splash = pre || playSplash(user, restored && soundOn() && !audioReady());
   await loadData();
   renderAll();
   snapshotToday();
