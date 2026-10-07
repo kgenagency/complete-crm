@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610072231';
+const APP_BUILD = '202610072309';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -97,7 +97,7 @@ function errText(e) {
   if (/foreign key|23503/i.test(m)) return 'Povezani zapis više ne postoji (verovatno je obrisan). Osveži stranicu.';
   return m || 'Nepoznata greška';
 }
-function fail(e) { console.error(e); toast('Greška: ' + errText(e), 5000); }
+function fail(e) { console.error(e); toast('Greška: ' + errText(e), 5000); try { sfx('error'); } catch (x) {} }
 async function q(p) { const { data, error } = await p; if (error) throw error; return data; }
 
 const itemsOf = (oid) => state.items.filter(i => i.order_id === oid);
@@ -181,7 +181,7 @@ async function stockAlert(v, from, to) {
   else if (to <= t && from > t) await log({ product_id: p.id, type: 'alert', body: `${p.name} ${v.size}: ostalo još ${to} kom` });
 }
 
-async function setOrderStatus(o, ns) {
+async function setOrderStatus(o, ns, fromDrag) {
   if (o.status === ns) return;
   const old = o.status;
   const patch = { status: ns };
@@ -196,6 +196,7 @@ async function setOrderStatus(o, ns) {
     if (wasHold !== isHold) body += isHold ? ' (roba skinuta sa stanja)' : ' (roba vraćena na stanje)';
     await log({ order_id: o.id, type: 'status', body });
     renderAll();
+    sfx(ns === 'delivered' ? 'delivered' : ns === 'shipped' ? 'shipped' : fromDrag ? null : 'move');
     toast(`${o.order_no || 'Porudžbina'} → ${ST[ns]}`);
   } catch (e) { fail(e); }
 }
@@ -353,8 +354,9 @@ function kbPointerUp() {
   if (!d.moved) return;
   justDragged = true; setTimeout(() => { justDragged = false; }, 80);
   const z = d.over; if (!z) return;
-  if (d.kind === 'order') { const o = order(d.id); if (o) setOrderStatus(o, z.dataset.status); }
-  else if (d.kind === 'post') movePost(d.id, z);
+  if (d.kind === 'order') { const o = order(d.id); if (o && o.status !== z.dataset.status) { sfx('move'); setOrderStatus(o, z.dataset.status, true); } return; }
+  sfx('move');
+  if (d.kind === 'post') movePost(d.id, z);
   else if (d.kind === 'idea') moveIdea(d.id, z.dataset.status);
   else if (d.kind === 'ret') moveRet(d.id, z.dataset.status);
 }
@@ -399,6 +401,7 @@ function renderProducts() {
 async function bumpStock(vid, d) {
   const v = variant(vid); if (!v) return;
   const ns = Math.max(0, v.stock + d);
+  sfx('tick', 1, d > 0);
   try {
     await q(sb.from('h_variants').update({ stock: ns }).eq('id', vid));
     await log({ product_id: v.product_id, type: 'stock', body: `${product(v.product_id)?.name} ${v.size}: ${v.stock} → ${ns}` });
@@ -619,7 +622,7 @@ async function saveOrder(e) {
     $('orderModal').classList.remove('open');
     renderAll();
     if (state.openOrderId) renderDrawer();
-    toast(`${o.order_no} sačuvana ✓`); taskAfterSave('ot', `${o.order_no || ''} · ${o.customer_name || ''}`);
+    toast(`${o.order_no} sačuvana ✓`); if (!old) { sfx('sale'); checkCelebrate(o); } taskAfterSave('ot', `${o.order_no || ''} · ${o.customer_name || ''}`);
   } catch (err) { fail(err); }
   $('omSave').disabled = false;
 }
@@ -818,23 +821,142 @@ function taskGet(px, legacy) {
   if (TASK_CTX[px]) TASK_CTX[px].last = { before: TASK_CTX[px].x ? assigneesOf(TASK_CTX[px].x) : [], after: as, due: f.task_due, mode };
   return f;
 }
-/* ---------- iskačuća kartica + „ting“ kad napraviš ili završiš zadatak ---------- */
-let AUD = null;
-function audioCtx() { try { AUD = AUD || new (window.AudioContext || window.webkitAudioContext)(); if (AUD.state === 'suspended') AUD.resume(); return AUD; } catch (e) { return null; } }
+/* ---------- ZVUCI: sve se pravi u pretraživaču (WebAudio), bez ijednog fajla ----------
+   jedan zajednički izlaz (kompresor + prostorni odjek), pa kratki „instrumenti“: zvonce, ton, šum */
+let AUD = null, BUS = null, NOISE = null;
+function audioCtx() { try { AUD = AUD || new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' }); if (AUD.state === 'suspended') AUD.resume().catch(() => {}); return AUD; } catch (e) { return null; } }
 const soundOn = () => LS.get('crm_sound', '1') !== '0';
-/* zvuk se pravi u pretraživaču (bez fajla): dva čista tona kao zvonce; „gotovo“ je tri tona naviše */
-function ting(kind) {
-  if (!soundOn()) return;
-  const a = audioCtx(); if (!a) return;
-  const t0 = a.currentTime + 0.01, out = a.createGain(); out.gain.value = kind === 'soft' ? 0.5 : 0.85; out.connect(a.destination);
-  const notes = kind === 'done' ? [[1046.5, 0], [1318.5, 0.09], [1568, 0.18]] : kind === 'soft' ? [[1568, 0]] : [[1318.5, 0], [1975.5, 0.075]];
-  notes.forEach(([f, d]) => [[f, 0.2, 1.1], [f * 2.76, 0.045, 0.35]].forEach(([fr, peak, len]) => {
-    const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.value = fr;
-    g.gain.setValueAtTime(0.0001, t0 + d); g.gain.exponentialRampToValueAtTime(peak, t0 + d + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + len);
-    o.connect(g); g.connect(out); o.start(t0 + d); o.stop(t0 + d + len + 0.05);
-  }));
-  try { if (navigator.vibrate) navigator.vibrate(kind === 'done' ? [12, 40, 12] : 14); } catch (e) {}
+function sfxBus(a) {
+  if (BUS && BUS.a === a) return BUS;
+  const master = a.createGain(); master.gain.value = 0.85;
+  const comp = a.createDynamicsCompressor(); comp.threshold.value = -18; comp.knee.value = 14; comp.ratio.value = 3.5; comp.attack.value = 0.003; comp.release.value = 0.25;
+  master.connect(comp); comp.connect(a.destination);
+  // odjek kao u velikoj, praznoj sobi (napravljen šumom koji se gasi)
+  const len = Math.floor(a.sampleRate * 2.2), ir = a.createBuffer(2, len, a.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.4) * Math.min(1, i / 240); }
+  const verb = a.createConvolver(); verb.buffer = ir;
+  const tone = a.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 5200;
+  const wet = a.createGain(); wet.gain.value = 0.34; verb.connect(tone); tone.connect(wet); wet.connect(master);
+  return (BUS = { a, master, verb });
 }
+function vOut(B, g, o) {
+  const ac = B.a; let n = g;
+  if ((o.pan || o.pan2) && ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.setValueAtTime(o.pan || 0, o.t); if (o.pan2 !== undefined) p.pan.linearRampToValueAtTime(o.pan2, o.t + (o.a || 0) + (o.d || 0)); g.connect(p); n = p; }
+  n.connect(B.master);
+  if (o.verb) { const s = ac.createGain(); s.gain.value = o.verb; n.connect(s); s.connect(B.verb); }
+}
+function vOsc(B, o) {
+  const ac = B.a, t = o.t, att = o.a ?? 0.005, d = o.d ?? 0.5, osc = ac.createOscillator(), g = ac.createGain();
+  g.gain.value = 0; osc.type = o.type || 'sine'; osc.frequency.setValueAtTime(o.f, t); if (o.f2) osc.frequency.exponentialRampToValueAtTime(o.f2, t + att + d * 0.7); if (o.detune) osc.detune.value = o.detune;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(o.peak ?? 0.1, t + att); g.gain.exponentialRampToValueAtTime(0.0001, t + att + d);
+  let n = osc; if (o.lp) { const fl = ac.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = o.lp; osc.connect(fl); n = fl; }
+  n.connect(g); vOut(B, g, o); osc.start(t); osc.stop(t + att + d + 0.05);
+}
+// zvonce: čist ton + dva metalna prizvuka koji se brže gase
+function vBell(B, f, t, peak = 0.1, d = 1.1, pan = 0, verb = 0.35) {
+  vOsc(B, { f, t, peak, d, pan, verb, a: 0.004 });
+  vOsc(B, { f: f * 2.76, t, peak: peak * 0.2, d: d * 0.32, pan, verb, a: 0.003 });
+  vOsc(B, { f: f * 5.4, t, peak: peak * 0.07, d: d * 0.12, pan, verb, a: 0.002 });
+}
+function noiseBuf(ac) {
+  if (NOISE && NOISE.sampleRate === ac.sampleRate) return NOISE;
+  const len = ac.sampleRate * 2 | 0; NOISE = ac.createBuffer(1, len, ac.sampleRate); const d = NOISE.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1; return NOISE;
+}
+function vNoise(B, o) {
+  const ac = B.a, t = o.t, att = o.a ?? 0.01, d = o.d ?? 0.3, s = ac.createBufferSource(); s.buffer = noiseBuf(ac); s.loop = true;
+  const fl = ac.createBiquadFilter(); fl.type = o.type || 'bandpass'; fl.Q.value = o.q ?? 1; fl.frequency.setValueAtTime(o.f || 1000, t); if (o.f2) fl.frequency.exponentialRampToValueAtTime(o.f2, t + att + d);
+  const g = ac.createGain(); g.gain.value = 0; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(o.peak ?? 0.06, t + att); g.gain.exponentialRampToValueAtTime(0.0001, t + att + d);
+  s.connect(fl); fl.connect(g); vOut(B, g, o); s.start(t, Math.random()); s.stop(t + att + d + 0.05);
+}
+const C4 = 261.63, E4 = 329.63, G4 = 392.0, B4 = 493.88, C5 = 523.25, D5 = 587.33, E5 = 659.25, G5 = 783.99, B5 = 987.77, C6 = 1046.5, D6 = 1174.66, E6 = 1318.51, G6 = 1567.98, B6 = 1975.53, C7 = 2093.0, E7 = 2637.02;
+/* p = važnost: tiši zvuk ne prekida jači koji je upravo krenuo */
+const SFX = {
+  // ulazak u CRM: vazduh dok se crta romb, dubok udar kad se pojavi H, svetlucanje dok se HARIZMA razvlači, tih akord uz pozdrav
+  intro: { p: 9, play(B, t) {
+    vNoise(B, { t, a: 0.55, d: 0.75, peak: 0.045, f: 260, f2: 3400, q: 0.8, verb: 0.55, pan: -0.25, pan2: 0.25 });
+    [[65.41, 0.085], [98.0, 0.05]].forEach(([f, pk]) => vOsc(B, { f, t: t + 0.05, a: 0.75, d: 2.3, peak: pk, type: 'triangle', lp: 380, verb: 0.3 }));
+    vOsc(B, { f: 130.81, f2: 128, t: t + 0.68, a: 0.006, d: 1.7, peak: 0.15, verb: 0.55 });
+    vBell(B, C4, t + 0.7, 0.085, 1.9, 0, 0.6); vBell(B, G4, t + 0.73, 0.05, 1.7, 0.1, 0.6);
+    [C5, E5, G5, B5, D6, G6].forEach((f, i) => vBell(B, f, t + 0.92 + i * 0.075, 0.042 - i * 0.003, 1.5, -0.65 + i * 0.26, 0.75));
+    [C4, E4, G4, B4, D5].forEach((f, i) => vOsc(B, { f, t: t + 1.22, a: 0.4, d: 1.7, peak: 0.024, pan: -0.3 + i * 0.15, verb: 0.65, detune: i % 2 ? 5 : -5 }));
+  } },
+  // nova porudžbina: fioka kase, „ka-čing“ i par novčića
+  sale: { v: 1.4, p: 6, vibe: [10, 30, 10, 30, 18], play(B, t) {
+    vOsc(B, { f: 160, f2: 70, t, a: 0.003, d: 0.15, peak: 0.2 });
+    vNoise(B, { t, a: 0.002, d: 0.05, peak: 0.1, type: 'highpass', f: 5200, verb: 0.1 });
+    vBell(B, C7, t + 0.05, 0.1, 0.9, -0.2, 0.3); vBell(B, E7, t + 0.13, 0.095, 1.15, 0.2, 0.35);
+    [3136, 3951, 4699, 3520].forEach((f, i) => vBell(B, f, t + 0.24 + i * 0.05 + Math.random() * 0.02, 0.022, 0.5, -0.5 + i * 0.33, 0.4));
+  } },
+  // rekord ili jubilarna porudžbina: kratka fanfara pa šampanjac
+  record: { v: 1.7, p: 10, vibe: [20, 50, 20, 50, 60], play(B, t) {
+    const brass = (f, tt, d, pk) => { vOsc(B, { f, t: tt, a: 0.03, d, peak: pk, type: 'sawtooth', lp: 2100, verb: 0.35, pan: -0.2 }); vOsc(B, { f: f * 1.004, t: tt, a: 0.03, d, peak: pk * 0.7, type: 'sawtooth', lp: 1700, verb: 0.35, pan: 0.2 }); };
+    brass(G4, t, 0.15, 0.045); brass(C5, t + 0.14, 0.15, 0.045); brass(E5, t + 0.28, 0.15, 0.045); brass(G5, t + 0.42, 1.0, 0.055);
+    [C4, E4, G4].forEach(f => vOsc(B, { f, t: t + 0.42, a: 0.05, d: 1.1, peak: 0.03, type: 'triangle', verb: 0.45 }));
+    for (let i = 0; i < 12; i++) vBell(B, 1800 + Math.random() * 3000, t + 0.5 + i * 0.06 + Math.random() * 0.03, 0.022, 0.6, Math.random() * 1.6 - 0.8, 0.5);
+    vNoise(B, { t: t + 0.42, a: 0.01, d: 0.7, peak: 0.028, type: 'highpass', f: 6500, verb: 0.3 });
+  } },
+  // zadaci
+  new: { p: 4, vibe: 14, play(B, t) { vBell(B, E6, t, 0.16, 1.1, -0.15, 0.3); vBell(B, B6, t + 0.075, 0.14, 1.2, 0.15, 0.3); } },
+  done: { p: 4, vibe: [12, 40, 12], play(B, t) { [C6, E6, G6].forEach((f, i) => vBell(B, f, t + i * 0.09, 0.14, 1.1, -0.2 + i * 0.2, 0.3)); } },
+  soft: { p: 2, play(B, t) { vBell(B, G6, t, 0.08, 1.0, 0, 0.35); } },
+  // porudžbina menja fazu
+  move: { p: 2, play(B, t) { vOsc(B, { f: 540, f2: 300, t, a: 0.003, d: 0.09, peak: 0.14 }); vOsc(B, { f: 1080, t: t + 0.004, a: 0.002, d: 0.05, peak: 0.025 }); } },
+  shipped: { v: 1.6, p: 4, play(B, t) { vNoise(B, { t, a: 0.06, d: 0.32, peak: 0.06, f: 600, f2: 4200, q: 1.3, verb: 0.3, pan: -0.6, pan2: 0.6 }); vBell(B, E6, t + 0.2, 0.05, 0.8, 0.4, 0.4); } },
+  delivered: { p: 5, vibe: 12, play(B, t) { [G5, C6, E6, G6, C7].forEach((f, i) => vBell(B, f, t + i * 0.055, 0.065, 1.0, -0.4 + i * 0.2, 0.45)); vOsc(B, { f: C4, t, a: 0.02, d: 0.9, peak: 0.05, verb: 0.4 }); } },
+  // beleške i sitnice
+  paper: { v: 1.6, p: 1, play(B, t) { vNoise(B, { t, a: 0.03, d: 0.11, peak: 0.055, f: 1800, f2: 5200, q: 1.5, verb: 0.1 }); vNoise(B, { t: t + 0.07, a: 0.004, d: 0.05, peak: 0.025, type: 'highpass', f: 3200 }); } },
+  pin: { p: 2, play(B, t) { vOsc(B, { f: 1800, f2: 900, t, a: 0.001, d: 0.03, peak: 0.06, type: 'triangle' }); vOsc(B, { f: 220, f2: 150, t, a: 0.002, d: 0.08, peak: 0.12 }); } },
+  check: { p: 2, play(B, t) { vBell(B, 880, t, 0.06, 0.5, 0, 0.3); vBell(B, E6, t + 0.07, 0.06, 0.7, 0, 0.3); } },
+  tick: { p: 0, free: true, play(B, t, up) { vOsc(B, { f: up ? 1600 : 1100, t, a: 0.001, d: 0.025, peak: 0.05, type: 'triangle' }); } },
+  trash: { v: 1.4, p: 3, play(B, t) { vNoise(B, { t, a: 0.01, d: 0.22, peak: 0.065, type: 'lowpass', f: 3200, f2: 240, q: 0.8, verb: 0.15 }); vOsc(B, { f: 330, f2: 140, t, a: 0.005, d: 0.2, peak: 0.07, type: 'triangle' }); } },
+  restore: { p: 3, play(B, t) { vNoise(B, { t, a: 0.08, d: 0.2, peak: 0.05, type: 'lowpass', f: 300, f2: 3600, verb: 0.2 }); vBell(B, B5, t + 0.18, 0.055, 0.7, 0, 0.35); vBell(B, E6, t + 0.25, 0.05, 0.8, 0, 0.35); } },
+  notif: { p: 2, play(B, t) { vBell(B, D6, t, 0.05, 0.6, 0, 0.35); vBell(B, G6, t + 0.09, 0.045, 0.7, 0, 0.35); } },
+  error: { p: 3, vibe: [30, 40, 30], play(B, t) { [[233.08, 0], [196, 0.13]].forEach(([f, d]) => vOsc(B, { f, t: t + d, a: 0.006, d: 0.15, peak: 0.08, type: 'square', lp: 650, verb: 0.05 })); } },
+  bye: { p: 8, play(B, t) { [G6, E6, C6, G5].forEach((f, i) => vBell(B, f, t + i * 0.09, 0.055, 1.2, 0.3 - i * 0.2, 0.55)); vOsc(B, { f: 130.81, t: t + 0.2, a: 0.2, d: 1.1, peak: 0.05, type: 'triangle', lp: 500, verb: 0.4 }); } },
+};
+let sfxLast = { t: 0, p: -1 };
+function sfx(name, vol = 1, arg) {
+  const s = SFX[name]; if (!s || !soundOn()) return false;
+  const now = performance.now();
+  if (!s.free && now - sfxLast.t < 350 && s.p <= sfxLast.p) return false;
+  const a = audioCtx(); if (!a) return false;
+  if (!s.free) sfxLast = { t: now, p: s.p };
+  const go = () => {
+    if (a.state !== 'running') return;
+    const B = sfxBus(a), out = a.createGain(), vs = a.createGain(), g = vol * (s.v || 1); out.gain.value = g; vs.gain.value = g; out.connect(B.master); vs.connect(B.verb);
+    try { s.play({ a, master: out, verb: vs }, a.currentTime + 0.03, arg); } catch (e) {}
+  };
+  // bez dodira korisnika pretraživač ne pušta zvuk; ako se ne odglavi odmah, preskačemo (da ne zakasni)
+  if (a.state === 'running') go(); else a.resume().then(() => { if (performance.now() - now < 600) go(); }).catch(() => {});
+  if (s.vibe && vol >= 0.8) { try { if (navigator.vibrate) navigator.vibrate(s.vibe); } catch (e) {} }
+  return true;
+}
+const ting = (kind) => sfx(kind === 'soft' ? 'soft' : kind === 'done' ? 'done' : 'new');
+function setSound(on) { LS.set('crm_sound', on ? '1' : '0'); renderSoundBtns(); if (on) { audioCtx(); setTimeout(() => sfx('done'), 30); } }
+function renderSoundBtns() { const on = soundOn(); document.querySelectorAll('[data-soundbtn]').forEach(b => { b.textContent = b.dataset.soundbtn === 'short' ? (on ? '🔔 Zvuk' : '🔕 Zvuk') : on ? '🔔 Zvuci uključeni' : '🔕 Zvuci isključeni'; b.classList.toggle('on', on); }); }
+/* proslava: prva / jubilarna porudžbina ili rekordan dan */
+function celebrate(title, sub) {
+  let el = $('cele');
+  if (!el) { el = document.createElement('div'); el.id = 'cele'; el.className = 'cele'; el.setAttribute('role', 'status'); document.body.appendChild(el); el.addEventListener('click', () => el.classList.remove('in')); }
+  const mob = innerWidth < 700, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches, cols = ['#C9A96E', '#E8E4D9', '#7E8C74', '#d9a3a0', '#f3d98b'];
+  const bits = reduce ? '' : Array.from({ length: mob ? 34 : 60 }, () => { const x = Math.random() * 100, dx = (Math.random() - 0.5) * 30, r = (Math.random() - 0.5) * 900, del = Math.random() * 0.35, dur = 1.6 + Math.random() * 1.2, w = 5 + Math.random() * 6;
+    return `<i style="left:${x}%;--dx:${dx}vw;--r:${r}deg;--del:${del}s;--dur:${dur}s;width:${w}px;height:${w * (Math.random() < 0.5 ? 0.45 : 1)}px;background:${cols[Math.random() * cols.length | 0]};border-radius:${Math.random() < 0.3 ? '50%' : '2px'}"></i>`; }).join('');
+  el.innerHTML = `<div class="cele-bits">${bits}</div><div class="cele-card"><div class="cele-ic">✦</div><div class="cele-t">${esc(title)}</div>${sub ? `<div class="cele-s">${esc(sub)}</div>` : ''}</div>`;
+  void el.offsetWidth; el.classList.add('in'); sfx('record');
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('in'), 3600);
+}
+const MILESTONES = [1, 10, 25, 50, 100, 150, 200, 300, 500, 750, 1000];
+function checkCelebrate(o) {
+  const live = state.orders.filter(x => !NO_REVENUE.includes(x.status)), nOrd = state.orders.length;
+  if (MILESTONES.includes(nOrd)) return setTimeout(() => celebrate(nOrd === 1 ? 'Prva porudžbina u CRM\u2011u!' : `${nOrd}. porudžbina!`, nOrd === 1 ? 'Neka ih bude još mnogo.' : 'Bravo, tim HARIZMA.'), 450);
+  const byDay = {}; live.forEach(x => { const d = dayStr(new Date(x.created_at)); byDay[d] = (byDay[d] || 0) + totals(x).revenue; });
+  const today = dayStr(new Date()), prev = Object.entries(byDay).filter(([d]) => d !== today);
+  if (prev.length >= 3 && byDay[today] > Math.max(...prev.map(([, v]) => v)) && !LS.get('crm_rec_' + today + '_' + Math.round(byDay[today]), '')) {
+    LS.set('crm_rec_' + today + '_' + Math.round(byDay[today]), '1');
+    setTimeout(() => celebrate('Rekordan dan!', `Danas ${rsd(byDay[today])}, više nego ikad.`), 450);
+  }
+}
+/* ---------- iskačuća kartica kad napraviš ili završiš zadatak ---------- */
 let tpopT = null;
 function tpopHide() { const el = $('tpop'); if (el) el.classList.remove('in'); document.body.classList.remove('tpop-on'); }
 function taskPop(kind, info) {
@@ -1380,18 +1502,18 @@ function renderNotes() {
 }
 async function addNote() {
   const body = $('noteInput').value.trim(); if (!body) return;
-  try { state.notes.push(await q(sb.from('h_notes').insert({ area: 'story', author: state.writer || who(), body }).select().single())); $('noteInput').value = ''; renderNotes(); } catch (e) { fail(e); }
+  try { state.notes.push(await q(sb.from('h_notes').insert({ area: 'story', author: state.writer || who(), body }).select().single())); $('noteInput').value = ''; renderNotes(); sfx('paper'); } catch (e) { fail(e); }
 }
 async function noteAction(id, act) {
   if (act === 'restore') {
     const d = (state.notesDel || []).find(z => z.id === id); if (!d) return;
-    try { await q(sb.from('h_notes').update({ deleted_at: null, deleted_by: null }).eq('id', id)); state.notesDel = state.notesDel.filter(z => z.id !== id); Object.assign(d, { deleted_at: null, deleted_by: null }); if (!state.notes.some(z => z.id === id)) state.notes.push(d); toast('Beleška vraćena ✓'); renderAll(); } catch (e) { fail(e); }
+    try { await q(sb.from('h_notes').update({ deleted_at: null, deleted_by: null }).eq('id', id)); state.notesDel = state.notesDel.filter(z => z.id !== id); Object.assign(d, { deleted_at: null, deleted_by: null }); if (!state.notes.some(z => z.id === id)) state.notes.push(d); sfx('restore'); toast('Beleška vraćena ✓'); renderAll(); } catch (e) { fail(e); }
     return;
   }
   const x = state.notes.find(z => z.id === id); if (!x) return;
   try {
     if (act === 'del') { if (!confirm('Beleška ide u istoriju beleški (može da se vrati). Nastaviti?')) return; await softDelete('h_notes', id); state.notes = state.notes.filter(z => z.id !== id); state.notesDel = [{ ...x, deleted_at: new Date().toISOString(), deleted_by: state.user.display }, ...(state.notesDel || []).filter(z => z.id !== id)]; }
-    else { const f = act === 'pin' ? 'pinned' : 'done'; const patch = { [f]: !x[f] }; if (f === 'done') { patch.done_by = !x.done ? who() : null; patch.done_at = !x.done ? new Date().toISOString() : null; } await q(sb.from('h_notes').update(patch).eq('id', id)); Object.assign(x, patch); if (f === 'done' && patch.done) toast('Završeno ✓ beleška je sada u Beleške → Istorija'); }
+    else { const f = act === 'pin' ? 'pinned' : 'done'; const patch = { [f]: !x[f] }; if (f === 'done') { patch.done_by = !x.done ? who() : null; patch.done_at = !x.done ? new Date().toISOString() : null; } await q(sb.from('h_notes').update(patch).eq('id', id)); Object.assign(x, patch); sfx(f === 'pinned' ? 'pin' : patch.done ? 'check' : 'move'); if (f === 'done' && patch.done) toast('Završeno ✓ beleška je sada u Beleške → Istorija'); }
     renderNotes(); renderHomeNotes(); renderNotesPage(); renderNotesBadge(); if (state.editPromoId && $('promoModal').classList.contains('open')) { renderPromoNotes(state.editPromoId); renderPromos(); }
   } catch (e) { fail(e); }
 }
@@ -1409,6 +1531,7 @@ function playSplash(u) {
     $('splashHello').innerHTML = esc(greet(u)) + (pp?.line ? `<span class="hello-sub">${esc(pp.line)}</span>` : '');
     const clone = sp.cloneNode(true); sp.replaceWith(clone); // restart animacija
     clone.classList.remove('hide');
+    sfx('intro');
     setTimeout(() => { clone.classList.add('hide'); res(); }, pp?.line ? 3000 : 2300);
   });
 }
@@ -1640,6 +1763,7 @@ async function retToIdea(id) {
 /* ---------- MEKO BRISANJE: ništa ne nestaje ---------- */
 async function softDelete(table, id) {
   await q(sb.from(table).update({ deleted_at: new Date().toISOString(), deleted_by: state.user.display }).eq('id', id));
+  sfx('trash');
 }
 const ARCH_TABLES = [
   ['h_orders', 'Porudžbina', r => `${r.order_no || ''} ${r.customer_name}`], ['h_products', 'Komad', r => r.name], ['h_posts', 'Objava', r => r.title],
@@ -1654,7 +1778,7 @@ async function loadArchive() {
 }
 async function restoreRow(t, id) {
   try {
-    await q(sb.from(t).update({ deleted_at: null, deleted_by: null }).eq('id', id));
+    await q(sb.from(t).update({ deleted_at: null, deleted_by: null }).eq('id', id)); sfx('restore');
     if (t === 'h_orders') {
       const o = await q(sb.from('h_orders').select('*').eq('id', id).single());
       const its = await q(sb.from('h_order_items').select('*').eq('order_id', id).is('deleted_at', null));
@@ -1797,7 +1921,7 @@ async function deletePromo() {
 }
 async function addPromoNote() {
   const body = $('prNoteInput').value.trim(); if (!body) return;
-  try { state.notes.push(await q(sb.from('h_notes').insert({ area: 'promo:' + state.editPromoId, author: state.writer || who(), body }).select().single())); renderPromoNotes(state.editPromoId); renderPromos(); } catch (e) { fail(e); }
+  try { state.notes.push(await q(sb.from('h_notes').insert({ area: 'promo:' + state.editPromoId, author: state.writer || who(), body }).select().single())); renderPromoNotes(state.editPromoId); renderPromos(); sfx('paper'); } catch (e) { fail(e); }
 }
 
 /* ---------- ISTORIJA ---------- */
@@ -1932,7 +2056,7 @@ const ACTIONS = [
   { name: 'Kopiraj link forme za povrate', kw: 'link', ic: '⧉', run: async () => { try { await navigator.clipboard.writeText(FORM_URL()); toast('Link kopiran ✓'); } catch (e) { prompt('Kopiraj:', FORM_URL()); } } },
   { name: 'Otvori HARIZMA sajt', kw: 'shop', ic: '↗', run: () => window.open(siteUrl(), '_blank') },
   { name: 'Arhiva obrisanog', kw: 'vrati obrisano', ic: '◷', run: () => { setTab('history'); showArchive(); } },
-  { name: 'Odjavi se', kw: 'logout izlaz', ic: '⎋', run: async () => { await sb.auth.signOut(); location.reload(); } },
+  { name: 'Odjavi se', kw: 'logout izlaz', ic: '⎋', run: byeOut },
 ];
 const fold = (s) => String(s || '').toLowerCase().replace(/č|ć/g, 'c').replace(/š/g, 's').replace(/đ/g, 'd').replace(/ž/g, 'z').normalize('NFD').replace(/[̀-ͯ]/g, '');
 function scoreMatch(hay, qn) { const h = fold(hay); if (!qn) return 1; if (h === qn) return 100; if (h.startsWith(qn)) return 60; if (h.split(/\s+/).some(w => w.startsWith(qn))) return 40; if (h.includes(qn)) return 20; return 0; }
@@ -2391,6 +2515,8 @@ function nfDismiss(key) {
   nfPersist();
 }
 function nfMenu(action) {
+  if (action === 'sound') { setSound(!soundOn()); toast(soundOn() ? 'Zvuci uključeni 🔔' : 'Zvuci isključeni'); return; }
+  if (action === 'soundtest') { if (!soundOn()) setSound(true); audioCtx(); setTimeout(() => sfx('intro'), 40); return; }
   const s = nfState();
   if (action === 'history') { $('bellMenu').classList.remove('open'); return openNotifHistory(); }
   if (action === 'clear') { s.cleared_before = new Date().toISOString(); s.dismissed = []; }
@@ -2437,7 +2563,7 @@ function onAuditLive(row) {
   if (row.actor !== who()) {
     const g = state.nfGroups.find(x => x.ids.includes(row.id)); if (g) { g.live = true; const s = nfState(); s.dismissed = s.dismissed.filter(k => k !== g.key); }
     renderTray();
-    { const dd = describeAudit(row); if (dd && dd.prio === 30) ting('soft'); }
+    if (!nfSnoozed()) { const dd = describeAudit(row); if (dd && dd.prio === 30) ting('soft'); else if (row.op === 'INSERT' && row.tbl === 'h_orders') sfx('sale', 0.6); else if (row.op === 'INSERT' && row.tbl === 'h_returns') sfx('notif', 0.8); }
     applyAuditRow(row);
     chgLive(row);
     clearTimeout(nfReloadT);
@@ -2667,7 +2793,7 @@ async function saveQuickNote() {
       const r = await q(sb.from('h_notes').insert({ area, author, body, pinned: $('qn_pin').checked, ...tf }).select().single());
       state.notes.push(r);
     }
-    $('noteModal').classList.remove('open'); renderAll(); toast(whoPicked('qt_assignees').length && area !== 'milestone' ? 'Zadatak dodat ✓ vidi se u Taskovima' : 'Zabeleženo ✓'); if (area !== 'milestone') taskAfterSave('qt', body, areaSec(area));
+    $('noteModal').classList.remove('open'); renderAll(); toast(whoPicked('qt_assignees').length && area !== 'milestone' ? 'Zadatak dodat ✓ vidi se u Taskovima' : 'Zabeleženo ✓'); if (area !== 'milestone') taskAfterSave('qt', body, areaSec(area)); sfx('paper');
   } catch (e) { fail(e); }
 }
 
@@ -2779,7 +2905,7 @@ async function npSaveNew() {
   try {
     const tf = taskGet('nt');
     const r = await q(sb.from('h_notes').insert({ area: $('np_area').value, author: state.writer || who(), body, pinned: $('np_pin').checked, ...tf }).select().single());
-    state.notes.push(r); $('np_body').value = ''; $('np_pin').checked = false; taskAfterSave('nt', body, areaSec($('np_area').value)); taskSet('nt', null, taskSrcOf('note')); renderAll(); toast(tf.assignees.length ? 'Beleška sačuvana ✓ i dodata u Taskove' : 'Beleška sačuvana ✓');
+    state.notes.push(r); $('np_body').value = ''; $('np_pin').checked = false; taskAfterSave('nt', body, areaSec($('np_area').value)); sfx('paper'); taskSet('nt', null, taskSrcOf('note')); renderAll(); toast(tf.assignees.length ? 'Beleška sačuvana ✓ i dodata u Taskove' : 'Beleška sačuvana ✓');
   } catch (e) { fail(e); }
 }
 async function npSaveEdit(id) {
@@ -2912,11 +3038,11 @@ function setTab(t) {
 
 function bindEvents() {
   $('loginForm').addEventListener('submit', async (e) => {
-    e.preventDefault(); $('loginErr').style.display = 'none';
+    e.preventDefault(); $('loginErr').style.display = 'none'; if (soundOn()) audioCtx();
     try { await enterApp(await signIn($('loginUser').value, $('loginPass').value)); }
     catch (err) { console.error('login', err); $('loginErr').style.display = 'block'; }
   });
-  $('logoutBtn').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+  $('logoutBtn').addEventListener('click', byeOut);
   $('projSel').addEventListener('change', (e) => {
     const h = e.target.value === 'harizma';
     $('harizma').style.display = h ? '' : 'none'; $('soonView').style.display = h ? 'none' : '';
@@ -2957,7 +3083,9 @@ function bindEvents() {
     const r = e.target.closest('[data-navres]'); if (r) { const it = state.navRes[+r.dataset.navres]; closeNav(); return runCmd(it); }
   });
   $('navProj').addEventListener('change', (e) => { $('projSel').value = e.target.value; $('projSel').dispatchEvent(new Event('change')); closeNav(); });
-  $('navLogout').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+  $('navLogout').addEventListener('click', byeOut);
+  $('navSound').addEventListener('click', () => { setSound(!soundOn()); toast(soundOn() ? 'Zvuci uključeni 🔔' : 'Zvuci isključeni'); });
+  renderSoundBtns();
   let ndX = null; $('navDrawer').addEventListener('touchstart', (e) => { ndX = e.touches[0].clientX; }, { passive: true });
   $('navDrawer').addEventListener('touchend', (e) => { if (ndX != null && ndX - e.changedTouches[0].clientX > 60) closeNav(); ndX = null; }, { passive: true });
   // stranica beleške
@@ -3120,7 +3248,7 @@ function bindEvents() {
   window.addEventListener('pointerdown', unlockAudio, true); window.addEventListener('keydown', unlockAudio, true);
   document.addEventListener('click', (e) => {
     const pop = e.target.closest('#tpop'); if (!pop) return;
-    if (e.target.closest('[data-tpsound]')) { LS.set('crm_sound', soundOn() ? '0' : '1'); const b = e.target.closest('[data-tpsound]'); b.textContent = soundOn() ? '🔔' : '🔕'; b.title = soundOn() ? 'Isključi zvuk' : 'Uključi zvuk'; if (soundOn()) ting('soft'); return; }
+    if (e.target.closest('[data-tpsound]')) { setSound(!soundOn()); const b = e.target.closest('[data-tpsound]'); b.textContent = soundOn() ? '🔔' : '🔕'; b.title = soundOn() ? 'Isključi zvuk' : 'Uključi zvuk'; return; }
     tpopHide(); clearTimeout(tpopT);
     if (!e.target.closest('[data-tpclose]') && state.tab !== 'tasks') setTab('tasks');
   });
@@ -3239,6 +3367,7 @@ const BOT_FAQ = [
   { g: [['ne radi', 'ne mogu', 'ne ucitav', 'zablok', 'zapel', 'zaglav', 'gresk', 'bug', 'ne otvar', 'ne cuva', 'ne sacuv', 'ne pokaz', 'ne vidim']], a: 'Prvo probaj osvežavanje: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> (na telefonu zatvori i ponovo otvori stranicu). Ako i dalje ne radi, pošalji timu kratak opis dugmetom ispod, pa će neko da pogleda.', b: [['Pošalji timu', 'teamlast']] },
   { g: [['backup', 'rezerv', 'sigurn', 'bezbed']], a: 'Podaci se čuvaju zauvek: obrisano ide u arhivu, svaka promena se beleži, a svake noći u 03:30 pravi se rezervna kopija cele baze na GitHub-u.', b: [['Istorija', 'tab:history']] },
   { g: [['istorij', 'prekretnic', 'dogadja', 'vremensk']], a: 'Istorija je vremenska linija svega. Važan događaj (lansiranje, nova kolekcija…) dodaješ dugmetom <b>Zabeleži događaj</b>.', b: [['Zabeleži događaj', 'act:Zabeleži događaj u istoriji'], ['Istorija', 'tab:history']] },
+  { g: [['zvuk', 'zvuc', 'ting', 'muzik', 'utisa', 'tisin', 'sound']], a: 'CRM ima zvuke: uvod kad uđeš, „ka-čing“ za novu porudžbinu (tiši kad je unese neko drugi), zvonce za zadatke, šuškanje papira za belešku, zvuk za poslato i isporučeno, brisanje i vraćanje, a za prvu, 10., 25., 50., 100. porudžbinu i za rekordan dan i mala proslava sa konfetama. Sve se gasi i pali u zvoncetu gore (Zvuci) ili u meniju sa tri crtice (Zvuk); tu je i <b>▶ Probaj</b>.', b: [] },
   { g: [['izvor', 'organic', 'organsk', 'meta ads', 'tiktok', 'tik tok', 'google ads', 'atribuc', 'odakle je dosl']], a: 'Svaka porudžbina ima <b>Izvor</b>: <b>Organic</b> (ručno uneta ili ne znamo odakle je došla), <b>Meta Ads</b>, <b>TikTok Ads</b> ili <b>Google Ads</b>. Biraš ga u formi porudžbine (podrazumevano Organic). U Porudžbinama je filter <b>Svi izvori</b> sa brojem porudžbina, a pored broja stoji ukupan iznos za taj izvor.', b: [['Porudžbine', 'tab:orders'], ['Nova porudžbina', 'act:Nova porudžbina']] },
   { g: [['istorij', 'zavrsen', 'obrisan', 'otkac', 'skin', 'gde ide', 'gde su', 'gde odu'], ['beles', 'beleshk', 'belez', 'papiric']], a: 'Kad <b>otkačiš</b> belešku, ona ostaje među ostalima pod svojim datumom. Kad je označiš <b>✓ Završeno</b> ili obrišeš <b>✕</b>, ide u <b>Beleške → Istorija</b>, grupisano po danu, sa oznakom ko je završio ili obrisao. Svaka može da se vrati.', b: [['Beleške', 'tab:notes']] },
   { g: [['kupac', 'kupc', 'klijent'], ['dodam', 'dodaj', 'nov', 'napravi', 'unes', 'pravi', 'povez', 'spaja', 'kako da', 'kako se']], a: 'Kupac se sam pravi kad uneseš porudžbinu i povezuje se sa postojećim po telefonu, Instagramu, mejlu ili imenu. Ručno ga dodaješ preko <b>Novi kupac</b>.', b: [['Kupci', 'tab:customers'], ['Novi kupac', 'act:Novi kupac']] },
@@ -3816,6 +3945,7 @@ function botLocalFirst(raw) {
   return false;
 }
 
+async function byeOut() { const played = sfx('bye'); await Promise.all([sb.auth.signOut(), new Promise(r => setTimeout(r, played ? 800 : 0))]); location.reload(); }
 async function enterApp(user) {
   state.user = user;
   $('userName').textContent = user.display;
