@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610072206';
+const APP_BUILD = '202610072207';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -433,7 +433,7 @@ function renderDrawer() {
       <div class="sec-title">Kupac</div>
       ${(() => { const c = o.customer_id && state.customers.find(x => x.id === o.customer_id); if (!c) return ''; const s = custStats(c); return `<div class="list-row" data-cust="${c.id}" style="border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:8px"><span><b>${esc(c.name)}</b> · ${s.count} porudžbina · ${rsd(s.spend)}</span>${tierBadge(s.tier)}</div>`; })()}
       <div class="info-grid">
-        ${row('Telefon', o.phone ? `<a href="tel:${esc(o.phone)}">${esc(o.phone)}</a>` : '')}
+        ${row('Telefon', o.phone ? `<a href="tel:${esc(o.phone)}">${esc(o.phone)}</a> · <a href="https://wa.me/${esc(intlNum(o.phone))}" target="_blank" rel="noopener">WhatsApp</a> · <a href="viber://chat?number=%2B${esc(intlNum(o.phone))}">Viber</a>` : '')}
         ${row('Instagram', o.instagram ? `<a href="https://instagram.com/${esc(o.instagram.replace('@', ''))}" target="_blank">${esc(o.instagram)}</a>` : '')}
         ${row('Email', esc(o.email))}
         ${row('Adresa', esc([o.address, [o.postal_code, o.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')))}
@@ -726,6 +726,7 @@ async function deleteProduct() {
 /* ================= v2 sekcije ================= */
 const who = () => state.user.username;
 const personName = (k) => PEOPLE[k]?.name || k;
+const intlNum = (ph) => { let d = String(ph || '').replace(/\D/g, ''); if (d.startsWith('00')) d = d.slice(2); else if (d.startsWith('0')) d = '381' + d.slice(1); return d; };
 /* više zaduženih: niz korisničkih imena u polju assignees; stari tekst u assignee se i dalje čita */
 function assigneesOf(x) {
   if (!x) return [];
@@ -2084,8 +2085,8 @@ function renderCustHead() {
   $('custTabs').style.display = '';
   $('custHead').innerHTML = `<div class="cust-av ${s.tier.key === 'vip' ? 'vip' : ''}">${esc(c.name.charAt(0).toUpperCase())}</div>
     <div><div class="cust-name">${esc(c.name)}</div><div class="cust-sub">${tierBadge(s.tier)}<span>${s.count} porudžbina · ${rsd(s.spend)} · ${s.points} poena</span>${s.first ? `<span>· kupac od ${fmtDate(s.first)}</span>` : ''}${(c.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div></div>
-    <div class="cust-quick">${c.phone ? `<a class="mini-btn" href="tel:${esc(c.phone)}">📞 Pozovi</a><a class="mini-btn" href="sms:${esc(c.phone)}">✉ SMS</a><a class="mini-btn" href="viber://chat?number=${esc(c.phone.replace(/\D/g, '').replace(/^0/, '381'))}">Viber</a>` : ''}${c.instagram ? `<a class="mini-btn" href="https://instagram.com/${esc(c.instagram.replace('@', ''))}" target="_blank" rel="noopener">IG ↗</a>` : ''}<button class="mini-btn" data-newordercust="${c.id}">+ Porudžbina</button></div>`;
-  $('custHead').insertAdjacentHTML('beforeend', `<button type="button" class="mini-btn" data-tkedit="cust:${c.id}" style="margin-left:auto;align-self:center">👤 ${assigneesOf(c).length ? esc(assigneesOf(c).map(personName).join(', ')) : 'Zaduži'}</button>`);
+    <div class="cust-quick">${c.phone ? `<a class="mini-btn" href="tel:${esc(c.phone)}">📞 Pozovi</a><a class="mini-btn" href="sms:${esc(c.phone)}">✉ SMS</a><a class="mini-btn" href="viber://chat?number=%2B${esc(intlNum(c.phone))}">Viber</a><a class="mini-btn wa" href="https://wa.me/${esc(intlNum(c.phone))}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${c.instagram ? `<a class="mini-btn" href="https://instagram.com/${esc(c.instagram.replace('@', ''))}" target="_blank" rel="noopener">IG ↗</a>` : ''}<button class="mini-btn" data-newordercust="${c.id}">+ Porudžbina</button></div>`;
+  ($('custHead').querySelector('.cust-quick') || $('custHead')).insertAdjacentHTML('beforeend', `<button type="button" class="mini-btn" data-tkedit="cust:${c.id}">👤 ${assigneesOf(c).length ? esc(assigneesOf(c).map(personName).join(', ')) : 'Zaduži'}</button>`);
   document.querySelectorAll('#custTabs button').forEach(b => b.classList.toggle('active', b.dataset.ct === state.custTab));
 }
 function renderCustBody() {
