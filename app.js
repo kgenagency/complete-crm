@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610072145';
+const APP_BUILD = '202610072206';
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
   try { if (sessionStorage.getItem('crm_reload') !== APP_BUILD) { sessionStorage.setItem('crm_reload', APP_BUILD); location.replace(location.pathname + '?v=' + Date.now()); } } catch (e) {}
@@ -279,7 +279,7 @@ function renderOrders() {
       const t = totals(o);
       return `<tr data-order="${o.id}">
         <td><b>${esc(o.order_no || '—')}</b></td>
-        <td><div class="lead-name">${esc(o.customer_name)}</div><div class="lead-social">${esc(o.instagram || o.phone || '')}${o.city ? ' · ' + esc(o.city) : ''}</div></td>
+        <td><div class="lead-name">${esc(o.customer_name)} ${taskChip(o, 'order')}</div><div class="lead-social">${esc(o.instagram || o.phone || '')}${o.city ? ' · ' + esc(o.city) : ''}</div></td>
         <td class="activity-cell" title="${itemsSummary(o)}">${itemsSummary(o)}</td>
         <td>${chBadge(o.channel)}</td>
         <td>${pill(o.status)}</td>
@@ -295,7 +295,7 @@ function renderOrders() {
         <div class="kb-cards">${col.map(o => `<div class="kb-card is-organic" data-id="${o.id}" data-order="${o.id}">
           <div class="kb-card-head"><div class="kb-name">${esc(o.customer_name)}</div><b class="page-sub">${esc(o.order_no || '')}</b></div>
           <div class="kb-social">${itemsSummary(o)}</div>
-          <div class="kb-meta">${chBadge(o.channel)}<span class="kb-fu">${rsd(totals(o).revenue)}</span></div></div>`).join('') || '<div class="kb-empty">Prazno</div>'}</div></div>`;
+          <div class="kb-meta">${chBadge(o.channel)}${taskChip(o, 'order')}<span class="kb-fu">${rsd(totals(o).revenue)}</span></div></div>`).join('') || '<div class="kb-empty">Prazno</div>'}</div></div>`;
     }).join('');
   }
 }
@@ -377,7 +377,7 @@ function renderProducts() {
     const m = n(p.sell_price) - n(p.buy_price);
     const vs = variantsOf(p.id);
     return `<tr data-product="${p.id}">
-      <td><div class="prod-cell">${p.image_url ? `<img class="prod-thumb" src="${esc(p.image_url)}" alt="">` : '<div class="prod-thumb"></div>'}<div><div class="lead-name">${esc(p.name)}</div><div class="lead-social">${esc(p.category || '')}${p.supplier ? ' · ' + esc(p.supplier) : ''}</div></div></div></td>
+      <td><div class="prod-cell">${p.image_url ? `<img class="prod-thumb" src="${esc(p.image_url)}" alt="">` : '<div class="prod-thumb"></div>'}<div><div class="lead-name">${esc(p.name)} ${taskChip(p, 'product')}</div><div class="lead-social">${esc(p.category || '')}${p.supplier ? ' · ' + esc(p.supplier) : ''}</div></div></div></td>
       <td><div class="sizes">${vs.map(v => `<span class="size-chip ${v.stock <= lowT() ? 'low' : ''}"><span class="sz">${esc(v.size)}${v.color ? ' ' + esc(v.color) : ''}</span><button data-stock="${v.id}" data-d="-1">−</button><span class="qty">${v.stock}</span><button data-stock="${v.id}" data-d="1">+</button></span>`).join('') || '<span class="page-sub">Dodaj veličine</span>'}</div></td>
       <td class="num">${rsd(p.buy_price)}</td>
       <td class="num">${rsd(p.sell_price)}${p.compare_price ? `<div class="page-sub"><s>${rsd(p.compare_price)}</s></div>` : ''}</td>
@@ -560,6 +560,7 @@ function openOrderModal(id) {
   $('itemRows').innerHTML = '';
   (o ? itemsOf(o.id) : [{}]).forEach(addItemRow);
   orderSum();
+  taskSet('ot', o, taskSrcOf('order'));
   $('orderModal').classList.add('open');
   $('o_name').focus();
 }
@@ -571,6 +572,7 @@ async function saveOrder(e) {
   Object.entries(OF).forEach(([el, k]) => { const v = $(el).value.trim(); f[k] = v === '' ? null : v; });
   ['shipping_price', 'shipping_cost', 'packaging_cost', 'discount'].forEach(k => f[k] = n(f[k]));
   if (f.customer_name === null) return;
+  Object.assign(f, taskGet('ot'));
   $('omSave').disabled = true;
   try {
     const old = state.editOrderId ? order(state.editOrderId) : null;
@@ -639,6 +641,7 @@ function openProductModal(id) {
   (p ? (vs.length ? vs : [{ size: '' }]) : [{ size: 'S' }, { size: 'M' }, { size: 'L' }]).forEach(addSizeRow);
   $('pmDelete').style.display = p ? '' : 'none';
   priceHint();
+  taskSet('pt', p, taskSrcOf('product'));
   $('prodModal').classList.add('open');
 }
 /* redovi veličina iz forme: red sa bojom ili komadima a bez veličine = UNI (da se ne izgubi tiho) */
@@ -660,6 +663,7 @@ async function saveProduct(e) {
   if (!f.name) { $('p_name').focus(); return toast('Upiši naziv komada'); }
   f.name = f.name.toUpperCase();
   f.buy_price = n(f.buy_price); f.sell_price = n(f.sell_price); f.compare_price = f.compare_price === null ? null : n(f.compare_price);
+  Object.assign(f, taskGet('pt'));
   const sizes = sizeRowsData();
   // ista veličina + boja dva puta → ne šaljemo ništa dok se ne sredi (baza bi odbila drugi red i ostavila pola sačuvano)
   const seen = {};
@@ -734,6 +738,155 @@ const assigneeBadges = (x) => assigneesOf(x).map(k => `<span class="by ${PEOPLE[
 function whoPick(id, sel) { $(id).innerHTML = Object.keys(PEOPLE).map(k => `<button type="button" class="wp ${(sel || []).includes(k) ? 'on' : ''}" data-who="${k}" aria-pressed="${(sel || []).includes(k)}"><span class="n-av ${k}">${esc(PEOPLE[k].name.charAt(0))}</span>${esc(PEOPLE[k].name)}</button>`).join(''); }
 const whoPicked = (id) => [...$(id).querySelectorAll('.wp.on')].map(b => b.dataset.who);
 const assignFields = (arr) => ({ assignees: arr, assignee: arr.length ? arr.map(personName).join(', ') : null });
+/* ================= TASKOVI =================
+   Svaka stavka (beleška, objava, predlog, materijal, povrat, promocija, porudžbina, kupac, komad, poglavlje priče)
+   može da ima zadužene (assignees) i rok (task_due). Kad se završi, ostaje kao istorija (task_done_at / task_done_by).
+   Baza sama beleži ko je i kad dodelio (task_at / task_by) i zatvara zadatak kad stavka dođe do kraja (npr. objavljeno). */
+const tcut = (s, k) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > k ? s.slice(0, k) + '…' : s; };
+const TASK_SRC = [
+  { k: 'note', tbl: 'h_notes', label: 'Beleške', ic: '✎', list: () => state.notes, title: x => tcut(x.body, 140), sub: x => notePlace(x), final: x => !!x.done, ref: x => `note:${x.id}` },
+  { k: 'post', tbl: 'h_posts', label: 'Objave + reklame', ic: '▶', list: () => state.posts, title: x => x.title, sub: x => `${ST[x.status] || x.status} · ${PURPOSE[ppOf(x)]}`, final: x => x.status === 'published', ref: x => `post:${x.id}` },
+  { k: 'site', tbl: 'h_site_ideas', label: 'Sajt', ic: '◎', list: () => state.ideas.filter(i => i.area !== 'packaging'), title: x => x.title, sub: x => (IDEA_ST.find(s => s.key === x.status) || {}).label || '', final: x => ['done', 'rejected'].includes(x.status), ref: x => `idea:${x.id}` },
+  { k: 'packidea', tbl: 'h_site_ideas', label: 'Pakovanje', ic: '▣', list: () => state.ideas.filter(i => i.area === 'packaging'), title: x => x.title, sub: x => 'predlog · ' + ((IDEA_ST.find(s => s.key === x.status) || {}).label || ''), final: x => ['done', 'rejected'].includes(x.status), ref: x => `idea:${x.id}` },
+  { k: 'pack', tbl: 'h_packaging', label: 'Pakovanje', ic: '▣', list: () => state.pack, title: x => x.name, sub: x => `materijal · na stanju ${x.stock}`, final: () => false, ref: x => `pack:${x.id}` },
+  { k: 'ret', tbl: 'h_returns', label: 'Povrati', ic: '↩', list: () => state.rets, title: x => `${x.case_no || ''} · ${x.customer_name || ''}`, sub: x => `${RT[x.type] || ''} · ${ST[x.status] || x.status}`, final: x => retClosed(x), ref: x => `ret:${x.id}` },
+  { k: 'promo', tbl: 'h_promotions', label: 'Promocije', ic: '％', list: () => state.promos, title: x => x.name, sub: x => `${fmtDate(x.starts_at)} → ${x.ends_at ? fmtDate(x.ends_at) : 'traje'}`, final: () => false, ref: x => `promo:${x.id}` },
+  { k: 'order', tbl: 'h_orders', label: 'Porudžbine', ic: '◫', list: () => state.orders, title: x => `${x.order_no || ''} · ${x.customer_name || ''}`, sub: x => ST[x.status] || x.status, final: x => ['delivered', 'cancelled', 'returned'].includes(x.status), ref: x => `order:${x.id}` },
+  { k: 'cust', tbl: 'h_customers', label: 'Kupci', ic: '☺', list: () => state.customers, title: x => x.name, sub: x => x.phone || x.instagram || x.city || '', final: () => false, ref: x => `cust:${x.id}` },
+  { k: 'product', tbl: 'h_products', label: 'Garderoba', ic: '▤', list: () => state.products, title: x => x.name, sub: x => x.category || '', final: () => false, ref: x => `product:${x.id}` },
+  { k: 'story', tbl: 'h_story_sections', label: 'Brand story', ic: '❦', list: () => state.story, title: x => x.title || 'Poglavlje', sub: () => 'poglavlje priče', final: () => false, ref: () => 'tab:story' },
+];
+const taskSrcOf = (k) => TASK_SRC.find(s => s.k === k);
+const taskIsDone = (x, src) => !!(x && (x.task_done_at || (src && src.final(x))));
+function dueInfo(d) {
+  if (!d) return null;
+  const t = new Date(dayStr(new Date()) + 'T12:00:00'), dd = new Date(String(d).slice(0, 10) + 'T12:00:00'), diff = Math.round((dd - t) / 864e5);
+  return { diff, level: diff < 0 ? 'late' : diff === 0 ? 'today' : '', txt: diff < 0 ? `kasni ${-diff} d` : diff === 0 ? 'danas' : diff === 1 ? 'sutra' : dd.toLocaleDateString('sr-Latn-RS', { weekday: 'short', day: 'numeric', month: 'short' }) };
+}
+function allTasks() {
+  const out = [];
+  TASK_SRC.forEach(src => src.list().forEach(x => { const as = assigneesOf(x); if (as.length) out.push({ src, x, as, done: taskIsDone(x, src), due: x.task_due || null }); }));
+  return out;
+}
+/* mala oznaka na kartici stavke */
+function taskChip(x, k) {
+  const as = assigneesOf(x); if (!as.length) return '';
+  const src = taskSrcOf(k), done = taskIsDone(x, src), d = !done && dueInfo(x.task_due);
+  return `<span class="tchip ${done ? 'done' : d && d.level === 'late' ? 'late' : ''}" title="Zadatak: ${esc(as.map(personName).join(', '))}${x.task_due ? ' · rok ' + fmtDate(x.task_due) : ''}">${done ? '✓' : '☑'} ${esc(as.map(a => personName(a).charAt(0)).join(''))}${d ? ' · ' + d.txt : ''}</span>`;
+}
+/* red „Zadatak“ u formama: zaduženi, rok i stanje (gotovo / vrati) */
+const TASK_CTX = {};
+function taskSet(px, x, src, def) {
+  TASK_CTX[px] = { x: x || null, src };
+  whoPick(px + '_assignees', x ? assigneesOf(x) : (def || []));
+  $(px + '_due').value = x && x.task_due ? String(x.task_due).slice(0, 10) : '';
+  $(px + '_tstate').dataset.mode = '';
+  renderTaskState(px);
+}
+function renderTaskState(px) {
+  const st = $(px + '_tstate'), { x, src } = TASK_CTX[px] || {}, mode = st.dataset.mode || '';
+  const done = x && taskIsDone(x, src), fin = x && src && src.final(x);
+  if (mode === 'done') st.innerHTML = `<span class="ok">✓ Biće označeno kao gotovo kad sačuvaš.</span><button type="button" data-tmode="" data-px="${px}">Poništi</button>`;
+  else if (mode === 'reopen') st.innerHTML = `<span>Zadatak će biti ponovo otvoren kad sačuvaš.</span><button type="button" data-tmode="" data-px="${px}">Poništi</button>`;
+  else if (done && assigneesOf(x).length) st.innerHTML = `<span class="ok">✓ Završeno${x.task_done_by ? ' · ' + esc(personName(x.task_done_by)) : ''}${x.task_done_at ? ' · ' + fmtDT(x.task_done_at) : ''}</span>${fin ? '<span>(stavka je završena)</span>' : `<button type="button" data-tmode="reopen" data-px="${px}">Vrati u otvorene</button>`}`;
+  else if (x && assigneesOf(x).length) st.innerHTML = `${x.task_by ? `<span>Dodelio/la ${esc(personName(x.task_by))}${x.task_at ? ' · ' + relTime(x.task_at) : ''}</span>` : ''}<button type="button" data-tmode="done" data-px="${px}">✓ Označi kao gotovo</button>`;
+  else st.innerHTML = '';
+}
+function taskGet(px, legacy) {
+  const as = whoPicked(px + '_assignees'), mode = $(px + '_tstate').dataset.mode || '';
+  const f = { assignees: as, task_due: $(px + '_due').value || null };
+  if (legacy) f.assignee = as.length ? as.map(personName).join(', ') : null;
+  if (mode === 'done') Object.assign(f, { task_done_at: new Date().toISOString(), task_done_by: who() });
+  if (mode === 'reopen') Object.assign(f, { task_done_at: null, task_done_by: null });
+  return f;
+}
+/* opšti prozor za zadatak (beleške, kupci, priča, izmena iz Taskova) */
+let tmCtx = null;
+function openTaskModal(k, id) {
+  const src = taskSrcOf(k), x = src && src.list().find(y => y.id === id); if (!x) return toast('Stavka više ne postoji');
+  tmCtx = { src, x };
+  $('tmItem').innerHTML = `<small>${src.ic} ${esc(src.label)}</small>${esc(src.title(x))}`;
+  taskSet('tm', x, src);
+  $('tmOpen').style.display = k === 'note' ? 'none' : '';
+  $('taskModal').classList.add('open');
+}
+async function saveTaskModal() {
+  if (!tmCtx) return;
+  const { src, x } = tmCtx, f = taskGet('tm', ['post', 'ret'].includes(src.k));
+  if (src.k === 'note' && 'task_done_at' in f) Object.assign(f, f.task_done_at ? { done: true, done_by: who() } : { done: false });
+  try {
+    const r = await q(sb.from(src.tbl).update(f).eq('id', x.id).select().single());
+    Object.assign(x, r); $('taskModal').classList.remove('open'); renderAll(); toast('Zadatak sačuvan ✓');
+  } catch (e) { fail(e); }
+}
+/* klik na kružić u Taskovima: gotovo / vrati */
+async function taskToggle(key) {
+  const [k, id] = key.split(':'), src = taskSrcOf(k), x = src && src.list().find(y => y.id === id); if (!x) return;
+  const done = taskIsDone(x, src);
+  if (done && src.final(x)) return toast('Stavka je završena (npr. objavljeno ili rešeno), zato zadatak ostaje u istoriji.');
+  const patch = done ? { task_done_at: null, task_done_by: null } : { task_done_at: new Date().toISOString(), task_done_by: who() };
+  if (k === 'note') Object.assign(patch, done ? { done: false } : { done: true, done_by: who() });
+  try {
+    await q(sb.from(src.tbl).update(patch).eq('id', id)); Object.assign(x, patch);
+    renderAll(); toast(done ? 'Vraćeno u otvorene' : `Gotovo ✓ ${tcut(src.title(x), 40)}`);
+  } catch (e) { fail(e); }
+}
+/* stranica Taskovi */
+const tkState = { who: 'me', st: 'open', sec: 'all' };
+function tkRow(t, i) {
+  const { src, x } = t, d = !t.done && dueInfo(t.due), byF = PEOPLE[x.task_by]?.f, doneF = PEOPLE[x.task_done_by]?.f;
+  const info = t.done
+    ? `<span>✓ ${x.task_done_by ? `${doneF ? 'završila' : 'završio'} ${esc(personName(x.task_done_by))}` : 'završeno'}${x.task_done_at ? ' · ' + fmtDT(x.task_done_at) : ''}</span>`
+    : x.task_by ? `<span>${byF ? 'dodelila' : 'dodelio'} ${esc(personName(x.task_by))}${x.task_at ? ' · ' + relTime(x.task_at) : ''}</span>` : '';
+  return `<div class="tk-row ${t.done ? 'done' : ''} ${d ? d.level : ''}" data-tkopen="${src.k}:${x.id}" style="animation-delay:${Math.min(i, 20) * 18}ms">
+    <button class="tk-check" data-tkdone="${src.k}:${x.id}" title="${t.done ? 'Vrati u otvorene' : 'Gotovo'}">✓</button>
+    <div class="tk-main"><div class="tk-t">${esc(src.title(x))}</div>
+      <div class="tk-s"><span class="tk-sec">${src.ic} ${esc(src.label)}</span>${src.sub(x) ? `<span>${esc(src.sub(x))}</span>` : ''}${info}</div></div>
+    <div class="tk-side">${d ? `<span class="tk-due ${d.level}">⏱ ${d.txt}</span>` : ''}<span class="tk-avs">${t.as.map(a => `<span class="n-av ${PEOPLE[a] ? a : 'system'}" title="${esc(personName(a))}">${esc(personName(a).charAt(0))}</span>`).join('')}</span><button class="tk-edit" data-tkedit="${src.k}:${x.id}" title="Zaduženi i rok">👤</button></div>
+  </div>`;
+}
+function renderTasks() {
+  const me = who(), all = allTasks();
+  const mine = all.filter(t => !t.done && t.as.includes(me)), late = mine.filter(t => dueInfo(t.due)?.level === 'late').length;
+  const b = $('taskBadge');
+  if (b) { b.style.display = mine.length ? '' : 'none'; b.textContent = mine.length; b.classList.toggle('soft', !late); b.title = `${mine.length} tvojih otvorenih${late ? `, ${late} kasni` : ''}`; }
+  if (!$('tkList') || state.tab !== 'tasks') return;
+  const others = Object.keys(PEOPLE).filter(k => k !== me);
+  $('tkWho').innerHTML = [['me', 'Moji'], ['all', 'Svi'], ...others.map(k => [k, PEOPLE[k].name])].map(([k, l]) => `<button data-tw="${k}" class="${tkState.who === k ? 'active' : ''}">${l}</button>`).join('');
+  document.querySelectorAll('#tkState button').forEach(x => x.classList.toggle('active', x.dataset.ts === tkState.st));
+  const labels = [...new Set(TASK_SRC.map(s => s.label))];
+  if ($('tkSec').options.length !== labels.length + 1) $('tkSec').innerHTML = `<option value="all">Sve sekcije</option>` + labels.map(l => `<option>${esc(l)}</option>`).join('');
+  $('tkSec').value = tkState.sec;
+  const wk = tkState.who === 'me' ? me : tkState.who, qn = fold($('tkQ').value.trim());
+  const base = all.filter(t => (wk === 'all' || t.as.includes(wk)) && (tkState.sec === 'all' || t.src.label === tkState.sec)
+    && (!qn || fold(`${t.src.title(t.x)} ${t.src.sub(t.x)} ${t.src.label} ${t.as.map(personName).join(' ')}`).includes(qn)));
+  const open = base.filter(t => !t.done), done = base.filter(t => t.done);
+  const wk7 = Date.now() - 7 * 864e5;
+  $('kpiTasks').innerHTML = stat(wk === me ? 'Tvoji otvoreni' : wk === 'all' ? 'Otvoreni (svi)' : `Otvoreni: ${personName(wk)}`, open.length) +
+    stat('Kasni', `<span class="${open.some(t => dueInfo(t.due)?.level === 'late') ? 'neg' : ''}">${open.filter(t => dueInfo(t.due)?.level === 'late').length}</span>`) +
+    stat('Za danas', open.filter(t => dueInfo(t.due)?.level === 'today').length) +
+    stat('Završeno za 7 dana', done.filter(t => t.x.task_done_at && new Date(t.x.task_done_at) > wk7).length);
+  let html = '', i = 0;
+  if (tkState.st === 'open') {
+    const grp = (t) => { const d = dueInfo(t.due); if (!d) return 4; if (d.diff < 0) return 0; if (d.diff === 0) return 1; if (d.diff <= 7) return 2; return 3; };
+    const names = [['Kasni', 'late'], ['Danas', 'today'], ['Narednih 7 dana', ''], ['Kasnije', ''], ['Bez roka', '']];
+    const sorted = open.slice().sort((a, b) => grp(a) - grp(b) || String(a.due || '').localeCompare(String(b.due || '')) || String(b.x.task_at || '').localeCompare(String(a.x.task_at || '')));
+    names.forEach(([n, cls], g) => { const items = sorted.filter(t => grp(t) === g); if (items.length) html += `<div class="tk-group ${cls}">${n} <span>${items.length}</span></div><div class="tk-list">${items.map(t => tkRow(t, i++)).join('')}</div>`; });
+    $('tkCount').textContent = `${open.length} ${bpl(open.length, 'otvoren', 'otvorena', 'otvorenih')}`;
+    if (!open.length) html = `<div class="tk-empty">${base.length || all.length ? 'Nema otvorenih zadataka za ovaj izbor. 👌' : 'Još niko nije zadužen ni za šta. Zadatak dodaješ u bilo kojoj stavci (polje „Zadatak“) ili dugmetom „Nov zadatak“.'}</div>`;
+  } else {
+    const sorted = done.slice().sort((a, b) => String(b.x.task_done_at || '').localeCompare(String(a.x.task_done_at || '')));
+    let last = null;
+    sorted.forEach(t => { const dd = t.x.task_done_at ? dayStr(new Date(t.x.task_done_at)) : 'bez datuma';
+      if (dd !== last) { if (last !== null) html += '</div>'; html += `<div class="tk-group">${dd === 'bez datuma' ? 'Završeno (stavka je došla do kraja)' : new Date(dd + 'T12:00:00').toLocaleDateString('sr-Latn-RS', { weekday: 'long', day: 'numeric', month: 'long' })}</div><div class="tk-list">`; last = dd; }
+      html += tkRow(t, i++); });
+    if (last !== null) html += '</div>';
+    $('tkCount').textContent = `${done.length} ${bpl(done.length, 'završen', 'završena', 'završenih')}`;
+    if (!done.length) html = '<div class="tk-empty">Istorija je prazna za ovaj izbor.</div>';
+  }
+  $('tkList').innerHTML = html;
+}
+
 function autosize(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
 function toLocalInput(iso) { if (!iso) return ''; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
 function boardCols(list, statuses, kind, cardFn, extraAttr = '') {
@@ -829,7 +982,7 @@ function postCard(p) {
     <div class="kb-card-head"><div class="kb-name">${esc(p.title)}</div><span class="fmt ${p.format}">${FMT[p.format] || p.format}</span></div>
     ${ppBadge(p) ? `<div style="margin-top:5px">${ppBadge(p)}</div>` : ''}
     ${p.hook ? `<div class="kb-social">„${esc(p.hook)}“</div>` : ''}
-    <div class="kb-meta">${postDate(p)}${assigneeBadges(p)}${pr ? `<span class="cat">${esc(pr.name)}</span>` : ''}</div>
+    <div class="kb-meta">${postDate(p)}${assigneeBadges(p)}${p.task_due && !taskIsDone(p, taskSrcOf('post')) ? `<span class="tchip ${dueInfo(p.task_due).level === 'late' ? 'late' : ''}">⏱ ${dueInfo(p.task_due).txt}</span>` : ''}${pr ? `<span class="cat">${esc(pr.name)}</span>` : ''}</div>
     ${(p.drive_link || p.post_url || ins) ? `<div class="p-links">${ins}${p.drive_link ? `<a class="drive" href="${esc(p.drive_link)}" target="_blank" rel="noopener">▲ Drive snimak</a>` : ''}${p.post_url ? `<a href="${esc(p.post_url)}" target="_blank" rel="noopener">↗ Objava</a>` : ''}</div>` : ''}
   </div>`;
 }
@@ -908,7 +1061,7 @@ function openPostModal(id, dateStr) {
   $('po_product').innerHTML = '<option value="">—</option>' + state.products.filter(x => x.status !== 'archived').map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
   Object.entries(POF).forEach(([el, f]) => { $(el).value = p ? (p[f] ?? '') : ({ format: 'reel', status: 'idea', purpose: state.postPurpose !== 'all' ? state.postPurpose : 'post' }[f] ?? ''); });
   setPostPurpose($('po_purpose').value);
-  whoPick('po_assignees', p ? assigneesOf(p) : [who()]);
+  taskSet('po', p, taskSrcOf('post'));
   $('po_date').value = p ? toLocalInput(p.publish_at) : (dateStr ? dateStr + 'T18:00' : '');
   $('poDelete').style.display = p ? '' : 'none';
   $('poComments').innerHTML = commentsBlock('post_id', state.editPostId);
@@ -920,7 +1073,7 @@ async function savePost(e) {
   const f = {};
   Object.entries(POF).forEach(([el, k]) => { const v = $(el).value.trim(); f[k] = v === '' ? null : v; });
   f.purpose = PURPOSE[f.purpose] ? f.purpose : 'post';
-  Object.assign(f, assignFields(whoPicked('po_assignees')));
+  Object.assign(f, taskGet('po', true));
   // inspiracija: svaki link u svom redu, bez https:// dodajemo ga sami
   f.inspo = f.inspo ? f.inspo.split(/\s+/).map(x => x.trim()).filter(Boolean).map(x => /^https?:\/\//i.test(x) ? x : 'https://' + x.replace(/^\/+/, '')).filter(okUrl).join('\n') || null : null;
   f.publish_at = $('po_date').value ? new Date($('po_date').value).toISOString() : null;
@@ -952,7 +1105,7 @@ function ideaCard(i) {
     <div class="kb-card-head"><div class="kb-name">${esc(i.title)}</div><span class="prio ${i.priority}">${PRIO[i.priority]}</span></div>
     ${i.description ? `<div class="kb-social" style="white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(i.description)}</div>` : ''}
     ${i.image_url ? `<img src="${esc(i.image_url)}" alt="">` : ''}
-    <div class="kb-meta"><span class="cat">${CAT[i.category] || i.category}</span><span class="cat">· ${esc(i.created_by || '')}</span>
+    <div class="kb-meta"><span class="cat">${CAT[i.category] || i.category}</span><span class="cat">· ${esc(i.created_by || '')}</span>${taskChip(i, i.area === 'packaging' ? 'packidea' : 'site')}
       <button class="vote ${voted ? 'on' : ''}" data-vote="${i.id}" style="margin-left:auto" title="${(i.votes || []).map(personName).join(', ')}">▲ ${(i.votes || []).length}</button></div>
   </div>`;
 }
@@ -995,6 +1148,7 @@ function openIdeaModal(id, area) {
   $('si_file').value = '';
   $('siDelete').style.display = i ? '' : 'none';
   $('siComments').innerHTML = commentsBlock('site_id', state.editIdeaId);
+  taskSet('st', i, taskSrcOf(state.ideaArea === 'packaging' ? 'packidea' : 'site'));
   $('siteModal').classList.add('open');
   $('si_title').focus();
 }
@@ -1002,6 +1156,7 @@ async function saveIdea(e) {
   e.preventDefault();
   const f = {};
   Object.entries(SIF).forEach(([el, k]) => { const v = $(el).value.trim(); f[k] = v === '' ? null : v; });
+  Object.assign(f, taskGet('st'));
   try {
     const file = $('si_file').files[0];
     if (file) f.image_url = await uploadImage(file, 'ideas');
@@ -1038,7 +1193,7 @@ function renderPackaging() {
   $('packAlerts').innerHTML = al.map(x => `<div class="alert ${x.stock <= 0 ? 'out' : ''}" data-pack="${x.id}"><div class="a-ic">${x.stock <= 0 ? '!' : x.stock}</div>
     <div><div class="a-t">${esc(x.name)}</div><div class="a-s">${x.stock <= 0 ? 'Nema na stanju.' : `Ostalo ${x.stock} kom (granica ${x.min_stock}).`} ${x.supplier ? 'Poruči kod: ' + esc(x.supplier) : ''}</div></div></div>`).join('');
   $('packTbody').innerHTML = state.pack.map(x => `<tr data-pack="${x.id}">
-    <td><div class="lead-name">${esc(x.name)}</div><div class="lead-social">${esc(x.kind)}${x.note ? ' · ' + esc(x.note) : ''}</div></td>
+    <td><div class="lead-name">${esc(x.name)} ${taskChip(x, 'pack')}</div><div class="lead-social">${esc(x.kind)}${x.note ? ' · ' + esc(x.note) : ''}</div></td>
     <td>${x.link ? `<a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.supplier || 'link')}</a>` : esc(x.supplier || '—')}</td>
     <td class="num">${x.unit_price != null ? rsd(x.unit_price) : '<span class="hint warn">upiši cenu</span>'}</td>
     <td class="num">${x.per_order || '—'}</td>
@@ -1072,6 +1227,7 @@ function openPackModal(id) {
   $('paTitle').textContent = x ? x.name : 'Novi materijal';
   Object.entries(PAF).forEach(([el, f]) => { $(el).value = x ? (x[f] ?? '') : ({ kind: 'kutija', stock: 0, min_stock: 10, per_order: 1 }[f] ?? ''); });
   $('paDelete').style.display = x ? '' : 'none';
+  taskSet('kt', x, taskSrcOf('pack'));
   $('packModal').classList.add('open');
 }
 async function savePack(e) {
@@ -1080,6 +1236,7 @@ async function savePack(e) {
   Object.entries(PAF).forEach(([el, k]) => { const v = $(el).value.trim(); f[k] = v === '' ? null : v; });
   f.unit_price = f.unit_price === null ? null : n(f.unit_price);
   ['stock', 'min_stock', 'per_order'].forEach(k => f[k] = parseInt(f[k]) || 0);
+  Object.assign(f, taskGet('kt'));
   try {
     if (state.editPackId) { const r = await q(sb.from('h_packaging').update(f).eq('id', state.editPackId).select().single()); Object.assign(state.pack.find(p => p.id === r.id), r); }
     else state.pack.push(await q(sb.from('h_packaging').insert(f).select().single()));
@@ -1099,7 +1256,7 @@ function renderStory() {
   doc.innerHTML = state.story.map((s, i) => `<div class="story-sec" data-sec="${s.id}" style="animation-delay:${i * 60}ms">
     <input class="st-title" value="${esc(s.title)}" data-f="title">
     <textarea data-f="body" rows="2" placeholder="Piši ovde…">${esc(s.body)}</textarea>
-    <div class="story-meta">${s.updated_by ? `izmenio/la ${esc(s.updated_by)} · ${fmtDT(s.updated_at)}` : ''}<button data-delsec="${s.id}">obriši poglavlje</button></div></div>`).join('')
+    <div class="story-meta">${s.updated_by ? `izmenio/la ${esc(s.updated_by)} · ${fmtDT(s.updated_at)}` : ''} ${taskChip(s, 'story')}<button data-tkedit="story:${s.id}">👤 ${assigneesOf(s).length ? 'Zadatak' : 'Zaduži'}</button><button data-delsec="${s.id}">obriši poglavlje</button></div></div>`).join('')
     || '<div class="page-sub">Dodaj prvo poglavlje.</div>';
   doc.querySelectorAll('textarea').forEach(autosize);
 }
@@ -1226,7 +1383,7 @@ function retCard(r) {
     <div class="kb-card-head"><div class="kb-name">${esc(r.customer_name)}</div><span class="rt-type ${r.type}">${RT[r.type]}</span></div>
     <div class="kb-social">${esc(r.case_no)}${r.item ? ' · ' + esc(r.item) : ''}${r.size ? ' ' + esc(r.size) : ''}</div>
     ${r.reason ? `<div class="kb-social">${esc(r.reason)}</div>` : ''}
-    <div class="kb-meta">${d ? `<span class="due ${d.level}">⏱ ${dueText(d)}</span>` : r.rating ? `<span class="due">${'★'.repeat(r.rating)}</span>` : ''}${r.photos?.length ? `<span class="cat">📷 ${r.photos.length}</span>` : ''}${assigneeBadges(r)}</div>
+    <div class="kb-meta">${d ? `<span class="due ${d.level}">⏱ ${dueText(d)}</span>` : r.rating ? `<span class="due">${'★'.repeat(r.rating)}</span>` : ''}${r.photos?.length ? `<span class="cat">📷 ${r.photos.length}</span>` : ''}${assigneeBadges(r)}${r.task_due && !taskIsDone(r, taskSrcOf('ret')) ? `<span class="tchip ${dueInfo(r.task_due).level === 'late' ? 'late' : ''}">⏱ ${dueInfo(r.task_due).txt}</span>` : ''}</div>
   </div>`;
 }
 function renderReturns() {
@@ -1314,7 +1471,7 @@ async function openRetModal(id) {
     if (f === 'product_id' && r && !v && r.item) { const m = state.products.find(p => r.item.toUpperCase().includes(p.name)); if (m) v = m.id; }
     $('rt_' + f).value = v ?? '';
   });
-  whoPick('rt_assignees', r ? assigneesOf(r) : [who()]);
+  taskSet('rt', r, taskSrcOf('ret'));
   $('rtDelete').style.display = r ? '' : 'none';
   $('rtIdea').style.display = r ? '' : 'none';
   $('rtPhotos').innerHTML = '';
@@ -1364,7 +1521,7 @@ async function saveRet(e) {
   f.rating = f.rating === null ? null : Math.min(5, Math.max(1, parseInt(f.rating)));
   if (f.package_received_at) f.package_received_at = new Date(f.package_received_at + 'T12:00:00').toISOString();
   if (f.order_id) f.order_no = order(f.order_id)?.order_no || null;
-  Object.assign(f, assignFields(whoPicked('rt_assignees')));
+  Object.assign(f, taskGet('rt', true));
   try {
     if (state.editRetId) {
       const old = state.rets.find(x => x.id === state.editRetId);
@@ -1506,7 +1663,7 @@ function renderPromos() {
   }
   $('promoList').innerHTML = list.map(p => { const st = promoStatus(p), r = promoResults(p), ns = promoNotes(p.id).slice(-2);
     return `<div class="promo ${st}" data-promo="${p.id}">
-      <div class="promo-top"><div><div class="promo-name">${esc(p.name)}</div><div class="promo-when">${fmtDate(p.starts_at)} → ${p.ends_at ? fmtDate(p.ends_at) : 'traje'} · ${r.days} d · ${PROMO_T[p.type]}${p.channel ? ' · ' + esc(p.channel) : ''}</div></div>
+      <div class="promo-top"><div><div class="promo-name">${esc(p.name)} ${taskChip(p, 'promo')}</div><div class="promo-when">${fmtDate(p.starts_at)} → ${p.ends_at ? fmtDate(p.ends_at) : 'traje'} · ${r.days} d · ${PROMO_T[p.type]}${p.channel ? ' · ' + esc(p.channel) : ''}</div></div>
         <div style="text-align:right">${pill(st)}${p.code ? `<div style="margin-top:6px"><span class="promo-code">${esc(p.code)}</span></div>` : ''}</div></div>
       <div class="promo-nums"><div><b>${r.orders}</b><span>porudžbina${p.code ? ` · ${r.withCode} sa kodom` : ''}</span></div><div><b>${rsd(r.revenue)}</b><span>prihod u periodu</span></div><div><b class="${r.profit >= 0 ? 'pos' : 'neg'}">${rsd(r.profit)}</b><span>bruto profit</span></div></div>
       ${r.lift != null ? `<span class="lift ${r.lift >= 0 ? 'up' : 'down'}">${r.lift >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(r.lift * 100))}% dnevnog prihoda u odnosu na 14 dana pre</span>` : `<span class="lift">bez poređenja, nema porudžbina pre akcije</span>`}
@@ -1527,6 +1684,7 @@ function openPromoModal(id) {
     $('prResults').innerHTML = `<div class="sec-title">Rezultat (računa se iz porudžbina)</div><div class="pr-res"><div><b>${r.orders}</b><span>porudžbina</span></div><div><b>${rsd(r.revenue)}</b><span>prihod</span></div><div><b>${rsd(r.profit)}</b><span>profit</span></div><div><b>${r.lift != null ? (r.lift >= 0 ? '+' : '') + Math.round(r.lift * 100) + '%' : '—'}</b><span>vs 14 dana pre</span></div></div>${p.code ? `<div class="hint">Sa kodom ${esc(p.code)}: ${r.withCode} porudžbina, ${rsd(r.codeRev)}. Kod se prepoznaje iz polja „Kod za popust“ na porudžbini.</div>` : ''}`;
     renderPromoNotes(p.id);
   } else { $('prResults').innerHTML = ''; $('prNotes').innerHTML = ''; }
+  taskSet('mt', p, taskSrcOf('promo'));
   $('promoModal').classList.add('open'); $('pr_name').focus();
 }
 function renderPromoNotes(id) {
@@ -1543,6 +1701,7 @@ async function savePromo(e) {
   f.starts_at = new Date($('pr_starts_at').value).toISOString();
   f.ends_at = $('pr_ends_at').value ? new Date($('pr_ends_at').value).toISOString() : null;
   if (f.ends_at && f.ends_at < f.starts_at) return toast('Kraj je pre početka');
+  Object.assign(f, taskGet('mt'));
   try {
     if (state.editPromoId) { const r = await q(sb.from('h_promotions').update(f).eq('id', state.editPromoId).select().single()); Object.assign(state.promos.find(x => x.id === r.id), r); }
     else { f.created_by = state.user.display; const r = await q(sb.from('h_promotions').insert(f).select().single()); state.promos.push(r); await log({ promo_id: r.id, type: 'system', body: `Promocija „${r.name}“ dodata (${fmtDate(r.starts_at)} → ${r.ends_at ? fmtDate(r.ends_at) : 'traje'})` }); }
@@ -1660,6 +1819,7 @@ function periodLabel() { const P = state.period; return P === 'custom' ? `${stat
 /* ---------- PRETRAGA (command palette) ---------- */
 const SECTIONS = [
   { tab: 'overview', name: 'Pregled', kw: 'dashboard pocetna prihod profit statistika brojke', ic: '◈' },
+  { tab: 'tasks', name: 'Taskovi', kw: 'zadaci zadatak task zaduzeni moji obaveze rok uraditi', ic: '☑' },
   { tab: 'notes', name: 'Beleške', kw: 'beleske note zapisi papirici tim', ic: '✎' },
   { tab: 'orders', name: 'Porudžbine', kw: 'narudzbine order kupovine pipeline tabela', ic: '◫' },
   { tab: 'customers', name: 'Kupci', kw: 'klijenti kupac loyalty klub popusti kodovi vip poeni', ic: '☺' },
@@ -1676,6 +1836,7 @@ const SECTIONS = [
 const ACTIONS = [
   { name: 'Nova porudžbina', kw: 'dodaj unesi', ic: '+', run: () => openOrderModal() },
   { name: 'Nova beleška', kw: 'zabelezi note zapisi', ic: '✎', run: () => openNoteModal('general') },
+  { name: 'Nov zadatak', kw: 'task zadatak zaduzi dodeli obaveza', ic: '☑', run: () => openNoteModal('general', true) },
   { name: 'Novi kupac', kw: 'dodaj', ic: '+', run: () => openCustModal() },
   { name: 'Novi komad', kw: 'proizvod roba dodaj', ic: '+', run: () => openProductModal() },
   { name: 'Nova ideja za objavu', kw: 'post reel reklama ad kreativa inspiracija', ic: '+', run: () => openPostModal() },
@@ -1812,7 +1973,7 @@ function renderCustomers() {
     const list = filteredCustomers();
     $('custCount').textContent = `${list.length} kupaca`;
     $('custTbody').innerHTML = list.map(({ c, s }) => `<tr data-cust="${c.id}">
-      <td><div class="prod-cell"><div class="avatar ${s.tier.key === 'vip' ? 'vip' : ''}" style="width:34px;height:34px;font-size:14px;border-radius:10px">${esc(c.name.charAt(0).toUpperCase())}</div><div><div class="lead-name">${esc(c.name)}</div><div class="lead-social">${esc(c.city || '')}${(c.tags || []).length ? ' · ' + c.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('') : ''}</div></div></div></td>
+      <td><div class="prod-cell"><div class="avatar ${s.tier.key === 'vip' ? 'vip' : ''}" style="width:34px;height:34px;font-size:14px;border-radius:10px">${esc(c.name.charAt(0).toUpperCase())}</div><div><div class="lead-name">${esc(c.name)} ${taskChip(c, 'cust')}</div><div class="lead-social">${esc(c.city || '')}${(c.tags || []).length ? ' · ' + c.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('') : ''}</div></div></div></td>
       <td class="contact">${c.phone ? `<div>${esc(c.phone)}</div>` : ''}${c.instagram ? `<div class="page-sub">${esc(c.instagram)}</div>` : ''}${!c.phone && !c.instagram && c.email ? `<div class="page-sub">${esc(c.email)}</div>` : ''}</td>
       <td>${tierBadge(s.tier)}</td><td class="num">${s.count}${s.rets ? `<span class="page-sub"> · ${s.rets} povrat</span>` : ''}</td><td class="num">${rsd(s.spend)}</td>
       <td class="num">${s.points}${s.points >= n(L.reward_points) ? ' <span class="tab-badge live" style="margin:0">nagrada</span>' : ''}</td>
@@ -1924,6 +2085,7 @@ function renderCustHead() {
   $('custHead').innerHTML = `<div class="cust-av ${s.tier.key === 'vip' ? 'vip' : ''}">${esc(c.name.charAt(0).toUpperCase())}</div>
     <div><div class="cust-name">${esc(c.name)}</div><div class="cust-sub">${tierBadge(s.tier)}<span>${s.count} porudžbina · ${rsd(s.spend)} · ${s.points} poena</span>${s.first ? `<span>· kupac od ${fmtDate(s.first)}</span>` : ''}${(c.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div></div>
     <div class="cust-quick">${c.phone ? `<a class="mini-btn" href="tel:${esc(c.phone)}">📞 Pozovi</a><a class="mini-btn" href="sms:${esc(c.phone)}">✉ SMS</a><a class="mini-btn" href="viber://chat?number=${esc(c.phone.replace(/\D/g, '').replace(/^0/, '381'))}">Viber</a>` : ''}${c.instagram ? `<a class="mini-btn" href="https://instagram.com/${esc(c.instagram.replace('@', ''))}" target="_blank" rel="noopener">IG ↗</a>` : ''}<button class="mini-btn" data-newordercust="${c.id}">+ Porudžbina</button></div>`;
+  $('custHead').insertAdjacentHTML('beforeend', `<button type="button" class="mini-btn" data-tkedit="cust:${c.id}" style="margin-left:auto;align-self:center">👤 ${assigneesOf(c).length ? esc(assigneesOf(c).map(personName).join(', ')) : 'Zaduži'}</button>`);
   document.querySelectorAll('#custTabs button').forEach(b => b.classList.toggle('active', b.dataset.ct === state.custTab));
 }
 function renderCustBody() {
@@ -1990,8 +2152,8 @@ async function deleteCust() {
 }
 
 /* ---------- OBAVEŠTENJA: ko je šta kad menjao ---------- */
-const NF_FIELD = { assignees: 'zaduženi', purpose: 'namena', inspo: 'inspiracija', status: 'status', courier: 'kurir', tracking_no: 'broj pošiljke', sell_price: 'prodajna', buy_price: 'nabavna', compare_price: '„bila“ cena', stock: 'stanje', publish_at: 'datum objave', drive_link: 'Drive link', assignee: 'zadužen', priority: 'prioritet', title: 'naslov', body: 'tekst', value: 'vrednost', note: 'napomena', refund_amount: 'vraćeno kupcu', return_shipping_cost: 'trošak slanja', resolution_note: 'rešenje', improve: 'šta da popravimo', vip: 'VIP', tags: 'oznake', points_adj: 'poeni', name: 'ime', phone: 'telefon', city: 'grad', address: 'adresa', postal_code: 'poštanski broj', payment: 'plaćanje', shipping_price: 'dostava (kupac)', shipping_cost: 'dostava (kurir)', packaging_cost: 'pakovanje', discount: 'popust', discount_code: 'kod', channel: 'kanal', category: 'kategorija', supplier: 'dobavljač', material: 'materijal', image_url: 'slika', concept: 'skripta', hook: 'hook', caption: 'opis', format: 'format', post_url: 'link objave', views: 'pregledi', likes: 'lajkovi', saves: 'sačuvano', description: 'opis', link: 'link', votes: 'glasovi', code: 'kod', pct: 'popust %', rsd: 'popust RSD', valid_to: 'važi do', valid_from: 'važi od', active: 'aktivan', max_uses: 'maks. upotreba', starts_at: 'početak', ends_at: 'kraj', budget: 'budžet', goal: 'cilj', result_note: 'zaključak', happened_at: 'datum', kind: 'vrsta', min_stock: 'granica', per_order: 'po paketu', unit_price: 'cena', spend: 'potrošeno', purchases: 'kupovine', revenue: 'prihod', reason: 'razlog', package_received_at: 'paket stigao', resolution_wanted: 'kupac želi', restocked: 'vraćeno na stanje', size: 'veličina', color: 'boja', qty: 'količina', email: 'email', instagram: 'instagram', birthday: 'rođendan', source: 'izvor', position: 'redosled', pinned: 'zakačeno', done: 'završeno', delivered_on: 'paket primljen', shipped_at: 'poslato', delivered_at: 'isporučeno', photos: 'fotografije', order_no: 'broj', exchange_details: 'želi umesto toga', item: 'komad', rating: 'ocena', customer_name: 'kupac', type: 'tip', discount_pct: 'popust %', discount_rsd: 'popust RSD', deleted_at: '__del' };
-const NF_SKIP = new Set(['assignee', 'updated_at', 'updated_by', 'created_at', 'created_by', 'deleted_by', 'phone_norm', 'first_order_at', 'customer_id', 'product_id', 'variant_id', 'order_id', 'code_id', 'consent', 'case_no', 'id', 'bank_account', 'shopify_order_id', 'shopify_product_id', 'shopify_variant_id', 'resolved_at', 'area', 'author']);
+const NF_FIELD = { task_due: 'rok', assignees: 'zaduženi', purpose: 'namena', inspo: 'inspiracija', status: 'status', courier: 'kurir', tracking_no: 'broj pošiljke', sell_price: 'prodajna', buy_price: 'nabavna', compare_price: '„bila“ cena', stock: 'stanje', publish_at: 'datum objave', drive_link: 'Drive link', assignee: 'zadužen', priority: 'prioritet', title: 'naslov', body: 'tekst', value: 'vrednost', note: 'napomena', refund_amount: 'vraćeno kupcu', return_shipping_cost: 'trošak slanja', resolution_note: 'rešenje', improve: 'šta da popravimo', vip: 'VIP', tags: 'oznake', points_adj: 'poeni', name: 'ime', phone: 'telefon', city: 'grad', address: 'adresa', postal_code: 'poštanski broj', payment: 'plaćanje', shipping_price: 'dostava (kupac)', shipping_cost: 'dostava (kurir)', packaging_cost: 'pakovanje', discount: 'popust', discount_code: 'kod', channel: 'kanal', category: 'kategorija', supplier: 'dobavljač', material: 'materijal', image_url: 'slika', concept: 'skripta', hook: 'hook', caption: 'opis', format: 'format', post_url: 'link objave', views: 'pregledi', likes: 'lajkovi', saves: 'sačuvano', description: 'opis', link: 'link', votes: 'glasovi', code: 'kod', pct: 'popust %', rsd: 'popust RSD', valid_to: 'važi do', valid_from: 'važi od', active: 'aktivan', max_uses: 'maks. upotreba', starts_at: 'početak', ends_at: 'kraj', budget: 'budžet', goal: 'cilj', result_note: 'zaključak', happened_at: 'datum', kind: 'vrsta', min_stock: 'granica', per_order: 'po paketu', unit_price: 'cena', spend: 'potrošeno', purchases: 'kupovine', revenue: 'prihod', reason: 'razlog', package_received_at: 'paket stigao', resolution_wanted: 'kupac želi', restocked: 'vraćeno na stanje', size: 'veličina', color: 'boja', qty: 'količina', email: 'email', instagram: 'instagram', birthday: 'rođendan', source: 'izvor', position: 'redosled', pinned: 'zakačeno', done: 'završeno', delivered_on: 'paket primljen', shipped_at: 'poslato', delivered_at: 'isporučeno', photos: 'fotografije', order_no: 'broj', exchange_details: 'želi umesto toga', item: 'komad', rating: 'ocena', customer_name: 'kupac', type: 'tip', discount_pct: 'popust %', discount_rsd: 'popust RSD', deleted_at: '__del' };
+const NF_SKIP = new Set(['assignee', 'task_at', 'task_by', 'task_done_by', 'updated_at', 'updated_by', 'created_at', 'created_by', 'deleted_by', 'phone_norm', 'first_order_at', 'customer_id', 'product_id', 'variant_id', 'order_id', 'code_id', 'consent', 'case_no', 'id', 'bank_account', 'shopify_order_id', 'shopify_product_id', 'shopify_variant_id', 'resolved_at', 'area', 'author']);
 const prodName = (id) => product(id)?.name || 'komad';
 const custName = (id) => state.customers.find(c => c.id === id)?.name || 'kupac';
 const NF_TBL = {
@@ -2028,6 +2190,7 @@ function nfVal(field, v) {
   if (Array.isArray(v)) return v.map(x => PEOPLE[x]?.name || x).join(', ') || '—';
   if (field === 'status' || field === 'kind' || field === 'type') return ST[v] || RT[v] || PROMO_T[v] || MS_K[v] || FMT[v] || v;
   if (field === 'purpose') return PURPOSE[v] || v;
+  if (field === 'task_due') return fmtDate(v);
   if (field === 'resolution_wanted') return RES_W[v] || v;
   if (field === 'payment') return PAY[v] || v;
   if (field === 'channel') return CH[v] || v;
@@ -2042,6 +2205,15 @@ function describeAudit(a) {
   if (T.only && !T.only(row)) return null;
   const cat = typeof T.cat === 'function' ? T.cat(row) : T.cat;
   const nm = esc(T.name(row) || ''), ref = nm ? `<span class="ref">${nm}</span>` : '';
+  if (PEOPLE[a.actor] && Array.isArray(row.assignees) && row.assignees.length) {
+    const meK = who(), fa = PEOPLE[a.actor].f, ch = a.changed || {};
+    if (a.actor !== meK && row.assignees.includes(meK) && (a.op === 'INSERT' || (ch.assignees && !(ch.assignees.od || []).includes(meK))))
+      return { cat, text: `${fa ? 'dodelila' : 'dodelio'} ti je zadatak: ${ref || esc(T.label)}${row.task_due ? ` <span class="page-sub">(rok ${fmtDate(row.task_due)})</span>` : ''}`, open: 'tab:tasks', prio: 30, kind: 'add' };
+    if (a.op === 'UPDATE' && ch.task_done_at) {
+      if (ch.task_done_at.na && !ch.task_done_at.od) return { cat, text: `${fa ? 'završila' : 'završio'} zadatak: ${ref}`, open: 'tab:tasks', prio: T.prio + 3, kind: 'edit' };
+      if (!ch.task_done_at.na && ch.task_done_at.od) return { cat, text: `${fa ? 'ponovo otvorila' : 'ponovo otvorio'} zadatak: ${ref}`, open: 'tab:tasks', prio: T.prio + 2, kind: 'edit' };
+    }
+  }
   let text, kind = 'edit';
   if (a.op === 'INSERT') { kind = 'add'; text = `${nfVerb(a.actor, 'add')} ${T.ins ? T.ins(row) : T.label}${ref ? ': ' + ref : ''}`; }
   else if (a.op === 'DELETE') { kind = 'del'; text = `trajno ${nfVerb(a.actor, 'del')} ${T.label} ${ref}`; }
@@ -2386,8 +2558,11 @@ function renderHomeNotes() {
       <span class="n-act"><button data-note="${x.id}" data-act="pin" title="Zakači">📌</button><button data-note="${x.id}" data-act="done" title="Završeno">✓</button><button data-note="${x.id}" data-act="del" title="Obriši">✕</button></span></div>`).join('')
     + `<div class="hn add" id="hnAdd">✎ Nova beleška</div><div class="hn all" data-goto="notes">Sve beleške (${list.length}) →</div>`;
 }
-function openNoteModal(area) {
+function openNoteModal(area, asTask) {
   $('qn_body').value = ''; $('qn_pin').checked = false; $('qn_area').value = area || 'general';
+  $('noteModal').querySelector('h3').textContent = asTask ? 'Nov zadatak' : 'Zabeleži';
+  $('qn_body').placeholder = asTask ? 'Šta treba da se uradi…' : 'Šta treba da se zapamti…';
+  taskSet('qt', null, taskSrcOf('note')); $('qt_task').style.display = '';
   const w = state.writer || who();
   document.querySelectorAll('#qnWriter button').forEach(b => b.classList.toggle('active', b.dataset.qw === w));
   $('noteModal').classList.add('open'); setTimeout(() => $('qn_body').focus(), 40);
@@ -2400,10 +2575,11 @@ async function saveQuickNote() {
       const r = await q(sb.from('h_milestones').insert({ title: body.split('\n')[0].slice(0, 140), body: body.includes('\n') ? body.slice(body.indexOf('\n') + 1) : null, kind: 'event', author: personName(author) }).select().single());
       state.milestones.push(r);
     } else {
-      const r = await q(sb.from('h_notes').insert({ area, author, body, pinned: $('qn_pin').checked }).select().single());
+      const tf = taskGet('qt');
+      const r = await q(sb.from('h_notes').insert({ area, author, body, pinned: $('qn_pin').checked, ...tf }).select().single());
       state.notes.push(r);
     }
-    $('noteModal').classList.remove('open'); renderAll(); toast('Zabeleženo ✓');
+    $('noteModal').classList.remove('open'); renderAll(); toast(whoPicked('qt_assignees').length && area !== 'milestone' ? 'Zadatak dodat ✓ vidi se u Taskovima' : 'Zabeleženo ✓');
   } catch (e) { fail(e); }
 }
 
@@ -2413,7 +2589,7 @@ function closeNav() { document.body.classList.remove('nav-open'); $('navQ').blur
 function navBadge(tab) {
   const cn = tab === state.tab || !state.nfState ? 0 : chgUnread(tab);
   const chg = cn ? `<span class="chg-badge" title="nove promene">${cn > 99 ? '99+' : cn}</span>` : '';
-  const id = { products: 'alertBadge', returns: 'retBadge', promos: 'promoBadge', packaging: 'packBadge', notes: 'notesBadge' }[tab];
+  const id = { products: 'alertBadge', returns: 'retBadge', promos: 'promoBadge', packaging: 'packBadge', notes: 'notesBadge', tasks: 'taskBadge' }[tab];
   const el = id && $(id); const al = el && el.style.display !== 'none' && el.textContent ? `<span class="tab-badge ${el.classList.contains('live') ? 'live' : ''}">${esc(el.textContent)}</span>` : '';
   return chg || al ? `<span class="nd-badges">${chg}${al}</span>` : '';
 }
@@ -2448,9 +2624,9 @@ function npCard(x, i) {
     <div class="np-meta"><span class="n-av ${p ? x.author : 'system'}">${esc((p ? p.name : x.author).charAt(0))}</span><b>${esc(personName(x.author))}</b>
       <span title="${fmtDT(x.created_at)}">${relTime(x.created_at)}</span><span class="place">${esc(notePlace(x))}</span>
       ${x.updated_at ? `<span>· izmenio/la ${esc(personName(x.updated_by || ''))} ${relTime(x.updated_at)}</span>` : ''}
-      ${x.done ? `<span>· završeno${x.done_by ? ' (' + esc(personName(x.done_by)) + ')' : ''}</span>` : ''}</div>
+      ${x.done ? `<span>· završeno${x.done_by ? ' (' + esc(personName(x.done_by)) + ')' : ''}</span>` : ''}${taskChip(x, 'note')}</div>
     <div class="np-acts">${editing ? `<button data-npsave="${x.id}" class="on">Sačuvaj</button><button data-npcancel="1">Otkaži</button>` :
-      `<button data-note="${x.id}" data-act="pin" class="${x.pinned ? 'on' : ''}">📌 ${x.pinned ? 'Otkači' : 'Zakači'}</button><button data-note="${x.id}" data-act="done" class="${x.done ? 'on' : ''}">✓ ${x.done ? 'Vrati' : 'Završeno'}</button><button data-npedit="${x.id}">✎ Izmeni</button><button data-note="${x.id}" data-act="del">✕</button>`}</div>
+      `<button data-tkedit="note:${x.id}" class="${assigneesOf(x).length ? 'on' : ''}">👤 ${assigneesOf(x).length ? esc(assigneesOf(x).map(personName).join(', ')) : 'Zaduži'}</button><button data-note="${x.id}" data-act="pin" class="${x.pinned ? 'on' : ''}">📌 ${x.pinned ? 'Otkači' : 'Zakači'}</button><button data-note="${x.id}" data-act="done" class="${x.done ? 'on' : ''}">✓ ${x.done ? 'Vrati' : 'Završeno'}</button><button data-npedit="${x.id}">✎ Izmeni</button><button data-note="${x.id}" data-act="del">✕</button>`}</div>
   </div>`;
 }
 function renderNotesPage() {
@@ -2486,8 +2662,9 @@ function renderNotesPage() {
 async function npSaveNew() {
   const body = $('np_body').value.trim(); if (!body) return toast('Napiši nešto prvo');
   try {
-    const r = await q(sb.from('h_notes').insert({ area: $('np_area').value, author: state.writer || who(), body, pinned: $('np_pin').checked }).select().single());
-    state.notes.push(r); $('np_body').value = ''; $('np_pin').checked = false; renderAll(); toast('Beleška sačuvana ✓');
+    const tf = taskGet('nt');
+    const r = await q(sb.from('h_notes').insert({ area: $('np_area').value, author: state.writer || who(), body, pinned: $('np_pin').checked, ...tf }).select().single());
+    state.notes.push(r); $('np_body').value = ''; $('np_pin').checked = false; taskSet('nt', null, taskSrcOf('note')); renderAll(); toast(tf.assignees.length ? 'Beleška sačuvana ✓ i dodata u Taskove' : 'Beleška sačuvana ✓');
   } catch (e) { fail(e); }
 }
 async function npSaveEdit(id) {
@@ -2608,6 +2785,7 @@ function renderAll() {
   renderOverview(); renderOrders(); renderProducts(); renderAds();
   renderGarderoba(); renderPosts(); renderSite(); renderPackaging(); renderStory(); renderNotes(); renderReturns(); renderPromos(); renderCustomers(); renderHomeNotes(); renderNotesPage(); renderChgBadges(); if (document.body.classList.contains('nav-open')) renderNav();
   if (state.tab === 'history') renderHistory();
+  renderTasks();
 }
 function setTab(t) {
   if (t === 'notes') LS.set(seenKey(), new Date().toISOString());
@@ -2808,6 +2986,24 @@ function bindEvents() {
   $('postViewSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.postView = b.dataset.view; LS.set('crm_pview', b.dataset.view); renderPosts(); });
   $('postFmtFilter').addEventListener('change', (e) => { state.postFmt = e.target.value; renderPosts(); });
   $('postPurposeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-pp]'); if (!b) return; state.postPurpose = b.dataset.pp; LS.set('crm_ppurpose', state.postPurpose); renderPosts(); });
+  // TASKOVI: kružić gotovo, izmena zaduženja, otvaranje stavke, stanje u formi
+  document.addEventListener('click', (e) => {
+    const dn = e.target.closest('[data-tkdone]'); if (dn) { e.preventDefault(); e.stopPropagation(); return taskToggle(dn.dataset.tkdone); }
+    const ed = e.target.closest('[data-tkedit]'); if (ed) { e.preventDefault(); e.stopPropagation(); const [k, id] = ed.dataset.tkedit.split(':'); return openTaskModal(k, id); }
+    const md = e.target.closest('[data-tmode]'); if (md) { e.preventDefault(); const st = $(md.dataset.px + '_tstate'); st.dataset.mode = md.dataset.tmode; return renderTaskState(md.dataset.px); }
+    const op = e.target.closest('[data-tkopen]'); if (op) { const [k, id] = op.dataset.tkopen.split(':'); const src = taskSrcOf(k), x = src && src.list().find(y => y.id === id); if (!x) return;
+      if (k === 'note') return openTaskModal(k, id);
+      const ref = src.ref(x); if (ref.startsWith('tab:')) return setTab(ref.slice(4)); if (k === 'cust') return openCustModal(id); return openRef(ref); }
+  }, true);
+  $('tkWho').addEventListener('click', (e) => { const b = e.target.closest('[data-tw]'); if (!b) return; tkState.who = b.dataset.tw; renderTasks(); });
+  $('tkState').addEventListener('click', (e) => { const b = e.target.closest('[data-ts]'); if (!b) return; tkState.st = b.dataset.ts; renderTasks(); });
+  $('tkSec').addEventListener('change', (e) => { tkState.sec = e.target.value; renderTasks(); });
+  $('tkQ').addEventListener('input', () => renderTasks());
+  $('newTaskBtn').addEventListener('click', () => openNoteModal('general', true));
+  $('tmSave').addEventListener('click', saveTaskModal);
+  $('tmOpen').addEventListener('click', () => { if (!tmCtx) return; const { src, x } = tmCtx; $('taskModal').classList.remove('open'); const ref = src.ref(x); if (ref.startsWith('tab:')) setTab(ref.slice(4)); else if (src.k === 'cust') openCustModal(x.id); else openRef(ref); });
+  $('qn_area').addEventListener('change', (e) => { $('qt_task').style.display = e.target.value === 'milestone' ? 'none' : ''; });
+  taskSet('nt', null, taskSrcOf('note'));
   document.addEventListener('click', (e) => { const b = e.target.closest('.who-pick .wp'); if (!b) return; b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); });
   $('po_purposeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-pp]'); if (b) setPostPurpose(b.dataset.pp); });
   $('newSiteBtn').addEventListener('click', () => openIdeaModal(null, 'site'));
@@ -2906,6 +3102,7 @@ const BOT_FAQ = [
   { g: [['povrat', 'reklamac', 'zamen', 'forma', 'zalb'], ['form', 'funkcion', 'radi', 'rok', 'prijav', 'link', 'salj', 'posalj', 'kako da', 'kako se', 'obrad']], a: 'Kupci popunjavaju formu za povrat (link možeš da kopiraš ispod). Prijava stiže u <b>Povrati</b> sa rokom: 8 dana za odgovor na reklamaciju, 14 dana za povrat novca ili zamenu. Karticu pomeraš kroz statuse.', b: [['Kopiraj link forme', 'copyform'], ['Povrati', 'tab:returns']] },
   { g: [['grafik', 'chart', 'datum', 'period', 'statistik', 'istoriju prihod']], a: 'Na Pregledu klikni karticu <b>Prihod, Profit, Reklame</b> ili neku drugu. Otvara se grafikon: biraš period (7, 30, 90 dana, mesec ili svoje datume), prikaz po danu, nedelji ili mesecu, i klikom na stubić vidiš tačno taj dan.', b: [['Grafikon prihoda', 'metric:revenue:30']] },
   { g: [['pretrag', 'nadj', 'trazi', 'search', 'precic', 'tastat']], a: 'Pretraga: <kbd>Ctrl</kbd>+<kbd>K</kbd> ili <kbd>/</kbd> (na telefonu lupa gore desno). Nalazi kupce, porudžbine, komade i sekcije. Prečice: brojevi <kbd>1</kbd>–<kbd>9</kbd> menjaju sekciju, <kbd>N</kbd> nova porudžbina, <kbd>B</kbd> nova beleška, <kbd>?</kbd> otvara mene.', b: [['Otvori pretragu', 'cmd']] },
+  { g: [['task', 'zadat', 'zaduz', 'dodel', 'rok']], a: 'Zadatak može da ima <b>bilo koja stavka</b>: u formi (porudžbina, komad, objava, predlog, materijal, povrat, promocija) je red <b>Zadatak</b> gde biraš ko je zadužen (može više) i rok. Za belešku, kupca i poglavlje priče klikni 👤. Sve se skuplja u sekciji <b>Taskovi</b>: Moji, Svi ili po osobi, otvoreni po roku, a <b>Istorija</b> čuva završene sa filterom po sekciji. Kružić ✓ označava gotovo.', b: [['Taskovi', 'tab:tasks'], ['Nov zadatak', 'act:Nov zadatak']] },
   { g: [['objav', 'reel', 'video', 'drive', 'kalendar', 'snima'], ['dodam', 'dodaj', 'nov', 'unes', 'napravi', 'upis', 'drive', 'link', 'pomer', 'faz', 'promen', 'datum', 'kako da', 'kako se', 'funkcion']], a: 'Objave + reklame → <b>+ Nova ideja</b>: naslov, gde se koristi (samo objava, objava + reklama ili samo reklama), link za inspiraciju, skripta (gore poseban red za hook), datum i Google Drive link za video. Gore biraš filter Sve / Objava + reklama / Samo reklama / Samo objava. Karticu pomeraš kroz faze (Ideja → Scenario → Snimanje → Montaža → Zakazano → Objavljeno), a u Kalendaru vidiš ceo mesec; ideje za reklamu imaju znak ◆.', b: [['Nova ideja', 'act:Nova ideja za objavu'], ['Objave + reklame', 'tab:posts']] },
   { g: [['promocij', 'akcij', 'kampanj'], ['dodam', 'dodaj', 'nov', 'napravi', 'unes', 'kako da', 'kako se', 'racun', 'funkcion', 'pokren']], a: 'Promocije → <b>+ Nova promocija</b>: ime, od-do, kod i budžet. CRM sam pokazuje koliko je porudžbina i prihoda donela, a svako može da doda beleške.', b: [['Nova promocija', 'act:Nova promocija'], ['Promocije', 'tab:promos']] },
   { g: [['sajt', 'shopify', 'domen']], a: 'Link sajta stoji na vrhu sekcije <b>Sajt</b>. Ispod dodaješ predloge šta da se promeni ili doda na sajtu.', b: [['Sajt', 'tab:site'], ['Otvori HARIZMA sajt', 'site']] },
@@ -2926,6 +3123,14 @@ const BOT_STOP = new Set('idi otvori otvoris vodi odvedi prebaci me mi na u do g
 
 const bpl = (n, one, few, many) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };
 function botBtn(label, go) { return `<button class="bt-btn" data-bgo="${esc(go)}">${esc(label)}</button>`; }
+function botTasks(t) {
+  const me = who(), forK = Object.keys(PEOPLE).find(k => { if (k === me) return false; const st = fold(PEOPLE[k].name); return bhas(t, [st.slice(0, Math.max(4, st.length - 1))]); }) || me;
+  const list = allTasks().filter(x => !x.done && x.as.includes(forK)).sort((a, b) => String(a.due || '9999').localeCompare(String(b.due || '9999')));
+  const nm = forK === me ? 'Tvoji' : `${personName(forK)}:`;
+  if (!list.length) return botSay(`${forK === me ? 'Nemaš otvorenih zadataka.' : personName(forK) + ' nema otvorenih zadataka.'} 👌`, [['Taskovi', 'tab:tasks'], ['Nov zadatak', 'act:Nov zadatak']]);
+  const late = list.filter(x => dueInfo(x.due)?.level === 'late').length;
+  botSay(`<div class="bt-cap" style="margin-bottom:6px">${nm} ${list.length} ${bpl(list.length, 'otvoren zadatak', 'otvorena zadatka', 'otvorenih zadataka')}${late ? `, <span class="bt-red">${late} kasni</span>` : ''}</div><div class="bt-list">${list.slice(0, 8).map(x => { const d = dueInfo(x.due); return botItem(esc(tcut(x.src.title(x.x), 60)), `${esc(x.src.label)}${d ? ` · <span class="${d.level === 'late' ? 'bt-red' : d.level === 'today' ? 'bt-amber' : ''}">${d.txt}</span>` : ''}`, x.src.k === 'note' || x.src.k === 'story' ? 'tab:tasks' : 'ref:' + x.src.ref(x.x), x.src.ic); }).join('')}</div>`, [['Taskovi', 'tab:tasks'], ['Nov zadatak', 'act:Nov zadatak']]);
+}
 function botItem(title, sub, go, ic) { return `<button class="bt-item" data-bgo="${esc(go)}"><span class="bi-ic">${ic || '›'}</span><span class="bi-t"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span></button>`; }
 function botPush(from, html, btns) { BOT.msgs.push({ from, html, btns: btns || [], at: Date.now() }); botSave(); renderBot(); }
 function botSay(html, btns) { botPush('bot', html, btns); }
@@ -3139,6 +3344,7 @@ async function botAnswer(raw) {
   const newVerb = /^ (nov|nova|novi|novu|dodaj|dodati|unesi|napravi|kreiraj|ubaci|upisi) /.test(t) || / (hocu da dodam|da dodam|da unesem|da napravim) /.test(t);
   if (!newVerb && (bhas(t, metricWords) || (bhas(t, ['koliko']) && bhas(t, ['porudzbin', 'narudzbin', 'komada', 'prodat', 'reklam'])))) return botMetric(t);
   if (bhas(t, ['sta je novo', 'ima novo', 'nesto novo', 'novosti', 'ko je menja', 'ko je sta', 'sta se desilo'])) return botChanges();
+  if (bhas(t, ['task', 'zadat', 'zaduz', 'dodeljen', 'sta mi je ostalo', 'sta moram', 'moje obaveze', 'sta je ostalo da'])) return botTasks(t);
   if (bhas(t, ['hitno', 'sta treba da', 'sta imam', 'sta ima', 'obavez', 'todo', 'to do', 'plan za danas', 'pregled dana', 'rezime', 'sazetak', 'sta ceka', 'ceka obradu', 'za obradu', 'sta je danas'])) return botUrgent();
   if (!newVerb && bhas(t, ['pakovanj', 'ambalaz', 'kutij', 'stiker']) && bhas(t, ['fali', 'nestaj', 'nema', 'malo', 'ostalo', 'zalih', 'stanj', 'minimum', 'naruc'])) return botPack();
   if (!newVerb && bhas(t, ['fali', 'nestaj', 'pri kraju', 'rasprod', 'dopun', 'zalih', 'stanje', 'na stanju', 'nema na', 'malo robe'])) return botStock();
@@ -3313,6 +3519,8 @@ function aiSnapshot() {
   L.push(`\n## PROMOCIJE\nid|naziv|tip|od|do|status|kod|popust|kanal|budžet|cilj|porudžbine u periodu|prihod|sa kodom|rast vs prosek|reklame|neto|opis|rezultat|beleške`);
   state.promos.slice().sort((a, b) => b.starts_at.localeCompare(a.starts_at)).forEach(p => { const x = promoResults(p); row(p.id, p.name, p.type, d(p.starts_at), p.ends_at ? d(p.ends_at) : 'traje', ST[promoStatus(p)], p.code, p.discount_pct ? p.discount_pct + '%' : p.discount_rsd ? R(p.discount_rsd) + ' RSD' : '', p.channel, R(p.budget) || '', cut(p.goal, 60), x.orders, R(x.revenue), x.withCode, x.lift == null ? '' : Math.round(x.lift * 100) + '%', R(x.spend), R(x.net), cut(p.description, 100), cut(p.result_note, 80), promoNotes(p.id).map(z => `${personName(z.author)}: ${cut(z.body, 60)}`).join(' / ')); });
 
+  L.push(`\n## TASKOVI (otvoreni zadaci, iz svih sekcija)\nsekcija|stavka|zaduženi|rok|dodelio`);
+  allTasks().filter(t => !t.done).forEach(t => row(t.src.label, cut(t.src.title(t.x), 90), t.as.map(personName).join(', '), t.due || '', t.x.task_by ? personName(t.x.task_by) : ''));
   L.push(`\n## OBJAVE + REKLAME\nid|naslov|namena|faza|format|datum|zadužen|hook|skripta|caption|drive link|inspiracija`);
   state.posts.forEach(p => row(p.id, p.title, PURPOSE[ppOf(p)], ST[p.status], FMT[p.format] || p.format, dt(p.publish_at), assigneeNames(p), cut(p.hook, 90), cut(p.concept, 260), cut(p.caption, 80), p.drive_link ? 'ima' : 'nema', inspoLinks(p).join(' ')));
 

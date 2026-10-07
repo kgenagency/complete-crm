@@ -470,6 +470,53 @@ tbody tr{transition:background .15s}
 .modal .field .script-hook span{flex:none;font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#7a5410;background:#f6ead0;border-radius:5px;padding:2px 7px}
 .modal .field .script-hook input{flex:1;min-width:0;width:auto;border:0;outline:0;box-shadow:none;border-radius:0;background:transparent;font:600 14px var(--font-ui);color:var(--ink);padding:4px 0}
 .modal .field .script-card textarea{border:0;border-radius:0;background:transparent;min-height:130px;outline:0;resize:vertical}
+/* ===== TASKOVI ===== */
+.task-row{margin:6px 0 14px;border:1px dashed #d8d2c2;border-radius:12px;background:#fbf9f3;padding:10px 12px}
+.task-row .tr-head{display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:8px;flex-wrap:wrap}
+.task-row .tr-head b{font-size:12.5px;letter-spacing:.02em}
+.task-row .tr-ic{width:20px;height:20px;border-radius:6px;background:#1B2620;color:#E8E4D9;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+.task-row .tr-body{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.task-row .tr-due{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--ink-2);margin:0}
+.task-row .tr-due input{width:auto;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px}
+.task-row .tr-state{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);margin-top:8px}
+.task-row .tr-state:empty{display:none}
+.task-row .tr-state .ok{color:#2e7d32;font-weight:700}
+.task-row .tr-state button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 10px;font:600 12px var(--font-ui);color:var(--ink);cursor:pointer}
+.task-row .tr-state button:hover{border-color:#1B2620}
+.task-row.compact{margin:10px 0 0;padding:8px 10px}
+.task-row.compact .tr-head .lbl-hint{display:none}
+.tm-item{background:#f6f3ea;border-radius:10px;padding:10px 12px;margin:-4px 0 12px;font-size:13.5px;line-height:1.45}
+.tm-item small{display:block;color:var(--muted);font-size:11.5px;margin-bottom:2px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.tab-badge.soft{background:#c99a3b}
+.tk-bar .seg{flex-wrap:wrap}
+.tk-group{margin:18px 0 8px;font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.tk-group.late{color:#a32c2c}.tk-group.today{color:#8a6100}
+.tk-group span{background:#eee9dc;color:var(--ink-2);border-radius:99px;padding:1px 8px;font-size:11px;letter-spacing:0}
+.tk-list{display:flex;flex-direction:column;gap:8px}
+.tk-row{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;transition:border-color .15s,transform .15s,box-shadow .15s;animation:fadeUp .35s var(--ease) both}
+.tk-row:hover{border-color:var(--sage);box-shadow:var(--shadow-sm)}
+.tk-row.late{border-left:4px solid #c62828}
+.tk-row.today{border-left:4px solid #d08a00}
+.tk-check{flex:none;width:30px;height:30px;border-radius:50%;border:2px solid #cfc8b6;background:#fff;color:transparent;font-weight:900;font-size:14px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.tk-check:hover{border-color:#2e7d32;color:#2e7d32;background:#eef7ee}
+.tk-row.done .tk-check{background:#2e7d32;border-color:#2e7d32;color:#fff}
+.tk-main{min-width:0;flex:1}
+.tk-t{font-weight:600;font-size:14px;line-height:1.35;overflow-wrap:anywhere}
+.tk-row.done .tk-t{color:var(--ink-2)}
+.tk-s{font-size:12px;color:var(--muted);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+.tk-sec{font-weight:700;color:#4a5a4f;background:#eef1ea;border-radius:6px;padding:1px 7px}
+.tk-side{display:flex;align-items:center;gap:8px;flex:none}
+.tk-due{font-size:11.5px;font-weight:700;border-radius:6px;padding:2px 7px;background:#eef1f4;color:#3f4a56;white-space:nowrap}
+.tk-due.late{background:#fbe5e5;color:#a32c2c}.tk-due.today{background:#fdf1d8;color:#8a6100}
+.tk-avs{display:flex}
+.tk-avs .n-av{width:24px;height:24px;font-size:12px;border-radius:50%;margin:0 0 0 -6px;transform:none;box-shadow:0 0 0 2px var(--surface)}
+.tk-avs .n-av:first-child{margin-left:0}
+.tk-edit{border:1px solid var(--line);background:#fff;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:13px}
+.tk-edit:hover{border-color:#1B2620}
+.tk-empty{padding:34px 16px;text-align:center;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:14px}
+.tchip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 6px;background:#eef1ea;color:#2f4a3a;white-space:nowrap}
+.tchip.late{background:#fbe5e5;color:#a32c2c}.tchip.done{background:#e8f4e8;color:#2e7d32}
+@media (max-width:640px){.tk-row{align-items:flex-start}.tk-side{flex-direction:column;align-items:flex-end;gap:6px}.tk-bar{gap:8px}#tkQ{width:100%!important}.task-row .tr-due input{font-size:16px}}
 .who-pick{display:flex;flex-wrap:wrap;gap:6px}
 .who-pick .wp{display:inline-flex;align-items:center;gap:7px;padding:5px 11px 5px 5px;border:1.5px solid var(--line);border-radius:99px;background:#fff;font:600 13px var(--font-ui);color:var(--ink-2);cursor:pointer;transition:all .15s}
 .who-pick .wp .n-av{width:24px;height:24px;font-size:13px;border-radius:50%;margin:0;transform:none;box-shadow:none;opacity:.45;transition:opacity .15s}
@@ -1184,6 +1231,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
     <div id="harizma">
       <div class="tabs" id="tabs">
         <button data-tab="overview" class="active">Pregled</button>
+        <button data-tab="tasks">Taskovi<span class="tab-badge" id="taskBadge" style="display:none"></span></button>
         <button data-tab="notes">Beleške<span class="tab-badge live" id="notesBadge" style="display:none"></span></button>
         <button data-tab="orders">Porudžbine</button>
         <button data-tab="customers">Kupci</button>
@@ -1221,6 +1269,23 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       </div>
 
       <!-- BELEŠKE -->
+      <!-- TASKOVI -->
+      <div class="view" id="v-tasks">
+        <div class="page-head">
+          <div><div class="page-title">Taskovi</div><div class="page-sub">Sve što je nekome dodeljeno, iz svih sekcija. Zadatak dodaješ u bilo kojoj stavci (polje Zadatak) ili ovde kao brzu belešku.</div></div>
+          <button class="btn-gold" id="newTaskBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Nov zadatak</button>
+        </div>
+        <div class="stats" id="kpiTasks"></div>
+        <div class="toolbar tk-bar">
+          <div class="seg" id="tkWho"></div>
+          <div class="seg" id="tkState"><button data-ts="open" class="active">Otvoreni</button><button data-ts="done">Istorija</button></div>
+          <div class="select-wrap"><select id="tkSec"></select></div>
+          <input class="inline-input" id="tkQ" type="search" placeholder="traži…" style="width:170px">
+          <div class="count" id="tkCount"></div>
+        </div>
+        <div id="tkList"></div>
+      </div>
+
       <div class="view" id="v-notes">
         <div class="page-head">
           <div><div class="page-title">Beleške</div><div class="page-sub">Sve beleške celog tima na jednom mestu. Svi vide sve.</div></div>
@@ -1233,6 +1298,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
             <label class="threshold"><input type="checkbox" id="np_pin" style="width:auto"> zakači</label>
             <button class="btn-gold" id="npSave" style="margin-left:auto">Sačuvaj belešku</button>
           </div>
+          <div class="task-row compact" id="nt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="nt_assignees"></div><label class="tr-due">Rok <input type="date" id="nt_due"></label></div><div class="tr-state" id="nt_tstate"></div></div>
         </div>
         <div class="np-people" id="npPeople"></div>
         <div class="toolbar">
@@ -1535,6 +1601,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       </div>
       <div class="field"><label>Broj pošiljke</label><input id="o_track"></div>
       <div class="field"><label>Napomena</label><textarea id="o_note"></textarea></div>
+      <div class="task-row" id="ot_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="ot_assignees"></div><label class="tr-due">Rok <input type="date" id="ot_due"></label></div><div class="tr-state" id="ot_tstate"></div></div>
       <div class="sum-box" id="orderSum"></div>
       <div class="modal-actions"><button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" type="submit" id="omSave">Sačuvaj</button></div>
     </form>
@@ -1567,6 +1634,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       <div id="sizeRows"></div>
       <button type="button" class="mini-btn" id="addSizeBtn">+ Veličina</button>
       <div class="field" style="margin-top:14px"><label>Napomena</label><textarea id="p_note"></textarea></div>
+      <div class="task-row" id="pt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="pt_assignees"></div><label class="tr-due">Rok <input type="date" id="pt_due"></label></div><div class="tr-state" id="pt_tstate"></div></div>
       <div class="modal-actions">
         <button type="button" class="fu-remove" id="pmDelete" style="display:none">Obriši</button>
         <button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" type="submit">Sačuvaj</button>
@@ -1591,7 +1659,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         <div class="field"><label>Format</label><select id="po_format"><option value="reel">Reel</option><option value="carousel">Carousel</option><option value="story">Story</option><option value="post">Post</option><option value="tiktok">TikTok</option></select></div>
         <div class="field"><label>Status</label><select id="po_status"></select></div>
       </div>
-      <div class="field"><label>Zaduženi <span class="lbl-hint">(može više)</span></label><div class="who-pick" id="po_assignees"></div></div>
+      <div class="task-row" id="po_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="po_assignees"></div><label class="tr-due">Rok <input type="date" id="po_due"></label></div><div class="tr-state" id="po_tstate"></div></div>
       <div class="frow">
         <div class="field"><label id="po_dateLbl">Datum i vreme objave</label><input id="po_date" type="datetime-local"></div>
         <div class="field"><label>Komad iz ponude</label><select id="po_product"></select></div>
@@ -1622,6 +1690,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         <div class="field"><label>Link (primer ili stranica)</label><input id="si_link" type="url"></div>
         <div class="field"><label>Slika / skica</label><input id="si_file" type="file" accept="image/*"></div>
       </div>
+      <div class="task-row" id="st_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="st_assignees"></div><label class="tr-due">Rok <input type="date" id="st_due"></label></div><div class="tr-state" id="st_tstate"></div></div>
       <div id="siComments"></div>
       <div class="modal-actions">
         <button type="button" class="fu-remove" id="siDelete" style="display:none">Obriši</button>
@@ -1650,6 +1719,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       </div>
       <div class="field"><label>Koliko ide u svaki paket</label><input id="pa_per" type="number" min="0"><div class="hint">Ako je više od 0, nova porudžbina sama skida ovaj materijal sa stanja i dodaje ga u trošak pakovanja.</div></div>
       <div class="field"><label>Napomena</label><textarea id="pa_note"></textarea></div>
+      <div class="task-row" id="kt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="kt_assignees"></div><label class="tr-due">Rok <input type="date" id="kt_due"></label></div><div class="tr-state" id="kt_tstate"></div></div>
       <div class="modal-actions">
         <button type="button" class="fu-remove" id="paDelete" style="display:none">Obriši</button>
         <button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" type="submit">Sačuvaj</button>
@@ -1667,7 +1737,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         <div class="field"><label>Tip</label><select id="rt_type"><option value="return">Povrat</option><option value="exchange">Zamena</option><option value="complaint">Reklamacija</option><option value="feedback">Utisak</option></select></div>
         <div class="field"><label>Status</label><select id="rt_status"></select></div>
       </div>
-      <div class="field"><label>Zaduženi <span class="lbl-hint">(može više)</span></label><div class="who-pick" id="rt_assignees"></div></div>
+      <div class="task-row" id="rt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="rt_assignees"></div><label class="tr-due">Rok <input type="date" id="rt_due"></label></div><div class="tr-state" id="rt_tstate"></div></div>
       <div class="frow">
         <div class="field"><label>Kupac *</label><input id="rt_customer_name" required></div>
         <div class="field"><label>Telefon</label><input id="rt_phone"></div>
@@ -1753,6 +1823,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       <div class="field"><label>Zaključak posle akcije</label><textarea id="pr_result_note" style="min-height:60px" placeholder="Šta je radilo, šta ne, šta sledeći put"></textarea></div>
       <div id="prResults"></div>
       <div id="prNotes"></div>
+      <div class="task-row" id="mt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="mt_assignees"></div><label class="tr-due">Rok <input type="date" id="mt_due"></label></div><div class="tr-state" id="mt_tstate"></div></div>
       <div class="modal-actions">
         <button type="button" class="fu-remove" id="prDelete" style="display:none">Obriši</button>
         <button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" type="submit">Sačuvaj</button>
@@ -1881,6 +1952,15 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 </div>
 
 <!-- MODAL brza beleška -->
+<div class="modal-wrap" id="taskModal"><div class="modal-bg" data-close></div>
+  <div class="modal" style="max-width:560px">
+    <h3 id="tmTitle">Zadatak</h3>
+    <div class="tm-item" id="tmItem"></div>
+    <div class="task-row" id="tm_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="tm_assignees"></div><label class="tr-due">Rok <input type="date" id="tm_due"></label></div><div class="tr-state" id="tm_tstate"></div></div>
+    <div class="modal-actions"><button type="button" class="btn-ghost" id="tmOpen">Otvori stavku ↗</button><span style="flex:1"></span><button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" type="button" id="tmSave">Sačuvaj</button></div>
+  </div>
+</div>
+
 <div class="modal-wrap" id="noteModal"><div class="modal-bg" data-close></div>
   <div class="modal qn">
     <h3>Zabeleži</h3>
@@ -1890,6 +1970,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       <div class="field" style="margin:0"><label>Gde ide</label><select id="qn_area"><option value="general">Beleške (opšta)</option><option value="story">Beleške + Brand story</option><option value="milestone">Istorija (događaj sa datumom, nije beleška)</option></select></div>
       <div class="field" style="margin:0;display:flex;align-items:flex-end"><label class="check" style="margin:0;display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="qn_pin"> Zakači na vrh</label></div>
     </div>
+    <div class="task-row compact" id="qt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="qt_assignees"></div><label class="tr-due">Rok <input type="date" id="qt_due"></label></div><div class="tr-state" id="qt_tstate"></div></div>
     <div class="modal-actions"><button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" id="qnSave">Sačuvaj <kbd style="margin-left:6px;background:rgba(255,255,255,.2);border-color:transparent;color:#E8E4D9">Ctrl ⏎</kbd></button></div>
   </div>
 </div>
@@ -1912,8 +1993,8 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610072145"></script>
-<script>window.HTML_BUILD="202610072145";</script>
-<script src="app.js?v=202610072145"></script>
+<script src="config.js?v=202610072206"></script>
+<script>window.HTML_BUILD="202610072206";</script>
+<script src="app.js?v=202610072206"></script>
 </body>
 </html>

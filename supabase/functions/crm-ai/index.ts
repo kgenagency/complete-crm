@@ -62,6 +62,7 @@ Gore je traka sa logom (klik vodi na Pregled), izbor projekta (HARIZMA, kasnije 
 11. Brand story (story): priča brenda po poglavljima (levo, auto-čuvanje) i papir sa beleškama desno gde biraš čije beleške gledaš (Staša, Konstantin, Marjan).
 12. Reklame (ads): ručni unos dnevne potrošnje sa Meta naloga (datum, iznos, kampanja, kupovine i prihod po Meta). Ulazi u neto i ROAS na Pregledu. Meta još nije povezana automatski.
 13. Istorija (history): vremenska linija svega (porudžbine, promene, promocije, događaji), filteri po vrsti i mesecu, dugme Zabeleži događaj (prekretnice, npr. lansiranje) i Arhiva obrisanog (sve obrisano može da se vrati, ništa se ne briše zauvek).
+14. Taskovi (tasks): svaka stavka u CRM-u (beleška, porudžbina, kupac, komad, objava/reklama, predlog za sajt ili pakovanje, materijal, povrat, promocija, poglavlje priče) može da ima zadužene (jedna ili više osoba) i rok. U formama je red „Zadatak“, a za belešku, kupca i poglavlje priče dugme 👤. Sekcija Taskovi skuplja sve: Moji / Svi / po osobi, otvoreni grupisani po roku (Kasni, Danas, Narednih 7 dana, Kasnije, Bez roka), kružić ✓ = gotovo, a Istorija čuva završene sa filterom po sekciji. Kad stavka dođe do kraja (objava Objavljeno, povrat Rešen, predlog Gotovo, porudžbina Isporučena), zadatak se sam zatvara. Dugme „Nov zadatak“ pravi belešku sa zaduženjem. Kad nekome dodeliš zadatak, dobija obaveštenje.
 
 # OBAVEŠTENJA I PROMENE
 - Kad neko drugi nešto doda ili promeni, dole desno iskače kartica (ko, šta, kad, stiker osobe), sklanja se na crveni X. Zvonce: istorija svih promena sa filterima, „prikaži ponovo“, „skloni sve“, utišaj na 1 h, 3 h ili do sutra.
@@ -131,7 +132,7 @@ Gore je traka sa logom (klik vodi na Pregled), pretraga (Ctrl+K ili /), zvonce s
 - Svaka izmena se trajno beleži, a svake noći se pravi rezervna kopija baze. Ako nešto ne radi: Ctrl+Shift+R, pa javi timu („pitaj tim: …“).`;
 
 const TABS_BY_MODULE: Record<string, string[]> = {
-  harizma: ['overview', 'notes', 'orders', 'customers', 'products', 'returns', 'promos', 'posts', 'packaging', 'site', 'story', 'ads', 'history'],
+  harizma: ['overview', 'tasks', 'notes', 'orders', 'customers', 'products', 'returns', 'promos', 'posts', 'packaging', 'site', 'story', 'ads', 'history'],
   potkovice: ['overview', 'notes', 'orders', 'customers', 'products', 'imports', 'returns', 'posts', 'site', 'ads', 'history'],
 };
 const KINDS_BY_MODULE: Record<string, string[]> = {

@@ -596,3 +596,61 @@ alter table h_posts add column if not exists inspo text;
 -- v17: više zaduženih na zadacima (objave + reklame, povrati)
 alter table h_posts add column if not exists assignees text[] not null default '{}';
 alter table h_returns add column if not exists assignees text[] not null default '{}';
+-- v17: TASKOVI. Svaka stavka može da ima zadužene i rok; završeni zadaci ostaju kao istorija.
+do $$ declare t text; begin
+  foreach t in array array['h_notes','h_posts','h_site_ideas','h_packaging','h_returns','h_promotions','h_orders','h_customers','h_products','h_story_sections'] loop
+    execute format('alter table %I add column if not exists assignees text[] not null default ''{}''', t);
+    execute format('alter table %I add column if not exists task_due date', t);
+    execute format('alter table %I add column if not exists task_at timestamptz', t);
+    execute format('alter table %I add column if not exists task_by text', t);
+    execute format('alter table %I add column if not exists task_done_at timestamptz', t);
+    execute format('alter table %I add column if not exists task_done_by text', t);
+  end loop;
+end $$;
+
+create or replace function public.h_task_fn() returns trigger language plpgsql set search_path = public as $f$
+declare
+  v_actor text := split_part(coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb->>'email', 'system'), '@', 1);
+  v_new jsonb := to_jsonb(new);
+  v_old jsonb := case when tg_op = 'UPDATE' then to_jsonb(old) else '{}'::jsonb end;
+  v_has boolean := coalesce(array_length(new.assignees, 1), 0) > 0;
+begin
+  -- nova dodela (neko je dodat): zapamti ko i kad je dodelio; ako je zadatak bio završen, ponovo je otvoren
+  if v_has and (tg_op = 'INSERT' or not (new.assignees <@ old.assignees)) then
+    new.task_at := now(); new.task_by := v_actor;
+    if tg_op = 'UPDATE' and old.task_done_at is not null and new.task_done_at is not distinct from old.task_done_at then
+      new.task_done_at := null; new.task_done_by := null;
+    end if;
+  end if;
+  -- prirodan kraj stavke (objavljeno, rešeno, gotovo, isporučeno...) završava zadatak
+  if v_has and new.task_done_at is null and array_length(tg_argv, 1) > 0
+     and (v_new->>'status') = any(tg_argv)
+     and (tg_op = 'INSERT' or (v_old->>'status') is distinct from (v_new->>'status')) then
+    new.task_done_at := now(); new.task_done_by := v_actor;
+  end if;
+  -- beleške: „završeno“ na belešci = završen zadatak (i obrnuto)
+  if tg_table_name = 'h_notes' and v_has then
+    if (v_new->>'done')::boolean and new.task_done_at is null then
+      new.task_done_at := now(); new.task_done_by := coalesce(v_new->>'done_by', v_actor);
+    elsif tg_op = 'UPDATE' and not coalesce((v_new->>'done')::boolean, false) and coalesce((v_old->>'done')::boolean, false)
+          and new.task_done_at is not distinct from old.task_done_at then
+      new.task_done_at := null; new.task_done_by := null;
+    end if;
+  end if;
+  return new;
+end $f$;
+
+drop trigger if exists h_task_trg on h_notes;           create trigger h_task_trg before insert or update on h_notes for each row execute function h_task_fn();
+drop trigger if exists h_task_trg on h_posts;           create trigger h_task_trg before insert or update on h_posts for each row execute function h_task_fn('published');
+drop trigger if exists h_task_trg on h_site_ideas;      create trigger h_task_trg before insert or update on h_site_ideas for each row execute function h_task_fn('done', 'rejected');
+drop trigger if exists h_task_trg on h_packaging;       create trigger h_task_trg before insert or update on h_packaging for each row execute function h_task_fn();
+drop trigger if exists h_task_trg on h_returns;         create trigger h_task_trg before insert or update on h_returns for each row execute function h_task_fn('resolved', 'rejected');
+drop trigger if exists h_task_trg on h_promotions;      create trigger h_task_trg before insert or update on h_promotions for each row execute function h_task_fn();
+drop trigger if exists h_task_trg on h_orders;          create trigger h_task_trg before insert or update on h_orders for each row execute function h_task_fn('delivered', 'cancelled', 'returned');
+drop trigger if exists h_task_trg on h_customers;       create trigger h_task_trg before insert or update on h_customers for each row execute function h_task_fn();
+drop trigger if exists h_task_trg on h_products;        create trigger h_task_trg before insert or update on h_products for each row execute function h_task_fn();
+drop trigger if exists h_task_trg on h_story_sections;  create trigger h_task_trg before insert or update on h_story_sections for each row execute function h_task_fn();
+
+-- postojeći zaduženi (objave) dobijaju vreme dodele
+update h_posts set task_at = created_at, task_by = lower(coalesce(created_by, 'konstantin')) where coalesce(array_length(assignees,1),0) > 0 and task_at is null;
+update h_returns set task_at = created_at where coalesce(array_length(assignees,1),0) > 0 and task_at is null;
