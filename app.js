@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610072357';
+const APP_BUILD = '202610080008';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -801,6 +801,7 @@ function taskSet(px, x, src, def) {
   TASK_CTX[px] = { x: x || null, src };
   whoPick(px + '_assignees', x ? assigneesOf(x) : (def || []));
   $(px + '_due').value = x && x.task_due ? String(x.task_due).slice(0, 10) : '';
+  if ($(px + '_tnote')) $(px + '_tnote').value = x && x.task_note || '';
   $(px + '_tstate').dataset.mode = '';
   renderTaskState(px);
 }
@@ -816,10 +817,11 @@ function renderTaskState(px) {
 function taskGet(px, legacy) {
   const as = whoPicked(px + '_assignees'), mode = $(px + '_tstate').dataset.mode || '';
   const f = { assignees: as, task_due: $(px + '_due').value || null };
+  const tn = $(px + '_tnote'); if (tn && tn.offsetParent !== null) f.task_note = tn.value.trim() || null;
   if (legacy) f.assignee = as.length ? as.map(personName).join(', ') : null;
   if (mode === 'done') Object.assign(f, { task_done_at: new Date().toISOString(), task_done_by: who() });
   if (mode === 'reopen') Object.assign(f, { task_done_at: null, task_done_by: null });
-  if (TASK_CTX[px]) TASK_CTX[px].last = { before: TASK_CTX[px].x ? assigneesOf(TASK_CTX[px].x) : [], after: as, due: f.task_due, mode };
+  if (TASK_CTX[px]) TASK_CTX[px].last = { before: TASK_CTX[px].x ? assigneesOf(TASK_CTX[px].x) : [], after: as, due: f.task_due, mode, note: f.task_note || '' };
   return f;
 }
 /* ---------- ZVUCI: sve se pravi u pretraživaču (WebAudio), bez ijednog fajla ----------
@@ -988,7 +990,7 @@ function taskAfterSave(px, title, sec) {
   if (L.mode === 'done') return taskPop('done', { title, sec });
   const added = L.after.filter(k => !L.before.includes(k));
   if (!added.length || L.mode === 'reopen') return;
-  taskPop(L.before.length ? 'assign' : 'new', { title, sec: sec || c.src?.label || '', as: L.after, due: L.due });
+  taskPop(L.before.length ? 'assign' : 'new', { title: L.note || title, sec: sec || c.src?.label || '', as: L.after, due: L.due });
 }
 
 /* opšti prozor za zadatak (beleške, kupci, priča, izmena iz Taskova) */
@@ -997,7 +999,7 @@ function openTaskModal(k, id) {
   const src = taskSrcOf(k), x = src && src.list().find(y => y.id === id); if (!x) return toast('Stavka više ne postoji');
   tmCtx = { src, x };
   $('tmItem').innerHTML = `<small>${src.ic} ${esc(src.label)}</small>${esc(src.title(x))}`;
-  taskSet('tm', x, src);
+  taskSet('tm', x, src); $('tm_tnote').style.display = k === 'note' ? 'none' : '';
   $('tmOpen').style.display = k === 'note' ? 'none' : '';
   $('taskModal').classList.add('open');
 }
@@ -1031,7 +1033,7 @@ function tkRow(t, i) {
     : x.task_by ? `<span>${byF ? 'dodelila' : 'dodelio'} ${esc(personName(x.task_by))}${x.task_at ? ' · ' + relTime(x.task_at) : ''}</span>` : '';
   return `<div class="tk-row ${t.done ? 'done' : ''} ${d ? d.level : ''}" data-tkopen="${src.k}:${x.id}" style="animation-delay:${Math.min(i, 20) * 18}ms">
     <button class="tk-check" data-tkdone="${src.k}:${x.id}" title="${t.done ? 'Vrati u otvorene' : 'Gotovo'}">✓</button>
-    <div class="tk-main"><div class="tk-t">${esc(src.title(x))}</div>
+    <div class="tk-main"><div class="tk-t">${esc(x.task_note && src.k !== 'note' ? x.task_note : src.title(x))}</div>${x.task_note && src.k !== 'note' ? `<div class="tk-ref">${src.ic} ${esc(src.title(x))}</div>` : ''}
       <div class="tk-s"><span class="tk-sec">${src.ic} ${esc(t.sec)}</span>${src.sub(x) ? `<span>${esc(src.sub(x))}</span>` : ''}${info}</div></div>
     <div class="tk-side">${d ? `<span class="tk-due ${d.level}">⏱ ${d.txt}</span>` : ''}<span class="tk-avs">${t.as.map(a => `<span class="n-av ${PEOPLE[a] ? a : 'system'}" title="${esc(personName(a))}">${esc(personName(a).charAt(0))}</span>`).join('')}</span><button class="tk-edit" data-tkedit="${src.k}:${x.id}" title="Zaduženi i rok">👤</button></div>
   </div>`;
@@ -2374,7 +2376,7 @@ async function deleteCust() {
 }
 
 /* ---------- OBAVEŠTENJA: ko je šta kad menjao ---------- */
-const NF_FIELD = { task_due: 'rok', assignees: 'zaduženi', purpose: 'namena', inspo: 'inspiracija', status: 'status', courier: 'kurir', tracking_no: 'broj pošiljke', sell_price: 'prodajna', buy_price: 'nabavna', compare_price: '„bila“ cena', stock: 'stanje', publish_at: 'datum objave', drive_link: 'Drive link', assignee: 'zadužen', priority: 'prioritet', title: 'naslov', body: 'tekst', value: 'vrednost', note: 'napomena', refund_amount: 'vraćeno kupcu', return_shipping_cost: 'trošak slanja', resolution_note: 'rešenje', improve: 'šta da popravimo', vip: 'VIP', tags: 'oznake', points_adj: 'poeni', name: 'ime', phone: 'telefon', city: 'grad', address: 'adresa', postal_code: 'poštanski broj', payment: 'plaćanje', shipping_price: 'dostava (kupac)', shipping_cost: 'dostava (kurir)', packaging_cost: 'pakovanje', discount: 'popust', discount_code: 'kod', channel: 'kanal', category: 'kategorija', supplier: 'dobavljač', material: 'materijal', image_url: 'slika', concept: 'skripta', hook: 'hook', caption: 'opis', format: 'format', post_url: 'link objave', views: 'pregledi', likes: 'lajkovi', saves: 'sačuvano', description: 'opis', link: 'link', votes: 'glasovi', code: 'kod', pct: 'popust %', rsd: 'popust RSD', valid_to: 'važi do', valid_from: 'važi od', active: 'aktivan', max_uses: 'maks. upotreba', starts_at: 'početak', ends_at: 'kraj', budget: 'budžet', goal: 'cilj', result_note: 'zaključak', happened_at: 'datum', kind: 'vrsta', min_stock: 'granica', per_order: 'po paketu', unit_price: 'cena', spend: 'potrošeno', purchases: 'kupovine', revenue: 'prihod', reason: 'razlog', package_received_at: 'paket stigao', resolution_wanted: 'kupac želi', restocked: 'vraćeno na stanje', size: 'veličina', color: 'boja', qty: 'količina', email: 'email', instagram: 'instagram', birthday: 'rođendan', source: 'izvor', position: 'redosled', pinned: 'zakačeno', done: 'završeno', delivered_on: 'paket primljen', shipped_at: 'poslato', delivered_at: 'isporučeno', photos: 'fotografije', order_no: 'broj', exchange_details: 'želi umesto toga', item: 'komad', rating: 'ocena', customer_name: 'kupac', type: 'tip', discount_pct: 'popust %', discount_rsd: 'popust RSD', deleted_at: '__del' };
+const NF_FIELD = { task_note: 'zadatak', task_due: 'rok', assignees: 'zaduženi', purpose: 'namena', inspo: 'inspiracija', status: 'status', courier: 'kurir', tracking_no: 'broj pošiljke', sell_price: 'prodajna', buy_price: 'nabavna', compare_price: '„bila“ cena', stock: 'stanje', publish_at: 'datum objave', drive_link: 'Drive link', assignee: 'zadužen', priority: 'prioritet', title: 'naslov', body: 'tekst', value: 'vrednost', note: 'napomena', refund_amount: 'vraćeno kupcu', return_shipping_cost: 'trošak slanja', resolution_note: 'rešenje', improve: 'šta da popravimo', vip: 'VIP', tags: 'oznake', points_adj: 'poeni', name: 'ime', phone: 'telefon', city: 'grad', address: 'adresa', postal_code: 'poštanski broj', payment: 'plaćanje', shipping_price: 'dostava (kupac)', shipping_cost: 'dostava (kurir)', packaging_cost: 'pakovanje', discount: 'popust', discount_code: 'kod', channel: 'kanal', category: 'kategorija', supplier: 'dobavljač', material: 'materijal', image_url: 'slika', concept: 'skripta', hook: 'hook', caption: 'opis', format: 'format', post_url: 'link objave', views: 'pregledi', likes: 'lajkovi', saves: 'sačuvano', description: 'opis', link: 'link', votes: 'glasovi', code: 'kod', pct: 'popust %', rsd: 'popust RSD', valid_to: 'važi do', valid_from: 'važi od', active: 'aktivan', max_uses: 'maks. upotreba', starts_at: 'početak', ends_at: 'kraj', budget: 'budžet', goal: 'cilj', result_note: 'zaključak', happened_at: 'datum', kind: 'vrsta', min_stock: 'granica', per_order: 'po paketu', unit_price: 'cena', spend: 'potrošeno', purchases: 'kupovine', revenue: 'prihod', reason: 'razlog', package_received_at: 'paket stigao', resolution_wanted: 'kupac želi', restocked: 'vraćeno na stanje', size: 'veličina', color: 'boja', qty: 'količina', email: 'email', instagram: 'instagram', birthday: 'rođendan', source: 'izvor', position: 'redosled', pinned: 'zakačeno', done: 'završeno', delivered_on: 'paket primljen', shipped_at: 'poslato', delivered_at: 'isporučeno', photos: 'fotografije', order_no: 'broj', exchange_details: 'želi umesto toga', item: 'komad', rating: 'ocena', customer_name: 'kupac', type: 'tip', discount_pct: 'popust %', discount_rsd: 'popust RSD', deleted_at: '__del' };
 const NF_SKIP = new Set(['assignee', 'done_at', 'done_by', 'task_at', 'task_by', 'task_done_by', 'updated_at', 'updated_by', 'created_at', 'created_by', 'deleted_by', 'phone_norm', 'first_order_at', 'customer_id', 'product_id', 'variant_id', 'order_id', 'code_id', 'consent', 'case_no', 'id', 'bank_account', 'shopify_order_id', 'shopify_product_id', 'shopify_variant_id', 'resolved_at', 'area', 'author']);
 const prodName = (id) => product(id)?.name || 'komad';
 const custName = (id) => state.customers.find(c => c.id === id)?.name || 'kupac';
@@ -2431,7 +2433,7 @@ function describeAudit(a) {
   if (PEOPLE[a.actor] && Array.isArray(row.assignees) && row.assignees.length) {
     const meK = who(), fa = PEOPLE[a.actor].f, ch = a.changed || {};
     if (a.actor !== meK && row.assignees.includes(meK) && (a.op === 'INSERT' || (ch.assignees && !(ch.assignees.od || []).includes(meK))))
-      return { cat, text: `${fa ? 'dodelila' : 'dodelio'} ti je zadatak: ${ref || esc(T.label)}${row.task_due ? ` <span class="page-sub">(rok ${fmtDate(row.task_due)})</span>` : ''}`, open: 'tab:tasks', prio: 30, kind: 'add' };
+      return { cat, text: `${fa ? 'dodelila' : 'dodelio'} ti je zadatak: ${row.task_note && a.tbl !== 'h_notes' ? `„${esc(tcut(row.task_note, 90))}“ · ` : ''}${ref || esc(T.label)}${row.task_due ? ` <span class="page-sub">(rok ${fmtDate(row.task_due)})</span>` : ''}`, open: 'tab:tasks', prio: 30, kind: 'add' };
     if (a.op === 'UPDATE' && ch.task_done_at) {
       if (ch.task_done_at.na && !ch.task_done_at.od) return { cat, text: `${fa ? 'završila' : 'završio'} zadatak: ${ref}`, open: 'tab:tasks', prio: T.prio + 3, kind: 'edit' };
       if (!ch.task_done_at.na && ch.task_done_at.od) return { cat, text: `${fa ? 'ponovo otvorila' : 'ponovo otvorio'} zadatak: ${ref}`, open: 'tab:tasks', prio: T.prio + 2, kind: 'edit' };
@@ -2789,19 +2791,110 @@ function renderHomeNotes() {
       <span class="n-act"><button data-note="${x.id}" data-act="pin" title="Zakači">📌</button><button data-note="${x.id}" data-act="done" title="Završeno">✓</button><button data-note="${x.id}" data-act="del" title="Obriši">✕</button></span></div>`).join('')
     + `<div class="hn add" id="hnAdd">✎ Nova beleška</div><div class="hn all" data-goto="notes">Sve beleške (${list.length}) →</div>`;
 }
+/* ---------- „Nov zadatak“ prema sekciji ----------
+   kad se izabere sekcija, pita „za šta je zadatak“: nova stavka (otvara celu formu te sekcije sa već dodeljenim zadatkom),
+   postojeća stavka (porudžbina, kupac, objava…) ili samo zadatak kao beleška u sekciji */
+const QL = {
+  posts: { srcs: ['post'], nw: 'Nova ideja', pk: 'Postojeća', what: 'objavu ili reklamu', px: 'po', ph: 'Traži objavu ili reklamu…',
+    hint: 'Otvoriće se cela forma za objavu: <b>ideja, gde se koristi (objava / reklama), inspiracija, skripta sa hook-om, format i status</b>. Prvi red gore postaje naziv ideje, ostalo ide u skriptu.',
+    open: (t, rest) => { openPostModal(); if (t) $('po_title').value = t; if (rest) $('po_concept').value = rest; } },
+  ads: { srcs: ['post'], filter: x => ppOf(x) !== 'post', nw: 'Nova reklama', pk: 'Postojeća', what: 'reklamu', px: 'po', ph: 'Traži reklamu…',
+    hint: 'Otvoriće se forma za reklamu (namena „Samo reklama“): <b>ideja, inspiracija, skripta sa hook-om, format, datum</b>. Prvi red gore postaje naziv.',
+    open: (t, rest) => { openPostModal(); setPostPurpose('ad'); if (t) $('po_title').value = t; if (rest) $('po_concept').value = rest; } },
+  site: { srcs: ['site'], nw: 'Nov predlog', pk: 'Postojeći', what: 'predlog za sajt', px: 'st', ph: 'Traži predlog…',
+    hint: 'Otvoriće se forma predloga za sajt: <b>naslov, opis, kategorija, prioritet, link i slika</b>. Prvi red gore postaje naslov, ostalo opis.',
+    open: (t, rest) => { openIdeaModal(null, 'site'); if (t) $('si_title').value = t; if (rest) $('si_desc').value = rest; } },
+  packaging: { srcs: ['pack', 'packidea'], nw: 'Nov predlog', pk: 'Materijal / predlog', what: 'materijal ili predlog', px: 'st', ph: 'Traži materijal (kutija, papir, stiker…) ili predlog…',
+    hint: 'Otvoriće se forma predloga za pakovanje: <b>naslov, opis, kategorija, prioritet, link i slika</b>. Za zadatak oko postojećeg materijala izaberi „Materijal / predlog“.',
+    open: (t, rest) => { openIdeaModal(null, 'packaging'); if (t) $('si_title').value = t; if (rest) $('si_desc').value = rest; } },
+  promos: { srcs: ['promo'], nw: 'Nova promocija', pk: 'Postojeća', what: 'promociju', px: 'mt', ph: 'Traži promociju…',
+    hint: 'Otvoriće se forma promocije: <b>naziv, tip, od-do, kod, popust, kanal, budžet i cilj</b>. Prvi red gore postaje naziv, ostalo opis.',
+    open: (t, rest) => { openPromoModal(); if (t) $('pr_name').value = t; if (rest) $('pr_description').value = rest; } },
+  orders: { srcs: ['order'], first: 'pick', nw: 'Nova porudžbina', pk: 'Postojeća porudžbina', what: 'porudžbinu', px: 'ot', noteOnly: true, ph: 'Traži po broju, kupcu, telefonu…',
+    hint: 'Otvoriće se forma za novu porudžbinu, a tekst gore ide kao opis zadatka.', open: () => openOrderModal() },
+  customers: { srcs: ['cust'], first: 'pick', pk: 'Kupac', what: 'kupca', ph: 'Traži kupca po imenu, telefonu, Instagramu…' },
+  products: { srcs: ['product'], first: 'pick', nw: 'Nov komad', pk: 'Postojeći model', what: 'model', px: 'pt', noteOnly: true, ph: 'Traži model…',
+    hint: 'Otvoriće se forma za nov komad (naziv, cene, veličine i boje), a tekst gore ide kao opis zadatka.', open: () => openProductModal() },
+  returns: { srcs: ['ret'], first: 'pick', nw: 'Nova prijava', pk: 'Postojeća prijava', what: 'prijavu', px: 'rt', noteOnly: true, ph: 'Traži po broju prijave ili kupcu…',
+    hint: 'Otvoriće se forma za novu prijavu (povrat, zamena, reklamacija), a tekst gore ide kao opis zadatka.', open: () => openRetModal() },
+  story: { srcs: ['story'], first: 'pick', pk: 'Poglavlje', what: 'poglavlje priče', ph: 'Traži poglavlje…' },
+};
+const qlState = { area: null, mode: 'note', sel: null, q: '' };
+const qlCfg = () => ($('noteModal').dataset.task === '1' ? QL[$('qn_area').value] : null);
+function qlItems(cfg) {
+  const qn = fold(qlState.q.trim()); let items = [];
+  cfg.srcs.forEach(k => { const src = taskSrcOf(k); src.list().filter(x => !cfg.filter || cfg.filter(x)).forEach(x => items.push({ src, x })); });
+  if (qn) items = items.filter(({ src, x }) => fold([src.title(x), src.sub(x), x.phone, x.instagram, x.email, x.city, x.code, x.task_note].filter(Boolean).join(' ')).includes(qn));
+  items.sort((a, b) => (a.src.final(a.x) - b.src.final(b.x)) || String(b.x.created_at || '').localeCompare(String(a.x.created_at || '')));
+  return items;
+}
+function qlListHtml(cfg) {
+  const items = qlItems(cfg), sel = qlState.sel;
+  return items.slice(0, 50).map(({ src, x }) => { const key = src.k + ':' + x.id, fin = src.final(x);
+    return `<button type="button" class="ql-it ${sel === key ? 'on' : ''} ${fin ? 'fin' : ''}" data-qlsel="${key}"><span class="ql-ic">${src.ic}</span><span class="ql-t"><b>${esc(src.title(x))}</b><small>${esc(src.sub(x) || '')}${fin ? ' · završeno' : ''}${assigneesOf(x).length && !taskIsDone(x, src) ? ' · već ima zadatak: ' + esc(assigneesOf(x).map(personName).join(', ')) : ''}</small></span><span class="ql-ok">✓</span></button>`; }).join('') || `<div class="ql-empty">${qlState.q ? 'Ništa ne odgovara pretrazi.' : 'Još nema stavki u ovoj sekciji.'}</div>`;
+}
+function renderQl() {
+  const box = $('qnLink'), cfg = qlCfg(), area = $('qn_area').value;
+  if (!cfg) { box.style.display = 'none'; box.innerHTML = ''; qlState.mode = 'note'; qlSync(); return; }
+  if (qlState.area !== area) { qlState.area = area; qlState.sel = null; qlState.q = ''; qlState.mode = cfg.first || (cfg.nw ? 'new' : 'pick'); }
+  const modes = [cfg.nw && ['new', '＋ ' + cfg.nw], ['pick', cfg.pk], ['note', 'Samo zadatak']].filter(Boolean);
+  let body = '';
+  if (qlState.mode === 'new') body = `<div class="ql-hint">${cfg.hint}</div>`;
+  else if (qlState.mode === 'note') body = `<div class="ql-hint">Zadatak ostaje kao beleška u sekciji <b>${esc(areaSec(area))}</b>, vidi se u Beleškama i Taskovima.</div>`;
+  else body = `<input class="ql-q" id="qlQ" placeholder="${esc(cfg.ph)}" value="${esc(qlState.q)}" autocomplete="off" enterkeyhint="search"><div class="ql-list" id="qlList">${qlListHtml(cfg)}</div>`;
+  box.innerHTML = `<div class="ql-head">Za šta je zadatak? <small>${esc(areaSec(area))}</small></div><div class="seg ql-modes">${modes.map(([k, l]) => `<button type="button" data-qm="${k}" class="${qlState.mode === k ? 'active' : ''}">${esc(l)}</button>`).join('')}</div>${body}`;
+  box.style.display = '';
+  qlSync();
+}
+function qlSync() {
+  const cfg = qlCfg(), m = cfg ? qlState.mode : 'note', btn = $('qnSave');
+  btn.firstChild.textContent = m === 'new' ? 'Dalje → ' : 'Sačuvaj ';
+  $('qnPinWrap').style.display = m === 'note' ? 'flex' : 'none';
+  $('qnWriter').style.display = m === 'note' ? '' : 'none';
+  if ($('noteModal').dataset.task === '1') $('qn_body').placeholder = m === 'new' && cfg && !cfg.noteOnly ? 'Naziv (prvi red), ispod opis ako treba…' : m === 'pick' ? `Šta treba da se uradi za ${cfg.what}…` : 'Šta treba da se uradi…';
+}
+async function qlOpenNew(cfg, body) {
+  const as = whoPicked('qt_assignees'), due = $('qt_due').value || '';
+  const lines = body.split('\n'), first = lines[0].trim().slice(0, 140), rest = lines.slice(1).join('\n').trim();
+  $('noteModal').classList.remove('open');
+  await cfg.open(cfg.noteOnly ? '' : first, cfg.noteOnly ? '' : rest);
+  whoPick(cfg.px + '_assignees', as); $(cfg.px + '_due').value = due;
+  if (cfg.noteOnly && body && $(cfg.px + '_tnote')) $(cfg.px + '_tnote').value = body;
+  toast(as.length ? 'Popuni ostalo i sačuvaj. Zadatak je već dodeljen.' : 'Popuni ostalo i sačuvaj.', 3500);
+}
+async function qlSavePick(body) {
+  if (!qlState.sel) return toast('Izaberi stavku iz liste');
+  const [k, id] = qlState.sel.split(':'), src = taskSrcOf(k), x = src && src.list().find(y => y.id === id); if (!x) return toast('Stavka više ne postoji');
+  const as = whoPicked('qt_assignees'); if (!as.length) return toast('Izaberi ko treba da uradi zadatak');
+  const before = taskIsDone(x, src) ? [] : assigneesOf(x);
+  const patch = { assignees: as, task_due: $('qt_due').value || null, task_note: body || null, task_done_at: null, task_done_by: null };
+  if (['h_posts', 'h_returns'].includes(src.tbl)) patch.assignee = as.map(personName).join(', ');
+  $('qnSave').disabled = true;
+  try {
+    const r = await q(sb.from(src.tbl).update(patch).eq('id', id).select().single()); Object.assign(x, r || patch);
+    $('noteModal').classList.remove('open'); renderAll();
+    taskPop(before.length ? 'assign' : 'new', { title: body || src.title(x), sec: src.sec ? src.sec(x) : src.label, as, due: patch.task_due });
+  } catch (e) { fail(e); }
+  $('qnSave').disabled = false;
+}
 function openNoteModal(area, asTask) {
   $('qn_body').value = ''; $('qn_pin').checked = false;
   if (!area || area === 'auto') area = state.tab === 'tasks' && tkState.sec !== 'all' ? ((NOTE_AREAS.find(x => x[1] === tkState.sec) || [])[0] || 'general') : (TAB_AREA[state.tab] || 'general');
   $('qn_area').value = area;
   $('noteModal').querySelector('h3').textContent = asTask ? 'Nov zadatak' : 'Zabeleži';
+  $('noteModal').dataset.task = asTask ? '1' : ''; qlState.area = null;
   $('qn_body').placeholder = asTask ? 'Šta treba da se uradi…' : 'Šta treba da se zapamti…';
   taskSet('qt', null, taskSrcOf('note')); $('qt_task').style.display = area === 'milestone' ? 'none' : '';
   const w = state.writer || who();
   document.querySelectorAll('#qnWriter button').forEach(b => b.classList.toggle('active', b.dataset.qw === w));
+  renderQl();
   $('noteModal').classList.add('open'); setTimeout(() => $('qn_body').focus(), 40);
 }
 async function saveQuickNote() {
-  const body = $('qn_body').value.trim(); if (!body) return toast('Napiši nešto prvo');
+  const body = $('qn_body').value.trim(), cfg = qlCfg();
+  if (cfg && qlState.mode === 'new') return qlOpenNew(cfg, body);
+  if (cfg && qlState.mode === 'pick') return qlSavePick(body);
+  if (!body) return toast('Napiši nešto prvo');
   const area = $('qn_area').value, author = state.writer || who();
   try {
     if (area === 'milestone') {
@@ -3277,7 +3370,13 @@ function bindEvents() {
   $('newTaskBtn').addEventListener('click', () => openNoteModal('auto', true));
   $('tmSave').addEventListener('click', saveTaskModal);
   $('tmOpen').addEventListener('click', () => { if (!tmCtx) return; const { src, x } = tmCtx; $('taskModal').classList.remove('open'); const ref = src.ref(x); if (ref.startsWith('tab:')) setTab(ref.slice(4)); else if (src.k === 'cust') openCustModal(x.id); else openRef(ref); });
-  $('qn_area').addEventListener('change', (e) => { $('qt_task').style.display = e.target.value === 'milestone' ? 'none' : ''; });
+  $('qn_area').addEventListener('change', (e) => { $('qt_task').style.display = e.target.value === 'milestone' ? 'none' : ''; renderQl(); });
+  $('qnLink').addEventListener('click', (e) => {
+    const m = e.target.closest('[data-qm]'); if (m) { qlState.mode = m.dataset.qm; renderQl(); if (qlState.mode === 'pick') setTimeout(() => $('qlQ') && $('qlQ').focus(), 30); return; }
+    const it = e.target.closest('[data-qlsel]'); if (it) { qlState.sel = qlState.sel === it.dataset.qlsel ? null : it.dataset.qlsel; $('qnLink').querySelectorAll('.ql-it').forEach(b => b.classList.toggle('on', b.dataset.qlsel === qlState.sel)); }
+  });
+  $('qnLink').addEventListener('input', (e) => { if (e.target.id !== 'qlQ') return; qlState.q = e.target.value; const cfg = qlCfg(); if (cfg && $('qlList')) $('qlList').innerHTML = qlListHtml(cfg); });
+  $('qnLink').addEventListener('keydown', (e) => { if (e.target.id === 'qlQ' && e.key === 'Enter') { e.preventDefault(); const f = $('qlList') && $('qlList').querySelector('[data-qlsel]'); if (f) f.click(); } });
   taskSet('nt', null, taskSrcOf('note'));
   fillAreaSelects();
   document.addEventListener('click', (e) => { const b = e.target.closest('.who-pick .wp'); if (!b) return; b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); });
@@ -3388,6 +3487,7 @@ const BOT_FAQ = [
   { g: [['ne radi', 'ne mogu', 'ne ucitav', 'zablok', 'zapel', 'zaglav', 'gresk', 'bug', 'ne otvar', 'ne cuva', 'ne sacuv', 'ne pokaz', 'ne vidim']], a: 'Prvo probaj osvežavanje: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> (na telefonu zatvori i ponovo otvori stranicu). Ako i dalje ne radi, pošalji timu kratak opis dugmetom ispod, pa će neko da pogleda.', b: [['Pošalji timu', 'teamlast']] },
   { g: [['backup', 'rezerv', 'sigurn', 'bezbed']], a: 'Podaci se čuvaju zauvek: obrisano ide u arhivu, svaka promena se beleži, a svake noći u 03:30 pravi se rezervna kopija cele baze na GitHub-u.', b: [['Istorija', 'tab:history']] },
   { g: [['istorij', 'prekretnic', 'dogadja', 'vremensk']], a: 'Istorija je vremenska linija svega. Važan događaj (lansiranje, nova kolekcija…) dodaješ dugmetom <b>Zabeleži događaj</b>.', b: [['Zabeleži događaj', 'act:Zabeleži događaj u istoriji'], ['Istorija', 'tab:history']] },
+  { g: [['nov zadatak', 'novi zadatak', 'novi task', 'nov task', 'zadatak za', 'task za', 'dodeli', 'zaduzi']], a: 'Klikni <b>Nov zadatak</b> (u Taskovima ili taster B), upiši šta treba i izaberi <b>Sekciju</b>. Ispod se pojavi <b>Za šta je zadatak?</b>: <b>＋ nova stavka</b> (npr. cela forma za ideju u Objave + reklame, predlog za Sajt, promocija), <b>postojeća</b> stavka iz liste (porudžbina, kupac, model, prijava…) ili <b>Samo zadatak</b> kao beleška. Izaberi ko radi i rok, pa Sačuvaj.', b: [['Nov zadatak', 'act:Nov zadatak'], ['Taskovi', 'tab:tasks']] },
   { g: [['zvuk', 'zvuc', 'ting', 'muzik', 'utisa', 'tisin', 'sound']], a: 'CRM ima zvuke: uvod kad uđeš, „ka-čing“ za novu porudžbinu (tiši kad je unese neko drugi), zvonce za zadatke, šuškanje papira za belešku, zvuk za poslato i isporučeno, brisanje i vraćanje, a za prvu, 10., 25., 50., 100. porudžbinu i za rekordan dan i mala proslava sa konfetama. Sve se gasi i pali u zvoncetu gore (Zvuci) ili u meniju sa tri crtice (Zvuk); tu je i <b>▶ Probaj</b>.', b: [] },
   { g: [['izvor', 'organic', 'organsk', 'meta ads', 'tiktok', 'tik tok', 'google ads', 'atribuc', 'odakle je dosl']], a: 'Svaka porudžbina ima <b>Izvor</b>: <b>Organic</b> (ručno uneta ili ne znamo odakle je došla), <b>Meta Ads</b>, <b>TikTok Ads</b> ili <b>Google Ads</b>. Biraš ga u formi porudžbine (podrazumevano Organic). U Porudžbinama je filter <b>Svi izvori</b> sa brojem porudžbina, a pored broja stoji ukupan iznos za taj izvor.', b: [['Porudžbine', 'tab:orders'], ['Nova porudžbina', 'act:Nova porudžbina']] },
   { g: [['istorij', 'zavrsen', 'obrisan', 'otkac', 'skin', 'gde ide', 'gde su', 'gde odu'], ['beles', 'beleshk', 'belez', 'papiric']], a: 'Kad <b>otkačiš</b> belešku, ona ostaje među ostalima pod svojim datumom. Kad je označiš <b>✓ Završeno</b> ili obrišeš <b>✕</b>, ide u <b>Beleške → Istorija</b>, grupisano po danu, sa oznakom ko je završio ili obrisao. Svaka može da se vrati.', b: [['Beleške', 'tab:notes']] },
@@ -3408,7 +3508,7 @@ function botTasks(t) {
   const nm = forK === me ? 'Tvoji' : `${personName(forK)}:`;
   if (!list.length) return botSay(`${forK === me ? 'Nemaš otvorenih zadataka.' : personName(forK) + ' nema otvorenih zadataka.'} 👌`, [['Taskovi', 'tab:tasks'], ['Nov zadatak', 'act:Nov zadatak']]);
   const late = list.filter(x => dueInfo(x.due)?.level === 'late').length;
-  botSay(`<div class="bt-cap" style="margin-bottom:6px">${nm} ${list.length} ${bpl(list.length, 'otvoren zadatak', 'otvorena zadatka', 'otvorenih zadataka')}${late ? `, <span class="bt-red">${late} kasni</span>` : ''}</div><div class="bt-list">${list.slice(0, 8).map(x => { const d = dueInfo(x.due); return botItem(esc(tcut(x.src.title(x.x), 60)), `${esc(x.sec)}${d ? ` · <span class="${d.level === 'late' ? 'bt-red' : d.level === 'today' ? 'bt-amber' : ''}">${d.txt}</span>` : ''}`, x.src.k === 'note' || x.src.k === 'story' ? 'tab:tasks' : 'ref:' + x.src.ref(x.x), x.src.ic); }).join('')}</div>`, [['Taskovi', 'tab:tasks'], ['Nov zadatak', 'act:Nov zadatak']]);
+  botSay(`<div class="bt-cap" style="margin-bottom:6px">${nm} ${list.length} ${bpl(list.length, 'otvoren zadatak', 'otvorena zadatka', 'otvorenih zadataka')}${late ? `, <span class="bt-red">${late} kasni</span>` : ''}</div><div class="bt-list">${list.slice(0, 8).map(x => { const d = dueInfo(x.due); return botItem(esc(tcut(x.x.task_note && x.src.k !== 'note' ? x.x.task_note : x.src.title(x.x), 60)), `${esc(x.sec)}${d ? ` · <span class="${d.level === 'late' ? 'bt-red' : d.level === 'today' ? 'bt-amber' : ''}">${d.txt}</span>` : ''}`, x.src.k === 'note' || x.src.k === 'story' ? 'tab:tasks' : 'ref:' + x.src.ref(x.x), x.src.ic); }).join('')}</div>`, [['Taskovi', 'tab:tasks'], ['Nov zadatak', 'act:Nov zadatak']]);
 }
 function botItem(title, sub, go, ic) { return `<button class="bt-item" data-bgo="${esc(go)}"><span class="bi-ic">${ic || '›'}</span><span class="bi-t"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span></button>`; }
 function botPush(from, html, btns) { BOT.msgs.push({ from, html, btns: btns || [], at: Date.now() }); botSave(); renderBot(); }
@@ -3801,7 +3901,7 @@ function aiSnapshot() {
   state.promos.slice().sort((a, b) => b.starts_at.localeCompare(a.starts_at)).forEach(p => { const x = promoResults(p); row(p.id, p.name, p.type, d(p.starts_at), p.ends_at ? d(p.ends_at) : 'traje', ST[promoStatus(p)], p.code, p.discount_pct ? p.discount_pct + '%' : p.discount_rsd ? R(p.discount_rsd) + ' RSD' : '', p.channel, R(p.budget) || '', cut(p.goal, 60), x.orders, R(x.revenue), x.withCode, x.lift == null ? '' : Math.round(x.lift * 100) + '%', R(x.spend), R(x.net), cut(p.description, 100), cut(p.result_note, 80), promoNotes(p.id).map(z => `${personName(z.author)}: ${cut(z.body, 60)}`).join(' / ')); });
 
   L.push(`\n## TASKOVI (otvoreni zadaci, iz svih sekcija)\nsekcija|stavka|zaduženi|rok|dodelio`);
-  allTasks().filter(t => !t.done).forEach(t => row(t.sec, cut(t.src.title(t.x), 90), t.as.map(personName).join(', '), t.due || '', t.x.task_by ? personName(t.x.task_by) : ''));
+  allTasks().filter(t => !t.done).forEach(t => row(t.sec, cut((t.x.task_note && t.src.k !== 'note' ? t.x.task_note + ' · za: ' : '') + t.src.title(t.x), 160), t.as.map(personName).join(', '), t.due || '', t.x.task_by ? personName(t.x.task_by) : ''));
   L.push(`\n## OBJAVE + REKLAME\nid|naslov|namena|faza|format|datum|zadužen|hook|skripta|caption|drive link|inspiracija`);
   state.posts.forEach(p => row(p.id, p.title, PURPOSE[ppOf(p)], ST[p.status], FMT[p.format] || p.format, dt(p.publish_at), assigneeNames(p), cut(p.hook, 90), cut(p.concept, 260), cut(p.caption, 80), p.drive_link ? 'ima' : 'nema', inspoLinks(p).join(' ')));
 

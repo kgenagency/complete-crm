@@ -666,3 +666,10 @@ do $$ begin
     alter table public.h_orders add constraint h_orders_source_chk check (source in ('organic','meta','tiktok','google'));
   end if;
 end $$;
+
+-- opis zadatka („šta treba da se uradi“) na svakoj stavci koja može biti zadatak
+do $$ declare t text; begin
+  foreach t in array array['h_notes','h_posts','h_site_ideas','h_packaging','h_returns','h_promotions','h_orders','h_customers','h_products','h_story_sections'] loop
+    execute format('alter table public.%I add column if not exists task_note text', t);
+  end loop;
+end $$;

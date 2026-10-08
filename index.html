@@ -504,6 +504,29 @@ tbody tr{transition:background .15s}
 .task-row .tr-head b{font-size:12.5px;letter-spacing:.02em}
 .task-row .tr-ic{width:20px;height:20px;border-radius:6px;background:#1B2620;color:#E8E4D9;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
 .task-row .tr-body{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.task-row .tr-note{flex:1 1 100%;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px;margin:0}
+.qn-link{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:11px 12px 12px;animation:fadeUp .25s var(--ease) both}
+.ql-head{font-size:12.5px;font-weight:700;margin-bottom:8px;display:flex;gap:6px;align-items:center;color:var(--ink)}
+.ql-head small{font-weight:500;color:var(--ink-3,#8a8574)}
+.ql-modes{display:flex;width:100%}
+.ql-modes button{flex:1 1 0;white-space:nowrap;padding:8px 6px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.ql-hint{font-size:12.5px;color:var(--ink-2);margin-top:9px;line-height:1.5}
+.ql-hint b{color:var(--ink)}
+.ql-q{width:100%;margin-top:9px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fbf9f3;font-size:13px}
+.ql-list{max-height:220px;overflow:auto;margin-top:6px;display:flex;flex-direction:column;gap:4px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.ql-it{display:flex;align-items:center;gap:10px;text-align:left;border:1.5px solid transparent;background:#f7f5ee;border-radius:10px;padding:8px 10px;width:100%;cursor:pointer;color:var(--ink)}
+.ql-it:hover{background:#f1eee4}
+.ql-it.on{border-color:var(--ink);background:#fff}
+.ql-it .ql-ic{width:22px;text-align:center;flex:none;opacity:.7}
+.ql-it .ql-t{flex:1;min-width:0}
+.ql-it .ql-t b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ql-it .ql-t small{display:block;font-size:11.5px;color:var(--ink-3,#8a8574);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ql-it .ql-ok{flex:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;background:var(--ink);color:#fff;opacity:0;transform:scale(.6);transition:all .15s}
+.ql-it.on .ql-ok{opacity:1;transform:none}
+.ql-it.fin{opacity:.62}
+.ql-empty{font-size:12.5px;color:var(--ink-3,#8a8574);padding:10px 2px}
+.tk-ref{font-size:12px;color:var(--ink-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:640px){.task-row .tr-note,.ql-q{font-size:16px}.ql-it{padding:11px 10px}.ql-modes button{font-size:12.5px;padding:8px 4px;white-space:normal;text-overflow:clip;line-height:1.2}.ql-list{max-height:260px}}
 .task-row .tr-due{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--ink-2);margin:0}
 .task-row .tr-due input{width:auto;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px}
 .task-row .tr-state{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);margin-top:8px}
@@ -1705,7 +1728,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       </div>
       <div class="field"><label>Broj pošiljke</label><input id="o_track"></div>
       <div class="field"><label>Napomena</label><textarea id="o_note"></textarea></div>
-      <div class="task-row" id="ot_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="ot_assignees"></div><label class="tr-due">Rok <input type="date" id="ot_due"></label></div><div class="tr-state" id="ot_tstate"></div></div>
+      <div class="task-row" id="ot_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><input class="tr-note" id="ot_tnote" placeholder="Šta treba da se uradi (nije obavezno)" maxlength="400"><div class="who-pick" id="ot_assignees"></div><label class="tr-due">Rok <input type="date" id="ot_due"></label></div><div class="tr-state" id="ot_tstate"></div></div>
       <div class="sum-box" id="orderSum"></div>
       <div class="modal-actions"><button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" type="submit" id="omSave">Sačuvaj</button></div>
     </form>
@@ -1738,7 +1761,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       <div id="sizeRows"></div>
       <button type="button" class="mini-btn" id="addSizeBtn">+ Veličina</button>
       <div class="field" style="margin-top:14px"><label>Napomena</label><textarea id="p_note"></textarea></div>
-      <div class="task-row" id="pt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="pt_assignees"></div><label class="tr-due">Rok <input type="date" id="pt_due"></label></div><div class="tr-state" id="pt_tstate"></div></div>
+      <div class="task-row" id="pt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><input class="tr-note" id="pt_tnote" placeholder="Šta treba da se uradi (nije obavezno)" maxlength="400"><div class="who-pick" id="pt_assignees"></div><label class="tr-due">Rok <input type="date" id="pt_due"></label></div><div class="tr-state" id="pt_tstate"></div></div>
       <div class="modal-actions">
         <button type="button" class="fu-remove" id="pmDelete" style="display:none">Obriši</button>
         <button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" type="submit">Sačuvaj</button>
@@ -1763,7 +1786,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         <div class="field"><label>Format</label><select id="po_format"><option value="reel">Reel</option><option value="carousel">Carousel</option><option value="story">Story</option><option value="post">Post</option><option value="tiktok">TikTok</option></select></div>
         <div class="field"><label>Status</label><select id="po_status"></select></div>
       </div>
-      <div class="task-row" id="po_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="po_assignees"></div><label class="tr-due">Rok <input type="date" id="po_due"></label></div><div class="tr-state" id="po_tstate"></div></div>
+      <div class="task-row" id="po_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><input class="tr-note" id="po_tnote" placeholder="Šta treba da se uradi (nije obavezno)" maxlength="400"><div class="who-pick" id="po_assignees"></div><label class="tr-due">Rok <input type="date" id="po_due"></label></div><div class="tr-state" id="po_tstate"></div></div>
       <div class="frow">
         <div class="field"><label id="po_dateLbl">Datum i vreme objave</label><input id="po_date" type="datetime-local"></div>
         <div class="field"><label>Komad iz ponude</label><select id="po_product"></select></div>
@@ -1794,7 +1817,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         <div class="field"><label>Link (primer ili stranica)</label><input id="si_link" type="url"></div>
         <div class="field"><label>Slika / skica</label><input id="si_file" type="file" accept="image/*"></div>
       </div>
-      <div class="task-row" id="st_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="st_assignees"></div><label class="tr-due">Rok <input type="date" id="st_due"></label></div><div class="tr-state" id="st_tstate"></div></div>
+      <div class="task-row" id="st_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><input class="tr-note" id="st_tnote" placeholder="Šta treba da se uradi (nije obavezno)" maxlength="400"><div class="who-pick" id="st_assignees"></div><label class="tr-due">Rok <input type="date" id="st_due"></label></div><div class="tr-state" id="st_tstate"></div></div>
       <div id="siComments"></div>
       <div class="modal-actions">
         <button type="button" class="fu-remove" id="siDelete" style="display:none">Obriši</button>
@@ -1823,7 +1846,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       </div>
       <div class="field"><label>Koliko ide u svaki paket</label><input id="pa_per" type="number" min="0"><div class="hint">Ako je više od 0, nova porudžbina sama skida ovaj materijal sa stanja i dodaje ga u trošak pakovanja.</div></div>
       <div class="field"><label>Napomena</label><textarea id="pa_note"></textarea></div>
-      <div class="task-row" id="kt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="kt_assignees"></div><label class="tr-due">Rok <input type="date" id="kt_due"></label></div><div class="tr-state" id="kt_tstate"></div></div>
+      <div class="task-row" id="kt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><input class="tr-note" id="kt_tnote" placeholder="Šta treba da se uradi (nije obavezno)" maxlength="400"><div class="who-pick" id="kt_assignees"></div><label class="tr-due">Rok <input type="date" id="kt_due"></label></div><div class="tr-state" id="kt_tstate"></div></div>
       <div class="modal-actions">
         <button type="button" class="fu-remove" id="paDelete" style="display:none">Obriši</button>
         <button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" type="submit">Sačuvaj</button>
@@ -1841,7 +1864,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
         <div class="field"><label>Tip</label><select id="rt_type"><option value="return">Povrat</option><option value="exchange">Zamena</option><option value="complaint">Reklamacija</option><option value="feedback">Utisak</option></select></div>
         <div class="field"><label>Status</label><select id="rt_status"></select></div>
       </div>
-      <div class="task-row" id="rt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="rt_assignees"></div><label class="tr-due">Rok <input type="date" id="rt_due"></label></div><div class="tr-state" id="rt_tstate"></div></div>
+      <div class="task-row" id="rt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><input class="tr-note" id="rt_tnote" placeholder="Šta treba da se uradi (nije obavezno)" maxlength="400"><div class="who-pick" id="rt_assignees"></div><label class="tr-due">Rok <input type="date" id="rt_due"></label></div><div class="tr-state" id="rt_tstate"></div></div>
       <div class="frow">
         <div class="field"><label>Kupac *</label><input id="rt_customer_name" required></div>
         <div class="field"><label>Telefon</label><input id="rt_phone"></div>
@@ -1927,7 +1950,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
       <div class="field"><label>Zaključak posle akcije</label><textarea id="pr_result_note" style="min-height:60px" placeholder="Šta je radilo, šta ne, šta sledeći put"></textarea></div>
       <div id="prResults"></div>
       <div id="prNotes"></div>
-      <div class="task-row" id="mt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="mt_assignees"></div><label class="tr-due">Rok <input type="date" id="mt_due"></label></div><div class="tr-state" id="mt_tstate"></div></div>
+      <div class="task-row" id="mt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><input class="tr-note" id="mt_tnote" placeholder="Šta treba da se uradi (nije obavezno)" maxlength="400"><div class="who-pick" id="mt_assignees"></div><label class="tr-due">Rok <input type="date" id="mt_due"></label></div><div class="tr-state" id="mt_tstate"></div></div>
       <div class="modal-actions">
         <button type="button" class="fu-remove" id="prDelete" style="display:none">Obriši</button>
         <button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" type="submit">Sačuvaj</button>
@@ -2060,7 +2083,7 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
   <div class="modal" style="max-width:560px">
     <h3 id="tmTitle">Zadatak</h3>
     <div class="tm-item" id="tmItem"></div>
-    <div class="task-row" id="tm_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="tm_assignees"></div><label class="tr-due">Rok <input type="date" id="tm_due"></label></div><div class="tr-state" id="tm_tstate"></div></div>
+    <div class="task-row" id="tm_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><input class="tr-note" id="tm_tnote" placeholder="Šta treba da se uradi (nije obavezno)" maxlength="400"><div class="who-pick" id="tm_assignees"></div><label class="tr-due">Rok <input type="date" id="tm_due"></label></div><div class="tr-state" id="tm_tstate"></div></div>
     <div class="modal-actions"><button type="button" class="btn-ghost" id="tmOpen">Otvori stavku ↗</button><span style="flex:1"></span><button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" type="button" id="tmSave">Sačuvaj</button></div>
   </div>
 </div>
@@ -2072,8 +2095,9 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
     <div class="writer" id="qnWriter"><span>Piše:</span><button data-qw="konstantin">Konstantin</button><button data-qw="stasa">Staša</button><button data-qw="marjan">Marjan</button></div>
     <div class="frow" style="margin-top:12px">
       <div class="field" style="margin:0"><label>Sekcija</label><select id="qn_area"></select></div>
-      <div class="field" style="margin:0;display:flex;align-items:flex-end"><label class="check" style="margin:0;display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="qn_pin"> Zakači na vrh</label></div>
+      <div class="field" style="margin:0;display:flex;align-items:flex-end" id="qnPinWrap"><label class="check" style="margin:0;display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="qn_pin"> Zakači na vrh</label></div>
     </div>
+    <div class="qn-link" id="qnLink" style="display:none"></div>
     <div class="task-row compact" id="qt_task"><div class="tr-head"><span class="tr-ic">☑</span><b>Zadatak</b><span class="lbl-hint">nije obavezno: ko treba da uradi i do kad</span></div><div class="tr-body"><div class="who-pick" id="qt_assignees"></div><label class="tr-due">Rok <input type="date" id="qt_due"></label></div><div class="tr-state" id="qt_tstate"></div></div>
     <div class="modal-actions"><button type="button" class="btn-ghost" data-close>Otkaži</button><button class="btn-gold" id="qnSave">Sačuvaj <kbd style="margin-left:6px;background:rgba(255,255,255,.2);border-color:transparent;color:#E8E4D9">Ctrl ⏎</kbd></button></div>
   </div>
@@ -2097,8 +2121,8 @@ body.bot-open .ntray{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610072357"></script>
-<script>window.HTML_BUILD="202610072357";</script>
-<script src="app.js?v=202610072357"></script>
+<script src="config.js?v=202610080008"></script>
+<script>window.HTML_BUILD="202610080008";</script>
+<script src="app.js?v=202610080008"></script>
 </body>
 </html>
