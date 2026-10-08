@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610080943';
+const APP_BUILD = '202610080949';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -4109,7 +4109,7 @@ async function pushRegister(prefs) {
   if (error) throw error; PUSH.row = data; return data;
 }
 async function pushEnable() {
-  if (!pushSupported()) return toast(isIOS() && !isStandalone() ? 'Na iPhone-u prvo dodaj CRM na početni ekran iz Safari-ja.' : 'Ovaj pretraživač ne podržava obaveštenja.', 4500);
+  if (!pushSupported()) return toast(isIOS() && !isStandalone() ? 'Na iPhone-u prvo dodaj CRM na početni ekran (dugme Podeli → Dodaj na početni ekran), pa ga otvori sa ikonice.' : 'Ovaj pretraživač ne podržava obaveštenja.', 4500);
   try {
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') { renderPushModal(); renderPushBar(); return toast('Obaveštenja nisu dozvoljena. Dozvoli ih u podešavanjima pretraživača za ovaj sajt.', 5000); }
@@ -4146,7 +4146,7 @@ function renderPushModal() {
     on: '<span class="pm-dot on"></span><b>Uključeno na ovom uređaju</b><small>' + esc(deviceName()) + '. Stiže i kad je CRM zatvoren.</small>',
     off: '<span class="pm-dot"></span><b>Isključeno na ovom uređaju</b><small>Uključi da ti zadaci i porudžbine stižu kao poruke, i kad je CRM zatvoren.</small>',
     denied: '<span class="pm-dot no"></span><b>Blokirano u pretraživaču</b><small>Pretraživač je zapamtio „Ne dozvoli“ za ovaj sajt. Odblokiraj ovako, pa klikni „Proveri ponovo“:</small><div class="pm-help">' + pushHelpHtml() + '</div>',
-    ios: '<span class="pm-dot"></span><b>Na iPhone-u treba jedan korak više</b><small>Otvori CRM u Safari-ju → dugme Podeli → „Dodaj na početni ekran“. Zatim otvori CRM sa ikonice i ovde uključi obaveštenja.</small>',
+    ios: '<span class="pm-dot"></span><b>Na iPhone-u treba jedan korak više</b><small>' + (/CriOS/.test(navigator.userAgent) ? 'U Chrome-u: dugme Podeli (kvadrat sa strelicom, gore desno pored adrese) → „Dodaj na početni ekran“.' : 'U Safari-ju: dugme Podeli (kvadrat sa strelicom) → „Dodaj na početni ekran“.') + ' Zatim otvori CRM <b>sa nove ikonice H</b> i ovde uključi obaveštenja. Treba iOS 16.4 ili noviji.</small>',
     nosupport: '<span class="pm-dot no"></span><b>Ovaj pretraživač ne podržava obaveštenja</b><small>Probaj u Chrome-u.</small>',
   }[st];
   $('pmPrefs').innerHTML = PUSH_PREFS.map(([k, t, s]) => '<label class="pm-row ' + (on ? '' : 'dis') + '"><input type="checkbox" data-pp="' + k + '" ' + (prefs[k] !== false ? 'checked' : '') + ' ' + (on ? '' : 'disabled') + '><span><b>' + t + '</b><small>' + s + '</small></span></label>').join('');
@@ -4172,7 +4172,7 @@ function renderPushBar() {
   const show = !!state.user && !nag && (st === 'ios' || (st === 'off' && Notification.permission === 'default'));
   if (!show) { if (bar) bar.remove(); return; }
   if (!bar) { bar = document.createElement('div'); bar.id = 'pushBar'; bar.className = 'push-bar'; const t = $('tabs'); t.parentNode.insertBefore(bar, t.nextSibling); }
-  bar.innerHTML = '<span class="pb-ic">🔔</span><span class="pb-t"><b>Uključi obaveštenja na ' + (/Android|iPhone|iPad/.test(navigator.userAgent) ? 'telefonu' : 'računaru') + '</b><small>' + (st === 'ios' ? 'Na iPhone-u: Safari → Podeli → Dodaj na početni ekran, pa otvori CRM sa ikonice.' : 'Zadaci, porudžbine i povrati stižu kao poruke, i kad je CRM zatvoren.') + '</small></span>' + (st === 'ios' ? '' : '<button class="btn-gold" data-pb="on">Uključi</button>') + '<button class="pb-x" data-pb="no" title="Ne sada">✕</button>';
+  bar.innerHTML = '<span class="pb-ic">🔔</span><span class="pb-t"><b>Uključi obaveštenja na ' + (/Android|iPhone|iPad/.test(navigator.userAgent) ? 'telefonu' : 'računaru') + '</b><small>' + (st === 'ios' ? 'Na iPhone-u: dugme Podeli (kvadrat sa strelicom) → Dodaj na početni ekran, pa otvori CRM sa nove ikonice H.' : 'Zadaci, porudžbine i povrati stižu kao poruke, i kad je CRM zatvoren.') + '</small></span>' + (st === 'ios' ? '' : '<button class="btn-gold" data-pb="on">Uključi</button>') + '<button class="pb-x" data-pb="no" title="Ne sada">✕</button>';
 }
 /* klik na obaveštenje: otvori pravo mesto u CRM-u */
 function crmGo(r) {
