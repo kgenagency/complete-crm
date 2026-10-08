@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610080008';
+const APP_BUILD = '202610080911';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -2532,6 +2532,7 @@ function nfDismiss(key) {
   nfPersist();
 }
 function nfMenu(action) {
+  if (action === 'push') { $('bellMenu').classList.remove('open'); return openPushModal(); }
   if (action === 'sound') { setSound(!soundOn()); toast(soundOn() ? 'Zvuci uključeni 🔔' : 'Zvuci isključeni'); return; }
   if (action === 'soundtest') {
     if (!soundOn()) setSound(true); const a = audioCtx(); sfxLast = { t: 0, p: -1 }; setTimeout(() => sfx('intro'), 40);
@@ -3198,6 +3199,11 @@ function bindEvents() {
   });
   $('navProj').addEventListener('change', (e) => { $('projSel').value = e.target.value; $('projSel').dispatchEvent(new Event('change')); closeNav(); });
   $('navLogout').addEventListener('click', byeOut);
+  $('navPush').addEventListener('click', () => { closeNav(); openPushModal(); });
+  $('pmMain').addEventListener('click', () => (pushState() === 'on' ? pushDisable() : pushEnable()));
+  $('pmTest').addEventListener('click', () => pushTest(false));
+  $('pmPrefs').addEventListener('change', pushSavePrefs);
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-pb]'); if (!b) return; if (b.dataset.pb === 'on') pushEnable(); else { LS.set('crm_push_nag', 'later'); renderPushBar(); toast('Možeš da ih uključiš kad hoćeš: zvonce gore → Obaveštenja na ovom uređaju', 4500); } });
   $('navSound').addEventListener('click', () => { setSound(!soundOn()); toast(soundOn() ? 'Zvuci uključeni 🔔' : 'Zvuci isključeni'); });
   renderSoundBtns();
   let ndX = null; $('navDrawer').addEventListener('touchstart', (e) => { ndX = e.touches[0].clientX; }, { passive: true });
@@ -3487,6 +3493,7 @@ const BOT_FAQ = [
   { g: [['ne radi', 'ne mogu', 'ne ucitav', 'zablok', 'zapel', 'zaglav', 'gresk', 'bug', 'ne otvar', 'ne cuva', 'ne sacuv', 'ne pokaz', 'ne vidim']], a: 'Prvo probaj osvežavanje: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> (na telefonu zatvori i ponovo otvori stranicu). Ako i dalje ne radi, pošalji timu kratak opis dugmetom ispod, pa će neko da pogleda.', b: [['Pošalji timu', 'teamlast']] },
   { g: [['backup', 'rezerv', 'sigurn', 'bezbed']], a: 'Podaci se čuvaju zauvek: obrisano ide u arhivu, svaka promena se beleži, a svake noći u 03:30 pravi se rezervna kopija cele baze na GitHub-u.', b: [['Istorija', 'tab:history']] },
   { g: [['istorij', 'prekretnic', 'dogadja', 'vremensk']], a: 'Istorija je vremenska linija svega. Važan događaj (lansiranje, nova kolekcija…) dodaješ dugmetom <b>Zabeleži događaj</b>.', b: [['Zabeleži događaj', 'act:Zabeleži događaj u istoriji'], ['Istorija', 'tab:history']] },
+  { g: [['obavestenj', 'notifikac', 'push', 'na telefon', 'stize poruka', 'stizu poruke']], a: 'CRM može da šalje <b>obaveštenja na telefon i računar</b>, i kad je zatvoren: kad ti neko dodeli zadatak, kad neko završi zadatak koji si dodelio/la, nova porudžbina, nova prijava povrata i jutarnji podsetnik u 8h. Uključuješ ih na svakom uređaju posebno: <b>zvonce gore → Obaveštenja na ovom uređaju → Uključi</b> (na telefonu i u meniju sa tri crtice, dugme 📲). Tu biraš šta da ti stiže i šalješ probu. Na iPhone-u prvo dodaj CRM na početni ekran iz Safari-ja.', b: [] },
   { g: [['nov zadatak', 'novi zadatak', 'novi task', 'nov task', 'zadatak za', 'task za', 'dodeli', 'zaduzi']], a: 'Klikni <b>Nov zadatak</b> (u Taskovima ili taster B), upiši šta treba i izaberi <b>Sekciju</b>. Ispod se pojavi <b>Za šta je zadatak?</b>: <b>＋ nova stavka</b> (npr. cela forma za ideju u Objave + reklame, predlog za Sajt, promocija), <b>postojeća</b> stavka iz liste (porudžbina, kupac, model, prijava…) ili <b>Samo zadatak</b> kao beleška. Izaberi ko radi i rok, pa Sačuvaj.', b: [['Nov zadatak', 'act:Nov zadatak'], ['Taskovi', 'tab:tasks']] },
   { g: [['zvuk', 'zvuc', 'ting', 'muzik', 'utisa', 'tisin', 'sound']], a: 'CRM ima zvuke: uvod kad uđeš, „ka-čing“ za novu porudžbinu (tiši kad je unese neko drugi), zvonce za zadatke, šuškanje papira za belešku, zvuk za poslato i isporučeno, brisanje i vraćanje, a za prvu, 10., 25., 50., 100. porudžbinu i za rekordan dan i mala proslava sa konfetama. Sve se gasi i pali u zvoncetu gore (Zvuci) ili u meniju sa tri crtice (Zvuk); tu je i <b>▶ Probaj</b>.', b: [] },
   { g: [['izvor', 'organic', 'organsk', 'meta ads', 'tiktok', 'tik tok', 'google ads', 'atribuc', 'odakle je dosl']], a: 'Svaka porudžbina ima <b>Izvor</b>: <b>Organic</b> (ručno uneta ili ne znamo odakle je došla), <b>Meta Ads</b>, <b>TikTok Ads</b> ili <b>Google Ads</b>. Biraš ga u formi porudžbine (podrazumevano Organic). U Porudžbinama je filter <b>Svi izvori</b> sa brojem porudžbina, a pored broja stoji ukupan iznos za taj izvor.', b: [['Porudžbine', 'tab:orders'], ['Nova porudžbina', 'act:Nova porudžbina']] },
@@ -4066,7 +4073,107 @@ function botLocalFirst(raw) {
   return false;
 }
 
-async function byeOut() { const played = sfx('bye'); await Promise.all([sb.auth.signOut(), new Promise(r => setTimeout(r, played ? 800 : 0))]); location.reload(); }
+/* ---------- OBAVEŠTENJA NA TELEFON I RAČUNAR (Web Push) ----------
+   uređaj se prijavi jednom (dozvola u pretraživaču), pa baza preko funkcije crm-push šalje:
+   dodeljen zadatak, završen zadatak koji si dodelio/la, nova porudžbina, nova prijava i jutarnji podsetnik u 8h */
+const VAPID_PUBLIC = 'BO9fqbcK6L9yA4bKN-m3gp2RxmbZ6Gt7UOsIjGDzOZDScOuWOtwSWT_nM8GeM__UZr6vE2bBSH2ou37jkf5_MTg';
+const PUSH_URL = () => SUPABASE_URL + '/functions/v1/crm-push';
+const PUSH_PREFS = [['tasks', 'Zadaci za mene', 'kad ti neko dodeli zadatak'], ['done', 'Završeni zadaci', 'kad neko završi zadatak koji si ti dodelio/la'], ['orders', 'Nove porudžbine', 'kad neko drugi unese porudžbinu'], ['returns', 'Povrati i reklamacije', 'nova prijava sa forme ili ručno'], ['daily', 'Jutarnji podsetnik u 8h', 'šta ti ističe danas i šta kasni']];
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const PUSH = { reg: null, sub: null, row: null };
+function deviceName() {
+  const u = navigator.userAgent, os = /Android/.test(u) ? 'Android' : isIOS() ? 'iPhone' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows' : /Linux/.test(u) ? 'Linux' : 'uređaj';
+  const br = /SamsungBrowser/.test(u) ? 'Samsung Internet' : /Edg\//.test(u) ? 'Edge' : /Firefox/.test(u) ? 'Firefox' : /Chrome|CriOS/.test(u) ? 'Chrome' : /Safari/.test(u) ? 'Safari' : '';
+  return os + (br ? ' · ' + br : '') + (isStandalone() ? ' (aplikacija)' : '');
+}
+function b64uToU8(s) { const p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); }
+async function pushInit() {
+  if (!('serviceWorker' in navigator)) return renderPushBar();
+  try {
+    PUSH.reg = await navigator.serviceWorker.register('sw.js');
+    if (!PUSH.msgBound) { PUSH.msgBound = true; navigator.serviceWorker.addEventListener('message', (e) => { if (e.data && e.data.crmGo) crmGo(e.data.crmGo); }); }
+    if (pushSupported() && Notification.permission === 'granted') {
+      PUSH.sub = await PUSH.reg.pushManager.getSubscription();
+      if (PUSH.sub) await pushRegister(); // uvek veži uređaj za onoga ko je sada prijavljen
+    }
+  } catch (e) { console.warn('push init', e); }
+  renderPushBar();
+}
+async function pushRegister(prefs) {
+  const j = PUSH.sub.toJSON();
+  const { data, error } = await sb.rpc('h_push_register', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_device: deviceName(), p_prefs: prefs || null });
+  if (error) throw error; PUSH.row = data; return data;
+}
+async function pushEnable() {
+  if (!pushSupported()) return toast(isIOS() && !isStandalone() ? 'Na iPhone-u prvo dodaj CRM na početni ekran iz Safari-ja.' : 'Ovaj pretraživač ne podržava obaveštenja.', 4500);
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { renderPushModal(); renderPushBar(); return toast('Obaveštenja nisu dozvoljena. Dozvoli ih u podešavanjima pretraživača za ovaj sajt.', 5000); }
+    PUSH.reg = PUSH.reg || await navigator.serviceWorker.register('sw.js'); await navigator.serviceWorker.ready;
+    PUSH.sub = await PUSH.reg.pushManager.getSubscription() || await PUSH.reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToU8(VAPID_PUBLIC) });
+    await pushRegister(); LS.set('crm_push_nag', 'done');
+    renderPushModal(); renderPushBar(); sfx('done'); toast('Obaveštenja uključena na ovom uređaju ✓');
+    pushTest(true);
+  } catch (e) { fail(e); }
+}
+async function pushDisable() {
+  try {
+    if (PUSH.sub) { const ep = PUSH.sub.endpoint; await PUSH.sub.unsubscribe().catch(() => {}); await sb.from('h_push_subs').delete().eq('endpoint', ep); }
+    PUSH.sub = null; PUSH.row = null; renderPushModal(); renderPushBar(); toast('Obaveštenja isključena na ovom uređaju');
+  } catch (e) { fail(e); }
+}
+async function pushTest(quiet) {
+  try { const r = await fetch(PUSH_URL(), { method: 'POST', headers: await aiHeaders(), body: '{"test":true}' }); const d = await r.json(); if (!quiet) toast(d.sent ? 'Poslato ✓ obaveštenje stiže za par sekundi' : 'Nema uključenih uređaja za tvoj nalog', 4000); }
+  catch (e) { if (!quiet) fail(e); }
+}
+async function pushSavePrefs() {
+  if (!PUSH.sub) return; const prefs = {}; document.querySelectorAll('#pmPrefs [data-pp]').forEach(c => prefs[c.dataset.pp] = c.checked);
+  try { await pushRegister(prefs); toast('Sačuvano ✓'); } catch (e) { fail(e); }
+}
+function pushState() {
+  if (!pushSupported()) return isIOS() && !isStandalone() ? 'ios' : 'nosupport';
+  if (Notification.permission === 'denied') return 'denied';
+  return PUSH.sub && PUSH.row ? 'on' : 'off';
+}
+function renderPushModal() {
+  if (!$('pushModal')) return;
+  const st = pushState(), on = st === 'on', prefs = (PUSH.row && PUSH.row.prefs) || {};
+  $('pmStatus').innerHTML = {
+    on: '<span class="pm-dot on"></span><b>Uključeno na ovom uređaju</b><small>' + esc(deviceName()) + '. Stiže i kad je CRM zatvoren.</small>',
+    off: '<span class="pm-dot"></span><b>Isključeno na ovom uređaju</b><small>Uključi da ti zadaci i porudžbine stižu kao poruke, i kad je CRM zatvoren.</small>',
+    denied: '<span class="pm-dot no"></span><b>Blokirano u pretraživaču</b><small>Dozvoli obaveštenja za ovaj sajt: klikni katanac (ili ⋮ → Podešavanja sajta) pored adrese → Obaveštenja → Dozvoli, pa osveži stranicu.</small>',
+    ios: '<span class="pm-dot"></span><b>Na iPhone-u treba jedan korak više</b><small>Otvori CRM u Safari-ju → dugme Podeli → „Dodaj na početni ekran“. Zatim otvori CRM sa ikonice i ovde uključi obaveštenja.</small>',
+    nosupport: '<span class="pm-dot no"></span><b>Ovaj pretraživač ne podržava obaveštenja</b><small>Probaj u Chrome-u.</small>',
+  }[st];
+  $('pmPrefs').innerHTML = PUSH_PREFS.map(([k, t, s]) => '<label class="pm-row ' + (on ? '' : 'dis') + '"><input type="checkbox" data-pp="' + k + '" ' + (prefs[k] !== false ? 'checked' : '') + ' ' + (on ? '' : 'disabled') + '><span><b>' + t + '</b><small>' + s + '</small></span></label>').join('');
+  $('pmMain').textContent = on ? 'Isključi na ovom uređaju' : 'Uključi obaveštenja';
+  $('pmMain').className = on ? 'btn-ghost' : 'btn-gold';
+  $('pmMain').style.display = ['on', 'off'].includes(st) ? '' : 'none';
+  $('pmTest').style.display = on ? '' : 'none';
+}
+function openPushModal() { renderPushModal(); $('pushModal').classList.add('open'); }
+function renderPushBar() {
+  let bar = $('pushBar'); const st = pushState(), nag = LS.get('crm_push_nag', '');
+  const show = !!state.user && !nag && (st === 'ios' || (st === 'off' && Notification.permission === 'default'));
+  if (!show) { if (bar) bar.remove(); return; }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'pushBar'; bar.className = 'push-bar'; const t = $('tabs'); t.parentNode.insertBefore(bar, t.nextSibling); }
+  bar.innerHTML = '<span class="pb-ic">🔔</span><span class="pb-t"><b>Uključi obaveštenja na ' + (/Android|iPhone|iPad/.test(navigator.userAgent) ? 'telefonu' : 'računaru') + '</b><small>' + (st === 'ios' ? 'Na iPhone-u: Safari → Podeli → Dodaj na početni ekran, pa otvori CRM sa ikonice.' : 'Zadaci, porudžbine i povrati stižu kao poruke, i kad je CRM zatvoren.') + '</small></span>' + (st === 'ios' ? '' : '<button class="btn-gold" data-pb="on">Uključi</button>') + '<button class="pb-x" data-pb="no" title="Ne sada">✕</button>';
+}
+/* klik na obaveštenje: otvori pravo mesto u CRM-u */
+function crmGo(r) {
+  if (!r || !state.user) return;
+  ['notifModal', 'pushModal'].forEach(id => { const m = $(id); if (m) m.classList.remove('open'); });
+  if (r.startsWith('tab:')) return setTab(r.slice(4));
+  if (r.startsWith('ref:')) r = r.slice(4);
+  const tabFor = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' };
+  const k = r.split(':')[0]; if (tabFor[k] && state.tab !== tabFor[k]) setTab(tabFor[k]);
+  try { openRef(r); } catch (e) {}
+}
+async function byeOut() {
+  try { if (PUSH.sub) await sb.from('h_push_subs').delete().eq('endpoint', PUSH.sub.endpoint); } catch (e) {} // posle odjave ovaj uređaj više ne prima tuđa obaveštenja
+  const played = sfx('bye'); await Promise.all([sb.auth.signOut(), new Promise(r => setTimeout(r, played ? 800 : 0))]); location.reload(); }
 async function enterApp(user, restored, pre) {
   state.user = user;
   $('userName').textContent = user.display;
@@ -4081,6 +4188,8 @@ async function enterApp(user, restored, pre) {
   $('loginPage').style.display = 'none';
   $('app').style.display = 'block';
   chgInit(); renderTray(); chgEnter(state.tab); renderChgBadges(); startLive();
+  pushInit();
+  { const m = location.hash.match(/^#go=(.+)$/); if (m) { history.replaceState(null, '', location.pathname + location.search); setTimeout(() => crmGo(decodeURIComponent(m[1])), 300); } }
   botStart();
   setInterval(renderTray, 60000);
   countUp($('v-' + state.tab));

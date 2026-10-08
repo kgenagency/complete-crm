@@ -2,3 +2,7 @@ k2.json
 keys.json
 *.png
 schema.sql.bak
+!icon-*.png
+!apple-touch-icon.png
+!badge-96.png
+!favicon-64.png

@@ -673,3 +673,7 @@ do $$ declare t text; begin
     execute format('alter table public.%I add column if not exists task_note text', t);
   end loop;
 end $$;
+
+-- Obaveštenja na telefon i računar (Web Push): pretplate po uređaju, tajna za okidač, okidač na h_audit, jutarnji cron
+-- (VAPID ključevi i PUSH_HOOK_SECRET su u tajnama Edge funkcija; funkcija crm-push, verify_jwt=false, proverava x-crm-hook)
+-- vidi: h_push_subs, h_private, h_push_hook(), h_push_register(), cron 'crm-push-daily' (06 i 07 UTC, funkcija šalje samo u 8h po Beogradu)
