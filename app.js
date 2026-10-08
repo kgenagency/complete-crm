@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610081210';
+const APP_BUILD = '202610081631';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -781,26 +781,72 @@ const taskSrcOf = (k) => TASK_SRC.find(s => s.k === k);
 const taskIsDone = (x, src) => !!(x && (x.task_done_at || (src && src.final(x))));
 function dueInfo(d) {
   if (!d) return null;
+  if (String(d).length > 10) return dueInfoAt(d);
   const t = new Date(dayStr(new Date()) + 'T12:00:00'), dd = new Date(String(d).slice(0, 10) + 'T12:00:00'), diff = Math.round((dd - t) / 864e5);
   return { diff, level: diff < 0 ? 'late' : diff === 0 ? 'today' : '', txt: diff < 0 ? `kasni ${-diff} d` : diff === 0 ? 'danas' : diff === 1 ? 'sutra' : dd.toLocaleDateString('sr-Latn-RS', { weekday: 'short', day: 'numeric', month: 'short' }) };
 }
+/* rok sa tačnim vremenom: „za 40 min“, „danas 15:00“, „kasni 2 h“ */
+const hhmm = (dt) => dt.toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' });
+function durTxt(ms) { const m = Math.max(1, Math.round(ms / 60000)); if (m < 60) return `${m} min`; const h = Math.floor(m / 60), r = m % 60; if (h < 24) return r && h < 5 ? `${h} h ${r} min` : `${h} h`; return `${Math.round(h / 24)} d`; }
+function dueInfoAt(iso) {
+  const dt = new Date(iso), now = new Date(), diff = Math.round((new Date(dayStr(dt) + 'T12:00:00') - new Date(dayStr(now) + 'T12:00:00')) / 864e5), ms = dt - now;
+  if (ms < 0) return { diff: Math.min(diff, -0.5), level: 'late', txt: `kasni ${durTxt(-ms)}`, at: dt };
+  if (ms <= 60 * 60000) return { diff, level: 'near', txt: `za ${durTxt(ms)} (${hhmm(dt)})`, at: dt };
+  return { diff, level: diff === 0 ? 'today' : '', txt: diff === 0 ? `danas ${hhmm(dt)}` : diff === 1 ? `sutra ${hhmm(dt)}` : `${dt.toLocaleDateString('sr-Latn-RS', { weekday: 'short', day: 'numeric', month: 'short' })} ${hhmm(dt)}`, at: dt };
+}
+const taskDueOf = (x) => (x && (x.task_due_at || x.task_due)) || null;
+const TPRIO = { urgent: { l: 'Hitno', ic: '🚩', r: 0 }, high: { l: 'Visok', ic: '▲', r: 1 }, normal: { l: 'Normalan', ic: '●', r: 2 }, low: { l: 'Nizak', ic: '▽', r: 3 } };
+const prioOf = (x) => (x && TPRIO[x.task_prio] ? x.task_prio : 'normal');
+const prioChip = (x, big) => { const p = prioOf(x); return p === 'normal' ? '' : `<span class="prio-chip ${p} ${big ? 'big' : ''}" title="Prioritet: ${TPRIO[p].l}">${TPRIO[p].ic} ${TPRIO[p].l.toUpperCase()}</span>`; };
 function allTasks() {
   const out = [];
-  TASK_SRC.forEach(src => src.list().forEach(x => { const as = assigneesOf(x); if (as.length) out.push({ src, x, as, sec: src.sec ? src.sec(x) : src.label, done: taskIsDone(x, src), due: x.task_due || null }); }));
+  TASK_SRC.forEach(src => src.list().forEach(x => { const as = assigneesOf(x); if (as.length) out.push({ src, x, as, sec: src.sec ? src.sec(x) : src.label, done: taskIsDone(x, src), due: taskDueOf(x), prio: prioOf(x) }); }));
   return out;
 }
 /* mala oznaka na kartici stavke */
 function taskChip(x, k) {
   const as = assigneesOf(x); if (!as.length) return '';
-  const src = taskSrcOf(k), done = taskIsDone(x, src), d = !done && dueInfo(x.task_due);
-  return `<span class="tchip ${done ? 'done' : d && d.level === 'late' ? 'late' : ''}" title="Zadatak: ${esc(as.map(personName).join(', '))}${x.task_due ? ' · rok ' + fmtDate(x.task_due) : ''}">${done ? '✓' : '☑'} ${esc(as.map(a => personName(a).charAt(0)).join(''))}${d ? ' · ' + d.txt : ''}</span>`;
+  const src = taskSrcOf(k), done = taskIsDone(x, src), d = !done && dueInfo(taskDueOf(x)), pr = !done && prioOf(x);
+  return `<span class="tchip ${done ? 'done' : (d && d.level === 'late') || pr === 'urgent' ? 'late' : ''}" title="Zadatak: ${esc(as.map(personName).join(', '))}${taskDueOf(x) ? ' · rok ' + (d ? d.txt : fmtDate(x.task_due)) : ''}${pr && pr !== 'normal' ? ' · ' + TPRIO[pr].l : ''}">${done ? '✓' : pr === 'urgent' ? '🚩' : '☑'} ${esc(as.map(a => personName(a).charAt(0)).join(''))}${d ? ' · ' + d.txt : ''}</span>`;
+}
+/* prioritet i tačno vreme u redu „Zadatak“ (dodaje se u sve forme) */
+function taskRowEnhance(px) {
+  const row = $(px + '_task'); if (!row || row.dataset.enh) return; row.dataset.enh = '1';
+  const lab = row.querySelector('.tr-due'), due = $(px + '_due');
+  if (lab && due) {
+    const tm = document.createElement('input'); tm.type = 'time'; tm.id = px + '_dtime'; tm.className = 'tr-time'; tm.title = 'Tačno vreme roka (nije obavezno)';
+    due.after(tm);
+    tm.addEventListener('change', () => { if (tm.value && !due.value) due.value = dayStr(new Date()); });
+    const pr = document.createElement('div'); pr.className = 'tr-prio'; pr.id = px + '_prio';
+    pr.innerHTML = ['urgent', 'high', 'normal', 'low'].map(k => `<button type="button" data-prio="${k}" class="${k}">${TPRIO[k].ic} ${TPRIO[k].l}</button>`).join('');
+    pr.addEventListener('click', (e) => { const b = e.target.closest('[data-prio]'); if (b) taskPrioSet(px, b.dataset.prio); });
+    lab.after(pr);
+    const hint = document.createElement('div'); hint.className = 'tr-alert'; hint.id = px + '_ahint'; pr.after(hint);
+    [due, tm].forEach(el => el.addEventListener('input', () => taskPrioHint(px)));
+  }
+}
+function taskPrioSet(px, p) { const el = $(px + '_prio'); if (!el) return; el.dataset.v = p || 'normal'; el.querySelectorAll('[data-prio]').forEach(b => b.classList.toggle('on', b.dataset.prio === el.dataset.v)); taskPrioHint(px); }
+const taskPrioGet = (px) => ($(px + '_prio') && $(px + '_prio').dataset.v) || 'normal';
+function taskPrioHint(px) {
+  const h = $(px + '_ahint'); if (!h) return; const p = taskPrioGet(px), tm = $(px + '_dtime') && $(px + '_dtime').value;
+  h.textContent = p === 'urgent' ? (tm ? '🚨 Hitno: svi dobijaju obaveštenje odmah, pa sat i 15 min pre roka, u roku i na 30 min dok se ne završi.' : '🚨 Hitno: svi dobijaju obaveštenje odmah. Dodaj i tačno vreme roka za podsetnike.') : tm ? '⏰ Podsetnik stiže celom timu sat vremena pre roka.' : '';
+  h.className = 'tr-alert ' + (p === 'urgent' ? 'urgent' : tm ? 'on' : '');
+}
+function taskTimeFields(px) {
+  const d = $(px + '_due').value || null, tm = $(px + '_dtime') ? $(px + '_dtime').value : '';
+  const at = d && tm ? new Date(`${d}T${tm}:00`) : null, p = taskPrioGet(px);
+  return { task_due: d, task_due_at: at ? at.toISOString() : null, task_prio: p === 'normal' ? null : p };
 }
 /* red „Zadatak“ u formama: zaduženi, rok i stanje (gotovo / vrati) */
 const TASK_CTX = {};
 function taskSet(px, x, src, def) {
   TASK_CTX[px] = { x: x || null, src };
   whoPick(px + '_assignees', x ? assigneesOf(x) : (def || []));
-  $(px + '_due').value = x && x.task_due ? String(x.task_due).slice(0, 10) : '';
+  taskRowEnhance(px);
+  const dAt = x && x.task_due_at ? new Date(x.task_due_at) : null;
+  $(px + '_due').value = dAt ? dayStr(dAt) : x && x.task_due ? String(x.task_due).slice(0, 10) : '';
+  if ($(px + '_dtime')) $(px + '_dtime').value = dAt ? hhmm(dAt) : '';
+  taskPrioSet(px, x ? prioOf(x) : 'normal');
   if ($(px + '_tnote')) $(px + '_tnote').value = x && x.task_note || '';
   $(px + '_tstate').dataset.mode = '';
   renderTaskState(px);
@@ -816,7 +862,7 @@ function renderTaskState(px) {
 }
 function taskGet(px, legacy) {
   const as = whoPicked(px + '_assignees'), mode = $(px + '_tstate').dataset.mode || '';
-  const f = { assignees: as, task_due: $(px + '_due').value || null };
+  const f = { assignees: as, ...taskTimeFields(px) };
   const tn = $(px + '_tnote'); if (tn && tn.offsetParent !== null) f.task_note = tn.value.trim() || null;
   if (legacy) f.assignee = as.length ? as.map(personName).join(', ') : null;
   if (mode === 'done') Object.assign(f, { task_done_at: new Date().toISOString(), task_done_by: who() });
@@ -915,6 +961,10 @@ const SFX = {
   tick: { p: 0, free: true, play(B, t, up) { vOsc(B, { f: up ? 1600 : 1100, t, a: 0.001, d: 0.025, peak: 0.05, type: 'triangle' }); } },
   trash: { v: 1.4, p: 3, play(B, t) { vNoise(B, { t, a: 0.01, d: 0.22, peak: 0.065, type: 'lowpass', f: 3200, f2: 240, q: 0.8, verb: 0.15 }); vOsc(B, { f: 330, f2: 140, t, a: 0.005, d: 0.2, peak: 0.07, type: 'triangle' }); } },
   restore: { p: 3, play(B, t) { vNoise(B, { t, a: 0.08, d: 0.2, peak: 0.05, type: 'lowpass', f: 300, f2: 3600, verb: 0.2 }); vBell(B, B5, t + 0.18, 0.055, 0.7, 0, 0.35); vBell(B, E6, t + 0.25, 0.05, 0.8, 0, 0.35); } },
+  alarm: { p: 9, vibe: 0, play(B, t, urgent) {
+    if (urgent) { for (let r = 0; r < 2; r++) [0, 0.16, 0.32].forEach((o, i) => { const s0 = t + r * 0.62 + o; vBell(B, 1760, s0, 0.075, 0.22, -0.2, 0.15); vBell(B, 2349.32, s0 + 0.07, 0.07, 0.22, 0.2, 0.15); }); }
+    else [0, 0.18, 0.36].forEach((o, i) => vBell(B, [1174.66, 1567.98, 2349.32][i], t + o, 0.07, 0.9, -0.3 + i * 0.3, 0.4));
+  } },
   notif: { p: 2, play(B, t) { vBell(B, D6, t, 0.05, 0.6, 0, 0.35); vBell(B, G6, t + 0.09, 0.045, 0.7, 0, 0.35); } },
   error: { p: 3, vibe: [30, 40, 30], play(B, t) { [[233.08, 0], [196, 0.13]].forEach(([f, d]) => vOsc(B, { f, t: t + d, a: 0.006, d: 0.15, peak: 0.08, type: 'square', lp: 650, verb: 0.05 })); } },
   bye: { p: 8, play(B, t) { [G6, E6, C6, G5].forEach((f, i) => vBell(B, f, t + i * 0.09, 0.055, 1.2, 0.3 - i * 0.2, 0.55)); vOsc(B, { f: 130.81, t: t + 0.2, a: 0.2, d: 1.1, peak: 0.05, type: 'triangle', lp: 500, verb: 0.4 }); } },
@@ -1033,7 +1083,7 @@ function tkRow(t, i) {
     : x.task_by ? `<span>${byF ? 'dodelila' : 'dodelio'} ${esc(personName(x.task_by))}${x.task_at ? ' · ' + relTime(x.task_at) : ''}</span>` : '';
   return `<div class="tk-row ${t.done ? 'done' : ''} ${d ? d.level : ''}" data-tkopen="${src.k}:${x.id}" style="animation-delay:${Math.min(i, 20) * 18}ms">
     <button class="tk-check" data-tkdone="${src.k}:${x.id}" title="${t.done ? 'Vrati u otvorene' : 'Gotovo'}">✓</button>
-    <div class="tk-main"><div class="tk-t">${esc(x.task_note && src.k !== 'note' ? x.task_note : src.title(x))}</div>${src.k !== 'note' ? `<button type="button" class="tk-ref" data-tkitem="${src.k}:${x.id}" title="Otvori stavku">${src.ic} ${esc(src.title(x))} ↗</button>` : ''}
+    <div class="tk-main"><div class="tk-t">${t.done ? '' : prioChip(x)}${esc(x.task_note && src.k !== 'note' ? x.task_note : src.title(x))}</div>${src.k !== 'note' ? `<button type="button" class="tk-ref" data-tkitem="${src.k}:${x.id}" title="Otvori stavku">${src.ic} ${esc(src.title(x))} ↗</button>` : ''}
       <div class="tk-s"><span class="tk-sec">${src.ic} ${esc(t.sec)}</span>${src.sub(x) ? `<span>${esc(src.sub(x))}</span>` : ''}${info}</div></div>
     <div class="tk-side">${taskCmChip(src, x)}${d ? `<span class="tk-due ${d.level}">⏱ ${d.txt}</span>` : ''}<span class="tk-avs">${t.as.map(a => `<span class="n-av ${PEOPLE[a] ? a : 'system'}" title="${esc(personName(a) + (a !== who() ? ' · ' + seenText(a) : ''))}">${esc(personName(a).charAt(0))}</span>`).join('')}</span><button class="tk-edit" data-tkedit="${src.k}:${x.id}" title="Zaduženi i rok">👤</button></div>
   </div>`;
@@ -1075,9 +1125,9 @@ function renderTasks() {
     stat('Završeno za 7 dana', done.filter(t => t.x.task_done_at && new Date(t.x.task_done_at) > wk7).length);
   let html = '', i = 0;
   if (tkState.st === 'open') {
-    const grp = (t) => { const d = dueInfo(t.due); if (!d) return 4; if (d.diff < 0) return 0; if (d.diff === 0) return 1; if (d.diff <= 7) return 2; return 3; };
+    const grp = (t) => { const d = dueInfo(t.due); if (!d) return t.prio === 'urgent' ? 1 : 4; if (d.level === 'late' || d.diff < 0) return 0; if (d.diff === 0) return 1; if (d.diff <= 7) return 2; return 3; };
     const names = [['Kasni', 'late'], ['Danas', 'today'], ['Narednih 7 dana', ''], ['Kasnije', ''], ['Bez roka', '']];
-    const sorted = open.slice().sort((a, b) => grp(a) - grp(b) || String(a.due || '').localeCompare(String(b.due || '')) || String(b.x.task_at || '').localeCompare(String(a.x.task_at || '')));
+    const sorted = open.slice().sort((a, b) => grp(a) - grp(b) || TPRIO[a.prio].r - TPRIO[b.prio].r || String(a.due || '').localeCompare(String(b.due || '')) || String(b.x.task_at || '').localeCompare(String(a.x.task_at || '')));
     names.forEach(([n, cls], g) => { const items = sorted.filter(t => grp(t) === g); if (items.length) html += `<div class="tk-group ${cls}">${n} <span>${items.length}</span></div><div class="tk-list">${items.map(t => tkRow(t, i++)).join('')}</div>`; });
     $('tkCount').textContent = `${open.length} ${bpl(open.length, 'otvoren', 'otvorena', 'otvorenih')}`;
     if (!open.length) html = `<div class="tk-empty">${base.length || all.length ? 'Nema otvorenih zadataka za ovaj izbor. 👌' : 'Još niko nije zadužen ni za šta. Zadatak dodaješ u bilo kojoj stavci (polje „Zadatak“) ili dugmetom „Nov zadatak“.'}</div>`;
@@ -2376,7 +2426,7 @@ async function deleteCust() {
 }
 
 /* ---------- OBAVEŠTENJA: ko je šta kad menjao ---------- */
-const NF_FIELD = { task_note: 'zadatak', task_due: 'rok', assignees: 'zaduženi', purpose: 'namena', inspo: 'inspiracija', status: 'status', courier: 'kurir', tracking_no: 'broj pošiljke', sell_price: 'prodajna', buy_price: 'nabavna', compare_price: '„bila“ cena', stock: 'stanje', publish_at: 'datum objave', drive_link: 'Drive link', assignee: 'zadužen', priority: 'prioritet', title: 'naslov', body: 'tekst', value: 'vrednost', note: 'napomena', refund_amount: 'vraćeno kupcu', return_shipping_cost: 'trošak slanja', resolution_note: 'rešenje', improve: 'šta da popravimo', vip: 'VIP', tags: 'oznake', points_adj: 'poeni', name: 'ime', phone: 'telefon', city: 'grad', address: 'adresa', postal_code: 'poštanski broj', payment: 'plaćanje', shipping_price: 'dostava (kupac)', shipping_cost: 'dostava (kurir)', packaging_cost: 'pakovanje', discount: 'popust', discount_code: 'kod', channel: 'kanal', category: 'kategorija', supplier: 'dobavljač', material: 'materijal', image_url: 'slika', concept: 'skripta', hook: 'hook', caption: 'opis', format: 'format', post_url: 'link objave', views: 'pregledi', likes: 'lajkovi', saves: 'sačuvano', description: 'opis', link: 'link', votes: 'glasovi', code: 'kod', pct: 'popust %', rsd: 'popust RSD', valid_to: 'važi do', valid_from: 'važi od', active: 'aktivan', max_uses: 'maks. upotreba', starts_at: 'početak', ends_at: 'kraj', budget: 'budžet', goal: 'cilj', result_note: 'zaključak', happened_at: 'datum', kind: 'vrsta', min_stock: 'granica', per_order: 'po paketu', unit_price: 'cena', spend: 'potrošeno', purchases: 'kupovine', revenue: 'prihod', reason: 'razlog', package_received_at: 'paket stigao', resolution_wanted: 'kupac želi', restocked: 'vraćeno na stanje', size: 'veličina', color: 'boja', qty: 'količina', email: 'email', instagram: 'instagram', birthday: 'rođendan', source: 'izvor', position: 'redosled', pinned: 'zakačeno', done: 'završeno', delivered_on: 'paket primljen', shipped_at: 'poslato', delivered_at: 'isporučeno', photos: 'fotografije', order_no: 'broj', exchange_details: 'želi umesto toga', item: 'komad', rating: 'ocena', customer_name: 'kupac', type: 'tip', discount_pct: 'popust %', discount_rsd: 'popust RSD', deleted_at: '__del' };
+const NF_FIELD = { task_note: 'zadatak', task_due: 'rok', task_due_at: 'rok (vreme)', task_prio: 'prioritet', assignees: 'zaduženi', purpose: 'namena', inspo: 'inspiracija', status: 'status', courier: 'kurir', tracking_no: 'broj pošiljke', sell_price: 'prodajna', buy_price: 'nabavna', compare_price: '„bila“ cena', stock: 'stanje', publish_at: 'datum objave', drive_link: 'Drive link', assignee: 'zadužen', priority: 'prioritet', title: 'naslov', body: 'tekst', value: 'vrednost', note: 'napomena', refund_amount: 'vraćeno kupcu', return_shipping_cost: 'trošak slanja', resolution_note: 'rešenje', improve: 'šta da popravimo', vip: 'VIP', tags: 'oznake', points_adj: 'poeni', name: 'ime', phone: 'telefon', city: 'grad', address: 'adresa', postal_code: 'poštanski broj', payment: 'plaćanje', shipping_price: 'dostava (kupac)', shipping_cost: 'dostava (kurir)', packaging_cost: 'pakovanje', discount: 'popust', discount_code: 'kod', channel: 'kanal', category: 'kategorija', supplier: 'dobavljač', material: 'materijal', image_url: 'slika', concept: 'skripta', hook: 'hook', caption: 'opis', format: 'format', post_url: 'link objave', views: 'pregledi', likes: 'lajkovi', saves: 'sačuvano', description: 'opis', link: 'link', votes: 'glasovi', code: 'kod', pct: 'popust %', rsd: 'popust RSD', valid_to: 'važi do', valid_from: 'važi od', active: 'aktivan', max_uses: 'maks. upotreba', starts_at: 'početak', ends_at: 'kraj', budget: 'budžet', goal: 'cilj', result_note: 'zaključak', happened_at: 'datum', kind: 'vrsta', min_stock: 'granica', per_order: 'po paketu', unit_price: 'cena', spend: 'potrošeno', purchases: 'kupovine', revenue: 'prihod', reason: 'razlog', package_received_at: 'paket stigao', resolution_wanted: 'kupac želi', restocked: 'vraćeno na stanje', size: 'veličina', color: 'boja', qty: 'količina', email: 'email', instagram: 'instagram', birthday: 'rođendan', source: 'izvor', position: 'redosled', pinned: 'zakačeno', done: 'završeno', delivered_on: 'paket primljen', shipped_at: 'poslato', delivered_at: 'isporučeno', photos: 'fotografije', order_no: 'broj', exchange_details: 'želi umesto toga', item: 'komad', rating: 'ocena', customer_name: 'kupac', type: 'tip', discount_pct: 'popust %', discount_rsd: 'popust RSD', deleted_at: '__del' };
 const NF_SKIP = new Set(['assignee', 'done_at', 'done_by', 'task_at', 'task_by', 'task_done_by', 'updated_at', 'updated_by', 'created_at', 'created_by', 'deleted_by', 'phone_norm', 'first_order_at', 'customer_id', 'product_id', 'variant_id', 'order_id', 'code_id', 'consent', 'case_no', 'id', 'bank_account', 'shopify_order_id', 'shopify_product_id', 'shopify_variant_id', 'resolved_at', 'area', 'author']);
 const prodName = (id) => product(id)?.name || 'komad';
 const custName = (id) => state.customers.find(c => c.id === id)?.name || 'kupac';
@@ -2415,6 +2465,8 @@ function nfVal(field, v) {
   if (field === 'status' || field === 'kind' || field === 'type') return ST[v] || RT[v] || PROMO_T[v] || MS_K[v] || FMT[v] || v;
   if (field === 'purpose') return PURPOSE[v] || v;
   if (field === 'task_due') return fmtDate(v);
+  if (field === 'task_due_at') return v ? fmtDT(v) : '—';
+  if (field === 'task_prio') return TPRIO[v || 'normal'].l;
   if (field === 'resolution_wanted') return RES_W[v] || v;
   if (field === 'payment') return PAY[v] || v;
   if (field === 'channel') return CH[v] || v;
@@ -2859,7 +2911,8 @@ async function qlOpenNew(cfg, body) {
   const lines = body.split('\n'), first = lines[0].trim().slice(0, 140), rest = lines.slice(1).join('\n').trim();
   $('noteModal').classList.remove('open');
   await cfg.open(cfg.noteOnly ? '' : first, cfg.noteOnly ? '' : rest);
-  whoPick(cfg.px + '_assignees', as); $(cfg.px + '_due').value = due;
+  const tm = $('qt_dtime') ? $('qt_dtime').value : '', pr = taskPrioGet('qt');
+  whoPick(cfg.px + '_assignees', as); $(cfg.px + '_due').value = due; taskRowEnhance(cfg.px); if ($(cfg.px + '_dtime')) $(cfg.px + '_dtime').value = tm; taskPrioSet(cfg.px, pr);
   if (cfg.noteOnly && body && $(cfg.px + '_tnote')) $(cfg.px + '_tnote').value = body;
   toast(as.length ? 'Popuni ostalo i sačuvaj. Zadatak je već dodeljen.' : 'Popuni ostalo i sačuvaj.', 3500);
 }
@@ -2868,7 +2921,7 @@ async function qlSavePick(body) {
   const [k, id] = qlState.sel.split(':'), src = taskSrcOf(k), x = src && src.list().find(y => y.id === id); if (!x) return toast('Stavka više ne postoji');
   const as = whoPicked('qt_assignees'); if (!as.length) return toast('Izaberi ko treba da uradi zadatak');
   const before = taskIsDone(x, src) ? [] : assigneesOf(x);
-  const patch = { assignees: as, task_due: $('qt_due').value || null, task_note: body || null, task_done_at: null, task_done_by: null };
+  const patch = { assignees: as, ...taskTimeFields('qt'), task_note: body || null, task_done_at: null, task_done_by: null };
   if (['h_posts', 'h_returns'].includes(src.tbl)) patch.assignee = as.map(personName).join(', ');
   $('qnSave').disabled = true;
   try {
@@ -3494,6 +3547,7 @@ const BOT_FAQ = [
   { g: [['backup', 'rezerv', 'sigurn', 'bezbed']], a: 'Podaci se čuvaju zauvek: obrisano ide u arhivu, svaka promena se beleži, a svake noći u 03:30 pravi se rezervna kopija cele baze na GitHub-u.', b: [['Istorija', 'tab:history']] },
   { g: [['istorij', 'prekretnic', 'dogadja', 'vremensk']], a: 'Istorija je vremenska linija svega. Važan događaj (lansiranje, nova kolekcija…) dodaješ dugmetom <b>Zabeleži događaj</b>.', b: [['Zabeleži događaj', 'act:Zabeleži događaj u istoriji'], ['Istorija', 'tab:history']] },
   { g: [['obavestenj', 'notifikac', 'push', 'na telefon', 'stize poruka', 'stizu poruke']], a: 'CRM može da šalje <b>obaveštenja na telefon i računar</b>, i kad je zatvoren: kad ti neko dodeli zadatak, kad neko završi zadatak koji si dodelio/la, nova porudžbina, nova prijava povrata i jutarnji podsetnik u 8h. Uključuješ ih na svakom uređaju posebno: <b>zvonce gore → Obaveštenja na ovom uređaju → Uključi</b> (na telefonu i u meniju sa tri crtice, dugme 📲). Tu biraš šta da ti stiže i šalješ probu. Na iPhone-u prvo dodaj CRM na početni ekran iz Safari-ja. Na Androidu instaliraj CRM kao aplikaciju (u istom prozoru dugme <b>Instaliraj HARIZMA aplikaciju</b>), pa obaveštenja stižu kao od aplikacije HARIZMA, i tu možeš da preuzmeš <b>HARIZMA zvuk</b> i postaviš ga kao zvuk obaveštenja. Na iPhone-u Apple ne dozvoljava poseban zvuk.', b: [] },
+  { g: [['prioritet', 'hitno', 'hitan', 'hitna', 'rok', 'vreme roka', 'alarm', 'podsetnik za rok']], a: 'Prioritet i tačno vreme roka: u svakom formularu zadatka pored datuma je polje za vreme (npr. 14:30) i izbor prioriteta Hitno 🚨, Visok, Normalan ili Nizak. Kad zadatak ima vreme, ceo tim dobija podsetnik sat pre roka. Hitni zadaci su jači: svi dobijaju obaveštenje odmah kad se označe kao hitni, pa 15 min pre roka, u roku i na svakih 30 min dok kasne (samo od 8 do 23h), dok se ne završe. Ta obaveštenja izgledaju drugačije: crvena (hitno) ili zlatna (rok) ikonica, duža vibracija, ostaju na ekranu i imaju dugmad Gotovo i Otvori. U CRM-u iskoči velika kartica sa posebnim zvukom. Uključuje se u zvonce → Obaveštenja → „Rokovi i hitni zadaci“ (uključeno je odmah). Zadaci bez vremena i dalje stižu u jutarnjem podsetniku u 8h.', b: [['Otvori Taskove', 'act:Taskovi']] },
   { g: [['aktivan', 'aktivna', 'na mrezi', 'online', 'poslednji put', 'kad je bio', 'kad je bila', 'ko je tu']], a: 'Ko je kad bio aktivan: na računaru gore pored dugmeta Chat su avatari tima (zelena tačka = CRM je otvoren ispred te osobe, zlatna = aktivna u poslednjih 15 min, siva = ranije). Klik pokazuje „aktivna pre 12 min · telefon“ i dugmad Piši i Pozovi. Na telefonu je isto u meniju sa tri crtice (Tim). Vidi se i u chatu pored imena, u zadatku kod zaduženih i kad pređeš mišem preko avatara u Taskovima.', b: [['Otvori chat', 'act:Tim chat']] },
   { g: [['huddle', 'poziv', 'pozov', 'zovem', 'zvati', 'video', 'kamer', 'ekran']], a: '<b>Huddle</b> je brz poziv u CRM-u (kao na Slack-u): u chatu gore dugme <b>📞 Huddle</b> (u Tim chatu) ili <b>Pozovi</b> (u privatnom razgovoru). Ostali dobiju zvono u CRM-u i obaveštenje na telefon, pa klik na <b>Pridruži se</b>. U traci poziva su mikrofon, kamera, deljenje ekrana (na računaru), veliki prikaz i crveno dugme za izlaz. Glas ide direktno između uređaja, šifrovano.', b: [['Otvori chat', 'act:Tim chat']] },
   { g: [['glasovn', 'glasom', 'snimi', 'snimak', 'voice', 'mikrofon']], a: 'Glasovna poruka: u chatu ili komentaru na zadatku, kad je polje prazno, desno je dugme <b>🎤</b>. Klik počinje snimanje, <b>➤</b> šalje, 🗑 odustaje (najviše 5 minuta). Ako uz snimak ukucaš i tekst sa @ime, ta osoba dobije obaveštenje. Snimak se pušta dugmetom ▶, a 1× menja brzinu na 1,5× i 2×.', b: [['Otvori chat', 'act:Tim chat']] },
@@ -4083,7 +4137,7 @@ function botLocalFirst(raw) {
    dodeljen zadatak, završen zadatak koji si dodelio/la, nova porudžbina, nova prijava i jutarnji podsetnik u 8h */
 const VAPID_PUBLIC = 'BO9fqbcK6L9yA4bKN-m3gp2RxmbZ6Gt7UOsIjGDzOZDScOuWOtwSWT_nM8GeM__UZr6vE2bBSH2ou37jkf5_MTg';
 const PUSH_URL = () => SUPABASE_URL + '/functions/v1/crm-push';
-const PUSH_PREFS = [['tasks', 'Zadaci za mene', 'kad ti neko dodeli zadatak'], ['done', 'Završeni zadaci', 'kad neko završi zadatak koji si ti dodelio/la'], ['orders', 'Nove porudžbine', 'kad neko drugi unese porudžbinu'], ['returns', 'Povrati i reklamacije', 'nova prijava sa forme ili ručno'], ['daily', 'Jutarnji podsetnik u 8h', 'šta ti ističe danas i šta kasni'], ['chat', 'Tim chat', 'samo kad te neko označi (@tvoje ime ili @svi)'], ['comments', 'Komentari na zadacima', 'kad neko napiše komentar na zadatku koji pratiš'], ['calls', 'Huddle pozivi', 'kad te neko zove ili pokrene huddle sa timom']];
+const PUSH_PREFS = [['tasks', 'Zadaci za mene', 'kad ti neko dodeli zadatak'], ['done', 'Završeni zadaci', 'kad neko završi zadatak koji si ti dodelio/la'], ['orders', 'Nove porudžbine', 'kad neko drugi unese porudžbinu'], ['returns', 'Povrati i reklamacije', 'nova prijava sa forme ili ručno'], ['daily', 'Jutarnji podsetnik u 8h', 'šta ti ističe danas i šta kasni'], ['chat', 'Tim chat', 'samo kad te neko označi (@tvoje ime ili @svi)'], ['comments', 'Komentari na zadacima', 'kad neko napiše komentar na zadatku koji pratiš'], ['calls', 'Huddle pozivi', 'kad te neko zove ili pokrene huddle sa timom'], ['deadline', 'Rokovi i hitni zadaci', 'sat pre roka; hitni odmah, 15 min pre, u roku i dok kasne']];
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -4098,7 +4152,7 @@ async function pushInit() {
   if (!('serviceWorker' in navigator)) return renderPushBar();
   try {
     PUSH.reg = await navigator.serviceWorker.register('sw.js');
-    if (!PUSH.msgBound) { PUSH.msgBound = true; navigator.serviceWorker.addEventListener('message', (e) => { if (e.data && e.data.crmGo) crmGo(e.data.crmGo); }); }
+    if (!PUSH.msgBound) { PUSH.msgBound = true; navigator.serviceWorker.addEventListener('message', (e) => { if (e.data && e.data.crmGo) crmGo(e.data.crmGo); if (e.data && e.data.crmAlarm) taskAlarmShow(e.data.crmAlarm); }); }
     try { if (!PUSH.permBound && navigator.permissions) { PUSH.permBound = true; const ps = await navigator.permissions.query({ name: 'notifications' }); ps.onchange = () => { renderPushModal(); renderPushBar(); if (Notification.permission === 'granted' && !PUSH.row) pushEnable(); }; } } catch (e) {}
     if (pushSupported() && Notification.permission === 'granted') {
       PUSH.sub = await PUSH.reg.pushManager.getSubscription();
@@ -4560,7 +4614,8 @@ function taskEvtText(a) {
     if (add.length) out.push(`${v('dodelio', 'dodelila')} zadatak: ${add.map(personName).join(', ')}`);
     if (rem.length) out.push(`${v('skinuo', 'skinula')} sa zadatka: ${rem.map(personName).join(', ')}`);
   }
-  if (ch.task_due) out.push(ch.task_due.na ? `rok: ${fmtDate(ch.task_due.na)}` : v('skinuo', 'skinula') + ' rok');
+  if (ch.task_due_at && ch.task_due_at.na) out.push(`rok: ${fmtDT(ch.task_due_at.na)}`); else if (ch.task_due) out.push(ch.task_due.na ? `rok: ${fmtDate(ch.task_due.na)}` : v('skinuo', 'skinula') + ' rok');
+  if (ch.task_prio) out.push(`prioritet: ${TPRIO[ch.task_prio.na || 'normal'].l}`);
   if (ch.task_done_at) out.push(ch.task_done_at.na ? `${v('završio', 'završila')} zadatak ✓` : `${v('ponovo otvorio', 'ponovo otvorila')} zadatak`);
   else if (ch.done) out.push(ch.done.na ? `${v('završio', 'završila')} belešku ✓` : `${v('vratio', 'vratila')} belešku`);
   if (ch.status) out.push(`status: ${stLbl(ch.status.od)} → ${stLbl(ch.status.na)}`);
@@ -4575,16 +4630,17 @@ async function taskAuditLoad(ch) {
 function taskDetailsHtml(ch) {
   const t = taskOfCh(ch);
   if (!t) return '<div class="td"><div class="td-miss">Ova stavka više ne postoji ili je u arhivi. Komentari ostaju sačuvani.</div></div>';
-  const { src, x } = t, as = assigneesOf(x), done = taskIsDone(x, src), d = !done && dueInfo(x.task_due), sec = src.sec ? src.sec(x) : src.label;
+  const { src, x } = t, as = assigneesOf(x), done = taskIsDone(x, src), d = !done && dueInfo(taskDueOf(x)), sec = src.sec ? src.sec(x) : src.label, pr = prioOf(x);
   const df = PEOPLE[x.task_done_by]?.f, bf = PEOPLE[x.task_by]?.f, hasNote = x.task_note && src.k !== 'note';
   const desc = src.k === 'note' ? x.body : hasNote ? '' : '';
   return `<div class="td">
     <div class="td-crumb"><span>${src.ic} ${esc(sec)}</span>${src.k !== 'note' ? `<span>›</span><button type="button" data-tdopen>${esc(tcut(src.title(x), 60))} ↗</button>` : ''}</div>
-    <h2 class="td-title">${esc(src.k === 'note' ? tcut(x.body, 90) : taskLabel(t))}</h2>
+    ${!done && pr !== 'normal' ? `<div class="td-pr">${prioChip(x, true)}</div>` : ''}<h2 class="td-title">${esc(src.k === 'note' ? tcut(x.body, 90) : taskLabel(t))}</h2>
     <div class="td-grid">
       <span class="td-l">◉ Status</span><span><button type="button" class="td-st ${done ? 'done' : ''}" data-tdtoggle title="${done ? 'Vrati u otvorene' : 'Označi kao gotovo'}">${done ? '✓ GOTOVO' : 'OTVOREN'}</button>${done ? '' : ' <button type="button" class="td-mini td-done" data-tdtoggle>✓ Završi zadatak</button>'}${done && x.task_done_by ? ` <small class="td-sm">${df ? 'završila' : 'završio'} ${esc(personName(x.task_done_by))}${x.task_done_at ? ' · ' + fmtDT(x.task_done_at) : ''}</small>` : ''}</span>
       <span class="td-l">👤 Zaduženi</span><span class="td-as">${as.length ? as.map(a => `<span class="td-p" title="${esc(seenText(a))}">${chatAv(a)}${esc(personName(a))}${a !== who() && seenShort(a) ? `<small class="td-seen ${seenCls(a)}">${seenShort(a)}</small>` : ''}</span>`).join('') : '<small class="td-sm">niko</small>'}<button type="button" class="td-mini" data-tdedit>Promeni</button></span>
-      <span class="td-l">📅 Rok</span><span>${x.task_due ? `<b class="td-due ${d ? d.level : ''}">${fmtDate(x.task_due)}</b>${d ? ` <small class="td-sm">· ${d.txt}</small>` : ''}` : '<small class="td-sm">bez roka</small>'} <button type="button" class="td-mini" data-tdedit>Promeni</button></span>
+      <span class="td-l">📅 Rok</span><span>${taskDueOf(x) ? `<b class="td-due ${d ? d.level : ''}">${x.task_due_at ? fmtDT(x.task_due_at) : fmtDate(x.task_due)}</b>${d ? ` <small class="td-sm">· ${d.txt}</small>` : ''}` : '<small class="td-sm">bez roka</small>'} <button type="button" class="td-mini" data-tdedit>Promeni</button></span>
+      <span class="td-l">🚩 Prioritet</span><span class="td-prio">${['urgent', 'high', 'normal', 'low'].map(k => `<button type="button" class="prio-b ${k} ${pr === k ? 'on' : ''}" data-tdprio="${k}">${TPRIO[k].ic} ${TPRIO[k].l}</button>`).join('')}</span>
       <span class="td-l">↗ Dodelio/la</span><span>${x.task_by ? `${esc(personName(x.task_by))} <small class="td-sm">· ${bf ? 'dodelila' : 'dodelio'} ${x.task_at ? relTime(x.task_at) : ''}</small>` : '<small class="td-sm">—</small>'}</span>
       <span class="td-l">▦ Sekcija</span><span>${esc(sec)}</span>
     </div>
@@ -4962,6 +5018,54 @@ function renderTeamPres() {
   }
   const nd = $('navTeam'); if (nd && state.user) nd.innerHTML = '<div class="nd-tl">Tim</div>' + teamRowsHtml();
 }
+async function taskSetPrio(tk, p) {
+  const { src, x } = tk, v = p === 'normal' ? null : p; if ((x.task_prio || null) === v) return;
+  try { await q(sb.from(src.tbl).update({ task_prio: v }).eq('id', x.id)); x.task_prio = v; renderAll(); if (CHAT.open) { renderChat(); setTimeout(() => taskAuditLoad(CHAT.ch), 900); } toast(p === 'urgent' ? '🚩 Hitno: tim je obavešten' : `Prioritet: ${TPRIO[p].l}`); }
+  catch (e) { fail(e); }
+}
+/* ---- alarm za rok i hitne zadatke: posebna kartica i zvuk u CRM-u (push dolazi preko sw.js, a ovde i lokalna provera) ---- */
+const ALARM = { q: [], cur: null };
+function alarmSeen() { try { return JSON.parse(LS.get('crm_alarms', '{}')) || {}; } catch (e) { return {}; } }
+function alarmMark(key) { const s = alarmSeen(), cut = Date.now() - 5 * 864e5; Object.keys(s).forEach(k => { if (s[k] < cut) delete s[k]; }); s[key] = Date.now(); LS.set('crm_alarms', JSON.stringify(s)); }
+function taskAlarmShow(d) {
+  if (!d || !state.user) return;
+  if (d.akey) { if (alarmSeen()[d.akey] && !d.force) return; alarmMark(d.akey); }
+  ALARM.q.push(d); if (!ALARM.cur) taskAlarmNext();
+}
+function taskAlarmNext() {
+  const d = ALARM.cur = ALARM.q.shift(); let el = $('taskAlarm');
+  if (!d) { if (el) el.classList.remove('in'); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'taskAlarm'; document.body.appendChild(el); }
+  const urgent = d.kind === 'urgent';
+  el.className = 'talarm ' + (urgent ? 'urgent' : 'deadline');
+  el.innerHTML = `<div class="ta-ic">${urgent ? '🚨' : '⏰'}</div><div class="ta-b"><b>${esc(String(d.title || '').replace(/^(⏰|🚨)\s*/u, ''))}</b><span>${esc(d.body || '')}</span></div><div class="ta-act">${d.task ? '<button type="button" class="ta-done" data-tadone>✓ Gotovo</button><button type="button" class="ta-open" data-taopen>Otvori</button>' : ''}<button type="button" class="ta-x" data-tax title="Zatvori">✕</button></div>`;
+  void el.offsetWidth; el.classList.add('in');
+  try { sfx('alarm', urgent ? 1.2 : 1, urgent); } catch (e) {}
+  try { navigator.vibrate && navigator.vibrate(urgent ? [400, 150, 400, 150, 400] : [200, 100, 200]); } catch (e) {}
+}
+function taskAlarmAct(kind) {
+  const d = ALARM.cur; if (!d) return;
+  if (kind === 'open' && d.task) crmGo('chat:task:' + d.task);
+  if (kind === 'done' && d.task) crmGo('taskdone:' + d.task);
+  taskAlarmNext();
+}
+/* lokalna provera na 30 s (radi i kad na ovom uređaju nisu uključena obaveštenja) */
+function taskAlarmCheck() {
+  if (!state.user || document.hidden) return;
+  const now = Date.now(), hr = new Date().getHours(), seen = alarmSeen();
+  allTasks().forEach(t => {
+    if (t.done || !t.x.task_due_at) return;
+    const due = new Date(t.x.task_due_at).getTime(), urgent = t.prio === 'urgent'; let k = null;
+    if (now < due) { if (urgent && now >= due - 15 * 60e3) k = 'm15'; else if (now >= due - 60 * 60e3) k = 'h1'; }
+    else if (urgent && now < due + 3 * 864e5) { const late = Math.floor((now - due) / 1800e3); if (late === 0) k = 'due'; else if (hr >= 8 && hr < 23) k = 'late' + late; }
+    if (!k) return;
+    const dIso = new Date(due).toISOString(), key = `${t.src.tbl}:${t.x.id}:${k}:${dIso}`; if (seen[key]) return;
+    if (k === 'm15') alarmMark(`${t.src.tbl}:${t.x.id}:h1:${dIso}`);
+    const ms = due - now, tm = hhmm(new Date(due)), what = t.x.task_note && t.src.k !== 'note' ? t.x.task_note : t.src.title(t.x);
+    const title = k === 'h1' ? `⏰ Rok za ${durTxt(ms)} (${tm})${urgent ? ' · HITNO' : ''}` : k === 'm15' ? `🚨 HITNO · još ${durTxt(ms)} do roka (${tm})` : k === 'due' ? `🚨 HITNO · rok je istekao (${tm})` : `🚨 HITNO · kasni ${durTxt(-ms)}, nije završeno`;
+    taskAlarmShow({ title, body: `${tcut(what, 120)} · ${t.as.map(personName).join(', ')} · ${t.sec}`, kind: urgent || k !== 'h1' ? 'urgent' : 'deadline', task: `${t.src.tbl}:${t.x.id}`, akey: key });
+  });
+}
 /* ---- odgovor na poruku (reply) ---- */
 const CHAT_DAT = { konstantin: 'Konstantinu', stasa: 'Staši', marjan: 'Marjanu' };
 function chatFind(id) { for (const a of Object.values(CHAT.msgs)) { const m = a.find(x => x.id === id); if (m) return m; } return CHAT.res[id] || null; }
@@ -5120,6 +5224,7 @@ function chatTouchBind(box) {
 function chatBind() {
   $('chatTop').addEventListener('click', () => (CHAT.open ? closeChat() : openChat()));
   $('chatOv').addEventListener('click', () => closeChat());
+  document.addEventListener('click', (e) => { const t = e.target; if (!t.closest || !t.closest('#taskAlarm')) return; if (t.closest('[data-tadone]')) return taskAlarmAct('done'); if (t.closest('[data-taopen]')) return taskAlarmAct('open'); if (t.closest('[data-tax]')) return taskAlarmAct('x'); });
   document.addEventListener('click', (e) => {
     const t = e.target; if (!t.closest) return;
     const pop = document.querySelector('#teamPres .tmp-pop');
@@ -5149,6 +5254,7 @@ function chatBind() {
     if (t.closest('[data-tdback]')) { if (CHAT.edit) chatEditCancel(); CHAT.ch = CHAT.prevCh && !isTaskCh(CHAT.prevCh) ? CHAT.prevCh : 'tim'; CHAT.list = isChatMobile(); renderChat(true); if (!CHAT.list) chatMarkRead(CHAT.ch); return; }
     if (t.closest('[data-tdtoggle]')) { const tk = taskOfCh(CHAT.ch); if (tk) taskToggle(`${tk.src.k}:${tk.x.id}`).then(() => { if (CHAT.open) { renderChat(); setTimeout(() => taskAuditLoad(CHAT.ch), 900); } }); return; }
     if (t.closest('[data-tdedit]')) { const tk = taskOfCh(CHAT.ch); if (tk) openTaskModal(tk.src.k, tk.x.id); return; }
+    const tp = t.closest('[data-tdprio]'); if (tp) { const tk = taskOfCh(CHAT.ch); if (tk) taskSetPrio(tk, tp.dataset.tdprio); return; }
     if (t.closest('[data-tdopen]')) { const tk = taskOfCh(CHAT.ch); if (tk) { closeChat(); openTaskItem(tk.src.k, tk.x.id); } return; }
     const c = t.closest('[data-chat]'); if (c) return chatSelect(c.dataset.chat);
     const g = t.closest('[data-chatgo]'); if (g) { const [ch, id] = g.dataset.chatgo.split('|'); return chatJump(ch, id); }
@@ -5240,6 +5346,7 @@ function crmGo(r) {
   if (!r || !state.user) return;
   ['notifModal', 'pushModal'].forEach(id => { const m = $(id); if (m) m.classList.remove('open'); });
   if (r.startsWith('tab:')) return setTab(r.slice(4));
+  if (r.startsWith('taskdone:')) { const tk = taskOfCh('task:' + r.slice(9)); if (tk) { openChat(taskChOf(tk.src, tk.x)); if (!taskIsDone(tk.x, tk.src)) taskToggle(`${tk.src.k}:${tk.x.id}`).then(() => { if (CHAT.open) renderChat(); }); } return; }
   if (r.startsWith('chat:')) return openChat(r.slice(5));
   if (r.startsWith('huddle:')) { const room = r.slice(7); openChat(room); if (HUD.room !== room) { HUD.ring = null; hudRing(room, null, true); } return; }
   if (r.startsWith('ref:')) r = r.slice(4);
@@ -5267,6 +5374,7 @@ async function enterApp(user, restored, pre) {
   pushInit();
   chatInit();
   hudInit();
+  setTimeout(taskAlarmCheck, 4000); setInterval(taskAlarmCheck, 30000); document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(taskAlarmCheck, 1500); });
   { const m = location.hash.match(/^#go=(.+)$/); if (m) { history.replaceState(null, '', location.pathname + location.search); setTimeout(() => crmGo(decodeURIComponent(m[1])), 300); } }
   botStart();
   setInterval(renderTray, 60000);

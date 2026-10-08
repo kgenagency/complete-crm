@@ -1717,6 +1717,38 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
 .cp-mention button .mb-seen{margin-left:auto;padding-left:12px;font-size:11.5px;color:var(--muted)}
 .td-seen{font-weight:500;font-size:11.5px;color:var(--muted);margin-left:2px}.td-seen.on{color:#2f6b3a}.td-seen.recent{color:#a0700f}
 @media (max-width:980px){.team-pres{display:none}}
+/* prioritet, tačno vreme roka, alarm */
+.task-row .tr-due .tr-time{width:auto;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px;margin-left:2px}
+.tr-prio{display:inline-flex;flex-wrap:wrap;gap:4px;margin:2px 0}
+.tr-prio button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:5px 10px;font:600 12px var(--font-ui);color:var(--ink-2);cursor:pointer}
+.tr-prio button.on{color:#fff;border-color:transparent}
+.tr-prio button.urgent.on{background:#c0392b}.tr-prio button.high.on{background:#d9822b}.tr-prio button.normal.on{background:#1B2620}.tr-prio button.low.on{background:#8a9187}
+.tr-alert{flex-basis:100%;font-size:12px;color:var(--muted);line-height:1.4}.tr-alert:empty{display:none}
+.tr-alert.on{color:#7a5a1f}.tr-alert.urgent{color:#a32c2c;font-weight:600}
+.prio-chip{display:inline-flex;align-items:center;gap:3px;margin-right:7px;padding:2px 7px;border-radius:6px;font-size:10.5px;font-weight:800;letter-spacing:.04em;vertical-align:2px;white-space:nowrap}
+.prio-chip.urgent{background:#c0392b;color:#fff;animation:prioPulse 1.8s infinite}.prio-chip.high{background:#fbe3c8;color:#8a4b0f}.prio-chip.low{background:#eceae1;color:#6b7369}
+.prio-chip.big{font-size:12px;padding:4px 10px;margin:0 0 6px}
+@keyframes prioPulse{0%,100%{box-shadow:0 0 0 0 rgba(192,57,43,.5)}50%{box-shadow:0 0 0 5px rgba(192,57,43,0)}}
+.tk-due.near,.td-due.near{color:#c0392b;font-weight:800}
+.tk-row:has(.prio-chip.urgent){border-left:3px solid #c0392b}
+.td-prio{display:flex;flex-wrap:wrap;gap:5px}
+.prio-b{border:1px solid var(--line);background:#fff;border-radius:99px;padding:5px 11px;font:600 12.5px var(--font-ui);color:var(--ink-2);cursor:pointer}
+.prio-b.on{color:#fff;border-color:transparent}.prio-b.urgent.on{background:#c0392b}.prio-b.high.on{background:#d9822b}.prio-b.normal.on{background:#1B2620}.prio-b.low.on{background:#8a9187}
+.talarm{position:fixed;z-index:122;left:50%;top:18px;transform:translate(-50%,-24px);opacity:0;pointer-events:none;width:min(520px,calc(100vw - 24px));display:flex;align-items:center;gap:12px;padding:14px 14px 14px 16px;border-radius:20px;color:#fff;box-shadow:0 30px 70px -18px rgba(0,0,0,.6);transition:opacity .25s,transform .4s var(--ease)}
+.talarm.in{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
+.talarm.urgent{background:linear-gradient(135deg,#d2402f,#a32118);animation:alarmShake .5s .35s 2}
+.talarm.deadline{background:linear-gradient(135deg,#2a3a31,#1B2620);border:1px solid rgba(201,169,110,.6)}
+@keyframes alarmShake{0%,100%{transform:translate(-50%,0)}25%{transform:translate(calc(-50% - 6px),0)}75%{transform:translate(calc(-50% + 6px),0)}}
+.ta-ic{font-size:30px;flex:none;animation:alarmRing 1s ease-in-out infinite}
+@keyframes alarmRing{0%,100%{transform:rotate(0)}10%{transform:rotate(-14deg)}20%{transform:rotate(14deg)}30%{transform:rotate(-10deg)}40%{transform:rotate(0)}}
+.ta-b{flex:1;min-width:0}.ta-b b{display:block;font-size:15px;line-height:1.3}.ta-b span{display:block;margin-top:3px;font-size:13px;opacity:.9;line-height:1.4}
+.talarm.deadline .ta-b b{color:#f0dcae}
+.ta-act{display:flex;flex-direction:column;gap:6px;flex:none}
+.ta-act button{border:0;border-radius:10px;padding:8px 12px;font:700 12.5px var(--font-ui);cursor:pointer;white-space:nowrap}
+.ta-done{background:#fff;color:#1B2620}.talarm.deadline .ta-done{background:var(--chat-gold)}
+.ta-open{background:rgba(255,255,255,.18);color:#fff}
+.ta-x{background:transparent;color:rgba(255,255,255,.75);padding:4px!important}
+@media (max-width:640px){.talarm{top:calc(10px + env(safe-area-inset-top));flex-wrap:wrap}.ta-b{flex:1 1 calc(100% - 50px)}.ta-act{flex-direction:row;flex:1 1 100%}.ta-act button{flex:1}.ta-x{flex:0 0 auto!important}.tr-prio button{font-size:13px;padding:7px 11px}.task-row .tr-due .tr-time{font-size:16px}}
 </style>
 </head>
 <body>
@@ -2605,8 +2637,8 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610081210"></script>
-<script>window.HTML_BUILD="202610081210";</script>
-<script src="app.js?v=202610081210"></script>
+<script src="config.js?v=202610081631"></script>
+<script>window.HTML_BUILD="202610081631";</script>
+<script src="app.js?v=202610081631"></script>
 </body>
 </html>

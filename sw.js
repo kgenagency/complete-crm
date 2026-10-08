@@ -12,19 +12,28 @@ self.addEventListener('push', (e) => {
   e.waitUntil((async () => {
     // chat: ako je CRM upravo otvoren i ispred tebe, poruku već vidiš u aplikaciji, pa obaveštenje stiže tiho i samo se skloni
     let quiet = false;
-    if (d.kind === 'chat' || d.kind === 'call') { try { const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true }); quiet = wins.some(c => c.visibilityState === 'visible' && c.focused); } catch (x) {} }
-    const call = d.kind === 'call' && !quiet;
+    const alarm = d.kind === 'deadline' || d.kind === 'urgent';
+    if (d.kind === 'chat' || d.kind === 'call' || alarm) {
+      try {
+        const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true }), front = wins.find(c => c.visibilityState === 'visible' && c.focused);
+        quiet = !!front;
+        if (front && alarm) front.postMessage({ crmAlarm: d }); // CRM je otvoren: pokaže svoju karticu sa alarmom
+      } catch (x) {}
+    }
+    const call = d.kind === 'call' && !quiet, urgent = d.kind === 'urgent';
     await self.registration.showNotification(d.title || 'HARIZMA CRM', {
-      body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag && !quiet, silent: quiet, requireInteraction: call,
-      icon: 'icon-192.png', badge: 'badge-96.png', vibrate: quiet ? undefined : call ? [300, 150, 300, 150, 300, 150, 300] : [60, 40, 60],
-      timestamp: d.ts || Date.now(), data: { go: d.go || '' },
+      body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag && !quiet, silent: quiet, requireInteraction: (call || alarm) && !quiet,
+      icon: urgent ? 'alarm-urgent.png' : d.kind === 'deadline' ? 'alarm-192.png' : 'icon-192.png', badge: 'badge-96.png',
+      vibrate: quiet ? undefined : call ? [300, 150, 300, 150, 300, 150, 300] : urgent ? [600, 200, 600, 200, 600, 200, 600] : alarm ? [250, 120, 250, 120, 500] : [60, 40, 60],
+      actions: alarm && !quiet && d.task ? [{ action: 'done', title: '✓ Gotovo' }, { action: 'open', title: 'Otvori zadatak' }] : undefined,
+      timestamp: d.ts || Date.now(), data: { go: d.go || '', done: d.task ? 'taskdone:' + d.task : '' },
     });
     if (quiet && d.tag) { await new Promise(r => setTimeout(r, 2500)); try { (await self.registration.getNotifications({ tag: d.tag })).forEach(n => n.close()); } catch (x) {} }
   })());
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const go = (e.notification.data || {}).go || '';
+  const dt = e.notification.data || {}, go = (e.action === 'done' && dt.done) ? dt.done : (dt.go || '');
   e.waitUntil((async () => {
     const scope = self.registration.scope;
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });

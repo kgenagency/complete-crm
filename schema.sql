@@ -975,3 +975,58 @@ select u, max(t) from (
 ) x group by u
 on conflict (username) do update set last_seen_at = greatest(h_last_seen.last_seen_at, excluded.last_seen_at);
 do $$ begin begin alter publication supabase_realtime add table public.h_last_seen; exception when duplicate_object then null; end; end $$;
+
+-- ===== v27: prioritet zadatka, tačno vreme roka, alarmi za rokove i hitne =====
+-- v27: prioritet i tačno vreme roka za zadatke + podsetnici (sat pre; hitni i 15 min pre, u roku i na 30 min dok kasne)
+do $$ declare t text; begin
+  foreach t in array array['h_notes','h_posts','h_site_ideas','h_packaging','h_returns','h_promotions','h_orders','h_customers','h_products','h_story_sections'] loop
+    execute format('alter table public.%I add column if not exists task_prio text', t);
+    execute format('alter table public.%I add column if not exists task_due_at timestamptz', t);
+    begin execute format('alter table public.%I add constraint %I check (task_prio is null or task_prio in (''urgent'',''high'',''normal'',''low''))', t, t || '_task_prio_chk'); exception when duplicate_object then null; end;
+  end loop;
+end $$;
+-- dnevnik poslatih podsetnika (da nijedan ne stigne dva puta); klijenti ga ne vide
+create table if not exists public.h_task_alerts (
+  tbl text not null, row_id uuid not null, kind text not null, due_at timestamptz not null,
+  sent_at timestamptz not null default now(),
+  primary key (tbl, row_id, kind, due_at)
+);
+alter table public.h_task_alerts enable row level security;
+create or replace function public.h_task_alerts_run() returns int language plpgsql security definer set search_path = public, extensions as $$
+declare t text; r record; n int := 0; sec text; k text; c int; hr int; late int;
+begin
+  select v into sec from public.h_private where h_private.k = 'push_hook';
+  hr := extract(hour from (now() at time zone 'Europe/Belgrade'))::int;
+  foreach t in array array['h_notes','h_posts','h_site_ideas','h_packaging','h_returns','h_promotions','h_orders','h_customers','h_products','h_story_sections'] loop
+    for r in execute format('select id, task_due_at, coalesce(task_prio, ''normal'') prio from public.%I
+        where deleted_at is null and task_done_at is null and coalesce(array_length(assignees, 1), 0) > 0
+          and task_due_at is not null and task_due_at < now() + interval ''61 minutes'' and task_due_at > now() - interval ''3 days''', t) loop
+      k := null;
+      if now() < r.task_due_at then
+        if r.prio = 'urgent' and now() >= r.task_due_at - interval '15 minutes' then k := 'm15';
+        elsif now() >= r.task_due_at - interval '60 minutes' then k := 'h1'; end if;
+      elsif r.prio = 'urgent' then
+        late := floor(extract(epoch from (now() - r.task_due_at)) / 1800)::int;
+        if late = 0 then k := 'due';
+        elsif hr >= 8 and hr < 23 then k := 'late' || late; end if;
+      end if;
+      if k is null then continue; end if;
+      -- ako je „h1“ preskočen jer je 15 min već tu, ne šalji i „h1“ kasnije
+      insert into public.h_task_alerts (tbl, row_id, kind, due_at) values (t, r.id, k, r.task_due_at) on conflict do nothing;
+      get diagnostics c = row_count;
+      if c = 1 then
+        if k = 'm15' then insert into public.h_task_alerts (tbl, row_id, kind, due_at) values (t, r.id, 'h1', r.task_due_at) on conflict do nothing; end if;
+        perform net.http_post(url := 'https://treqdonahihterhaxxfw.supabase.co/functions/v1/crm-push',
+          body := jsonb_build_object('alert', jsonb_build_object('tbl', t, 'id', r.id, 'kind', k)),
+          headers := jsonb_build_object('Content-Type', 'application/json', 'x-crm-hook', sec), timeout_milliseconds := 15000);
+        n := n + 1;
+      end if;
+    end loop;
+  end loop;
+  return n;
+end $$;
+revoke all on function public.h_task_alerts_run() from public, anon, authenticated;
+select cron.unschedule('crm-task-alerts') where exists (select 1 from cron.job where jobname = 'crm-task-alerts');
+select cron.schedule('crm-task-alerts', '* * * * *', 'select public.h_task_alerts_run()');
+alter table public.h_push_subs alter column prefs set default '{"tasks":true,"done":true,"orders":true,"returns":true,"daily":true,"chat":true,"comments":true,"calls":true,"deadline":true}'::jsonb;
+select 'ok';

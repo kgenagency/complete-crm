@@ -22,11 +22,16 @@ const pname = (k: string) => PEOPLE[k]?.name || k;
 const vb = (k: string, m: string, f: string) => (PEOPLE[k]?.f ? f : m);
 const rsd = (n: number) => new Intl.NumberFormat('sr-Latn-RS').format(Math.round(n)) + ' RSD';
 const fmtDay = (d: string) => new Date(String(d).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('sr-Latn-RS', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Belgrade' });
+const BG = 'Europe/Belgrade';
+const ymd = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: BG }).format(d);
+const hm = (iso: string) => new Intl.DateTimeFormat('sr-Latn-RS', { hour: '2-digit', minute: '2-digit', timeZone: BG }).format(new Date(iso));
+const dayLbl = (iso: string) => { const d = ymd(new Date(iso)); return d === ymd(new Date()) ? 'danas' : d === ymd(new Date(Date.now() + 864e5)) ? 'sutra' : fmtDay(d); };
+const dur = (ms: number) => { const m = Math.max(1, Math.round(ms / 60000)); if (m < 60) return `${m} min`; const h = Math.floor(m / 60), r = m % 60; return h < 24 ? (r && h < 5 ? `${h} h ${r} min` : `${h} h`) : `${Math.round(h / 24)} d`; };
 const pl = (n: number, a: string, b: string, c: string) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? b : c; };
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } });
 
-type Msg = { title: string; body: string; tag?: string; go?: string; kind?: string; ttl?: number };
+type Msg = { title: string; body: string; tag?: string; go?: string; kind?: string; ttl?: number; [k: string]: any };
 async function pushTo(users: string[], kind: string, msg: Msg) {
   users = [...new Set(users)].filter(u => PEOPLE[u]); if (!users.length) return { sent: 0, subs: 0 };
   const { data: subs } = await db.from('h_push_subs').select('*').in('username', users);
@@ -52,7 +57,14 @@ async function onAudit(a: any) {
     const added = r.assignees.filter((k: string) => !(before || []).includes(k) && k !== actor);
     const what = r.task_note && tbl !== 'h_notes' ? cut(r.task_note, 140) : cut(NAME[tbl]?.(r), 140);
     const ref = r.task_note && tbl !== 'h_notes' ? cut(NAME[tbl]?.(r), 60) : '';
-    if (added.length && !r.task_done_at && PEOPLE[actor])
+    const pch = a.changed?.task_prio;
+    const urgentNow = r.task_prio === 'urgent' && !r.task_done_at && r.assignees.length > 0 && PEOPLE[actor] && (a.op === 'INSERT' || (pch && pch.na === 'urgent') || added.length > 0);
+    if (urgentNow) {
+      const as = r.assignees.filter((u: string) => PEOPLE[u]).map(pname).join(', ');
+      const due = r.task_due_at ? `· rok ${dayLbl(r.task_due_at)} u ${hm(r.task_due_at)}` : r.task_due ? `· rok ${fmtDay(r.task_due)}` : '';
+      out.push(await pushTo(USERS.filter(u => u !== actor), 'deadline', { title: `🚨 HITNO · ${pname(actor)} ${vb(actor, 'označio', 'označila')} zadatak kao hitan`, body: [what, ref && `(${ref})`, due, `· zaduženi: ${as}`].filter(Boolean).join(' '), tag: `dl-${tbl}-${r.id}`, go: `chat:task:${tbl}:${r.id}`, kind: 'urgent', task: `${tbl}:${r.id}`, akey: `${tbl}:${r.id}:new:${a.id || Date.now()}` }));
+    }
+    if (added.length && !r.task_done_at && PEOPLE[actor] && !urgentNow)
       out.push(await pushTo(added, 'tasks', { title: `${pname(actor)} ti je ${vb(actor, 'dodelio', 'dodelila')} zadatak`, body: [what, ref && `(${ref})`, r.task_due && `· rok ${fmtDay(r.task_due)}`, `· ${SEC[tbl]}`].filter(Boolean).join(' '), tag: `task-${tbl}-${r.id}`, go: 'tab:tasks' }));
     const ch = a.changed?.task_done_at;
     if (a.op === 'UPDATE' && ch && !ch.od && ch.na && r.task_by && r.task_by !== actor && PEOPLE[actor])
@@ -116,6 +128,27 @@ async function onChat(m: any) {
   });
 }
 
+// podsetnik za rok (zove ga baza svakog minuta preko h_task_alerts_run): celom timu
+async function onAlert(al: any) {
+  const tbl = String(al?.tbl || ''), id = String(al?.id || ''), kind = String(al?.kind || '');
+  if (!NAME[tbl] || !id) return { sent: 0 };
+  const { data: r } = await db.from(tbl).select('*').eq('id', id).maybeSingle();
+  if (!r || r.deleted_at || r.task_done_at || !r.task_due_at) return { sent: 0, skip: true };
+  const what = r.task_note && tbl !== 'h_notes' ? cut(r.task_note, 120) : cut(NAME[tbl](r), 120);
+  const as = (r.assignees || []).filter((u: string) => PEOPLE[u]).map(pname).join(', ');
+  const due = new Date(r.task_due_at), ms = due.getTime() - Date.now(), urgent = r.task_prio === 'urgent', t = hm(r.task_due_at);
+  let title = '';
+  if (kind === 'h1') title = `⏰ Rok za ${dur(ms)} (${t})${urgent ? ' · HITNO' : ''}`;
+  else if (kind === 'm15') title = `🚨 HITNO · još ${dur(ms)} do roka (${t})`;
+  else if (kind === 'due') title = `🚨 HITNO · rok je istekao (${t})`;
+  else if (kind.startsWith('late')) title = `🚨 HITNO · kasni ${dur(-ms)}, nije završeno`;
+  else return { sent: 0 };
+  return await pushTo(USERS, 'deadline', {
+    title, body: `${what}${as ? ' · ' + as : ''} · ${SEC[tbl]}`, tag: `dl-${tbl}-${id}`, go: `chat:task:${tbl}:${id}`,
+    kind: urgent || kind !== 'h1' ? 'urgent' : 'deadline', task: `${tbl}:${id}`, akey: `${tbl}:${id}:${kind}:${due.toISOString()}`, ttl: 3600,
+  });
+}
+
 // jutarnji podsetnik: šta ističe danas i šta kasni
 const FINAL: Record<string, (r: any) => boolean> = {
   h_posts: r => r.status === 'published', h_site_ideas: r => ['done', 'rejected'].includes(r.status), h_returns: r => ['resolved', 'rejected'].includes(r.status),
@@ -153,6 +186,7 @@ Deno.serve(async (req) => {
     try {
       if (body.audit) return json({ ok: true, res: await onAudit(body.audit) });
       if (body.chat) return json({ ok: true, res: await onChat(body.chat) });
+      if (body.alert) return json({ ok: true, res: await onAlert(body.alert) });
       if (Array.isArray(body.test_users)) return json({ ok: true, res: await pushTo(body.test_users, 'test', { title: body.title || 'Obaveštenja rade ✓', body: body.text || 'Ovako će stizati zadaci, porudžbine, povrati i poruke iz HARIZMA CRM-a.', tag: 'test', go: body.go || 'tab:overview' }) });
       if (body.daily) return json({ ok: true, res: await daily(!!body.force) });
       if (body.selftest) { // provera da li šifrovanje i potpis rade u ovom okruženju (šalje na zadatu adresu)
