@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610081026';
+const APP_BUILD = '202610081046';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -3494,7 +3494,7 @@ const BOT_FAQ = [
   { g: [['backup', 'rezerv', 'sigurn', 'bezbed']], a: 'Podaci se čuvaju zauvek: obrisano ide u arhivu, svaka promena se beleži, a svake noći u 03:30 pravi se rezervna kopija cele baze na GitHub-u.', b: [['Istorija', 'tab:history']] },
   { g: [['istorij', 'prekretnic', 'dogadja', 'vremensk']], a: 'Istorija je vremenska linija svega. Važan događaj (lansiranje, nova kolekcija…) dodaješ dugmetom <b>Zabeleži događaj</b>.', b: [['Zabeleži događaj', 'act:Zabeleži događaj u istoriji'], ['Istorija', 'tab:history']] },
   { g: [['obavestenj', 'notifikac', 'push', 'na telefon', 'stize poruka', 'stizu poruke']], a: 'CRM može da šalje <b>obaveštenja na telefon i računar</b>, i kad je zatvoren: kad ti neko dodeli zadatak, kad neko završi zadatak koji si dodelio/la, nova porudžbina, nova prijava povrata i jutarnji podsetnik u 8h. Uključuješ ih na svakom uređaju posebno: <b>zvonce gore → Obaveštenja na ovom uređaju → Uključi</b> (na telefonu i u meniju sa tri crtice, dugme 📲). Tu biraš šta da ti stiže i šalješ probu. Na iPhone-u prvo dodaj CRM na početni ekran iz Safari-ja.', b: [] },
-  { g: [['chat', 'cet', 'caskanj', 'dopisiv', 'privatn', 'gif', 'tagu', 'taguj', 'oznac', 'pominj']], a: '<b>Tim chat</b> je zlatno dugme <b>💬 Chat</b> dole desno (i gore u traci, i prvo u meniju sa tri crtice, taster <kbd>C</kbd>). Ima grupu <b>Tim HARIZMA</b> i privatne poruke sa svakim posebno (vidite ih samo vas dvoje). Obaveštenje na telefon stiže <b>samo kad nekog označiš</b>: napiši <b>@</b> i izaberi ime, ili <b>@svi</b> za ceo tim. Dugme <b>GIF</b> šalje GIF ili sliku (iz galerije, nalepljen link ili pretraga). Poruke se ne mogu menjati ni brisati, istorija se čuva zauvek, a pretraga gore levo traži kroz celu istoriju.', b: [['Otvori chat', 'act:Tim chat']] },
+  { g: [['chat', 'cet', 'caskanj', 'dopisiv', 'privatn', 'gif', 'tagu', 'taguj', 'oznac', 'pominj', 'reakc', 'lajk', 'odgovor na poruk', 'reply', 'izmeni poruk', 'obrisi poruk', 'edit']], a: '<b>Tim chat</b> je zlatno dugme <b>💬 Chat</b> dole desno (i gore u traci, i prvo u meniju sa tri crtice, taster <kbd>C</kbd>). Ima grupu <b>Tim HARIZMA</b> i privatne poruke sa svakim posebno (vidite ih samo vas dvoje). Obaveštenje na telefon stiže <b>samo kad nekog označiš</b>: napiši <b>@</b> i izaberi ime, ili <b>@svi</b> za ceo tim. Dugme <b>GIF</b> šalje GIF ili sliku (iz galerije, nalepljen link ili pretraga). Na poruku <b>odgovaraš i reaguješ</b> (❤️ 👍 😂…) dugim držanjem poruke na telefonu, a na računaru dugmetom ☺ pored poruke; brz odgovor je prevlačenje poruke udesno, a dva dodira daju ❤️. <b>Svoje poruke</b> možeš da izmeniš ili obrišeš (isti meni, na računaru i strelica gore u praznom polju menja poslednju). Kod drugih piše „izmenjeno“ ili „Poruka je obrisana“, a original ostaje sačuvan u bazi i dnevnoj kopiji. Pretraga gore levo traži kroz celu istoriju.', b: [['Otvori chat', 'act:Tim chat']] },
   { g: [['nov zadatak', 'novi zadatak', 'novi task', 'nov task', 'zadatak za', 'task za', 'dodeli', 'zaduzi']], a: 'Klikni <b>Nov zadatak</b> (u Taskovima ili taster B), upiši šta treba i izaberi <b>Sekciju</b>. Ispod se pojavi <b>Za šta je zadatak?</b>: <b>＋ nova stavka</b> (npr. cela forma za ideju u Objave + reklame, predlog za Sajt, promocija), <b>postojeća</b> stavka iz liste (porudžbina, kupac, model, prijava…) ili <b>Samo zadatak</b> kao beleška. Izaberi ko radi i rok, pa Sačuvaj.', b: [['Nov zadatak', 'act:Nov zadatak'], ['Taskovi', 'tab:tasks']] },
   { g: [['zvuk', 'zvuc', 'ting', 'muzik', 'utisa', 'tisin', 'sound']], a: 'CRM ima zvuke: uvod kad uđeš, „ka-čing“ za novu porudžbinu (tiši kad je unese neko drugi), zvonce za zadatke, šuškanje papira za belešku, zvuk za poslato i isporučeno, brisanje i vraćanje, a za prvu, 10., 25., 50., 100. porudžbinu i za rekordan dan i mala proslava sa konfetama. Sve se gasi i pali u zvoncetu gore (Zvuci) ili u meniju sa tri crtice (Zvuk); tu je i <b>▶ Probaj</b>.', b: [] },
   { g: [['izvor', 'organic', 'organsk', 'meta ads', 'tiktok', 'tik tok', 'google ads', 'atribuc', 'odakle je dosl']], a: 'Svaka porudžbina ima <b>Izvor</b>: <b>Organic</b> (ručno uneta ili ne znamo odakle je došla), <b>Meta Ads</b>, <b>TikTok Ads</b> ili <b>Google Ads</b>. Biraš ga u formi porudžbine (podrazumevano Organic). U Porudžbinama je filter <b>Svi izvori</b> sa brojem porudžbina, a pored broja stoji ukupan iznos za taj izvor.', b: [['Porudžbine', 'tab:orders'], ['Nova porudžbina', 'act:Nova porudžbina']] },
@@ -4178,7 +4178,7 @@ function renderPushBar() {
 /* ================= TIM CHAT =================
    grupa „Tim HARIZMA“ + privatne poruke. Poruke se ne menjaju i ne brišu (baza to ne dozvoljava),
    pa se istorija čuva zauvek (plus dnevna kopija). Obaveštenje na telefon stiže samo kad te neko označi (@ime ili @svi). */
-const CHAT = { open: false, ch: 'tim', msgs: {}, reads: {}, seen: {}, loaded: false, online: new Set(), typing: {}, list: true, q: '', older: {}, rt: null, typeAt: 0, gif: { open: false, q: '', items: [], configured: null, off: 0 }, focusId: null, readT: {}, lim: {}, res: {}, srv: [], qT: 0, poll: 0 };
+const CHAT = { open: false, ch: 'tim', msgs: {}, reads: {}, seen: {}, loaded: false, online: new Set(), typing: {}, list: true, q: '', older: {}, rt: null, typeAt: 0, gif: { open: false, q: '', items: [], configured: null, off: 0 }, focusId: null, readT: {}, lim: {}, res: {}, srv: [], qT: 0, poll: 0, rx: {}, reply: {}, act: null, need: new Set(), tap: null, edit: null, updSince: '' };
 const dmKey = (a, b) => 'dm:' + [a, b].sort().join(':');
 const chatChannels = () => ['tim', ...Object.keys(PEOPLE).filter(k => k !== who()).map(k => dmKey(who(), k))];
 const chatOther = (ch) => (ch === 'tim' ? null : ch.slice(3).split(':').find(k => k !== who()));
@@ -4188,7 +4188,7 @@ const MENTION_RE = /@(konstantin|stasa|staša|marjan|svi|all)(?![\p{L}\p{N}_])/g
 const normMention = (m) => { m = m.toLowerCase().replace(/š/g, 's'); return m === 'all' ? 'svi' : m; };
 const chatMentionsMe = (m) => m.author !== who() && (m.mentions || []).some(x => x === who() || x === 'svi');
 const isChatMobile = () => innerWidth < 760;
-function chatUnread(ch) { const r = CHAT.reads[ch] || ''; return (CHAT.msgs[ch] || []).filter(m => !m._tmp && m.author !== who() && m.created_at > r).length; }
+function chatUnread(ch) { const r = CHAT.reads[ch] || ''; return (CHAT.msgs[ch] || []).filter(m => !m._tmp && !m.deleted_at && m.author !== who() && m.created_at > r).length; }
 const chatUnreadTotal = () => chatChannels().reduce((a, c) => a + chatUnread(c), 0);
 function chatAddMsgs(rows) { rows.forEach(m => { const a = CHAT.msgs[m.channel] = CHAT.msgs[m.channel] || []; if (!a.some(x => x.id === m.id)) a.push(m); }); Object.values(CHAT.msgs).forEach(a => a.sort((x, y) => x.created_at.localeCompare(y.created_at))); }
 async function chatLoad() {
@@ -4197,6 +4197,7 @@ async function chatLoad() {
     const res = await Promise.all([...chs.map(c => q(sb.from('h_chat_messages').select('*').eq('channel', c).order('created_at', { ascending: false }).limit(300))), q(sb.from('h_chat_reads').select('*'))]);
     const reads = res.pop();
     res.forEach((rows, i) => { if (rows.length < 300) CHAT.older[chs[i]] = 'done'; chatAddMsgs(rows); });
+    await chatRxLoad();
     reads.forEach(r => { if (r.username === who()) { if ((CHAT.reads[r.channel] || '') < r.last_read_at) CHAT.reads[r.channel] = r.last_read_at; } else (CHAT.seen[r.channel] = CHAT.seen[r.channel] || {})[r.username] = r.last_read_at; });
     CHAT.loaded = true; chatBadges(); if (CHAT.open) renderChat(true);
   } catch (e) { console.warn('chat', e); }
@@ -4205,6 +4206,8 @@ async function chatPoll() {
   if (!state.user || document.hidden) return;
   const all = Object.values(CHAT.msgs).flat().filter(m => !m._tmp), last = all.reduce((a, m) => (m.created_at > a ? m.created_at : a), '');
   try { const rows = await q(sb.from('h_chat_messages').select('*').gt('created_at', last || '1970-01-01').order('created_at').limit(200)); rows.forEach(chatIncoming); } catch (e) {}
+  try { const since = CHAT.updSince || new Date(Date.now() - 5 * 60e3).toISOString(); CHAT.updSince = new Date(Date.now() - 90e3).toISOString(); const up = await q(sb.from('h_chat_messages').select('*').or(`edited_at.gt.${since},deleted_at.gt.${since}`).limit(200)); up.forEach(chatUpdated); } catch (e) {}
+  if (CHAT.open) { const before = JSON.stringify(CHAT.rx); await chatRxLoad(); if (JSON.stringify(CHAT.rx) !== before) renderChatMsgs(chatNearBottom()); }
 }
 async function chatOlder(ch) {
   const a = CHAT.msgs[ch] || [], lim = CHAT.lim[ch] || 300, box = $('cpMsgs'), h0 = box.scrollHeight, t0 = box.scrollTop;
@@ -4249,7 +4252,9 @@ function chatLive() {
   try {
     CHAT.rt = sb.channel('crm-chat', { config: { presence: { key: who() } } })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'h_chat_messages' }, p => chatIncoming(p.new))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'h_chat_messages' }, p => chatUpdated(p.new))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'h_chat_reads' }, p => chatReadEvt(p.new))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'h_chat_reactions' }, p => chatRxEvt(p))
       .on('presence', { event: 'sync' }, () => { try { CHAT.online = new Set(Object.keys(CHAT.rt.presenceState())); } catch (e) {} if (CHAT.open) { renderChatSide(); renderChatTop(); } })
       .on('broadcast', { event: 'typing' }, ({ payload }) => chatTypingEvt(payload))
       .subscribe(async (s) => { if (s === 'SUBSCRIBED') { try { await CHAT.rt.track({ at: Date.now() }); } catch (e) {} } });
@@ -4298,14 +4303,14 @@ function openChat(ch) {
   if (!(isChatMobile() && CHAT.list)) { chatMarkRead(CHAT.ch); if (!isChatMobile()) setTimeout(() => $('cpInput').focus(), 60); }
   if (!CHAT.loaded) chatLoad();
 }
-function closeChat() { CHAT.open = false; document.body.classList.remove('chat-open'); $('chatPanel').classList.remove('open'); chatGifClose(); $('cpMention').style.display = 'none'; try { $('cpInput').blur(); } catch (e) {} chatVV(); }
+function closeChat() { chatActClose(); CHAT.open = false; document.body.classList.remove('chat-open'); $('chatPanel').classList.remove('open'); chatGifClose(); $('cpMention').style.display = 'none'; try { $('cpInput').blur(); } catch (e) {} chatVV(); }
 /* telefon: kad se otvori tastatura, chat staje tačno u vidljivi deo ekrana */
 function chatVV() {
   const p = $('chatPanel'), v = window.visualViewport; if (!p) return;
   if (!v || !CHAT.open || !isChatMobile()) { p.style.height = ''; p.style.top = ''; return; }
   p.style.height = v.height + 'px'; p.style.top = v.offsetTop + 'px';
 }
-function chatSelect(ch) { CHAT.ch = ch; CHAT.list = false; CHAT.q = ''; if ($('cpQ')) $('cpQ').value = ''; renderChat(true); chatMarkRead(ch); if (!isChatMobile()) setTimeout(() => $('cpInput').focus(), 40); }
+function chatSelect(ch) { if (CHAT.edit) chatEditCancel(); CHAT.ch = ch; CHAT.list = false; CHAT.q = ''; if ($('cpQ')) $('cpQ').value = ''; renderChat(true); chatMarkRead(ch); if (!isChatMobile()) setTimeout(() => $('cpInput').focus(), 40); }
 /* ---- prikaz ---- */
 const chatTime = (iso) => new Date(iso).toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' });
 function chatDayLbl(d) { const t = dayStr(new Date()), y = new Date(); y.setDate(y.getDate() - 1); return d === t ? 'Danas' : d === dayStr(y) ? 'Juče' : new Date(d + 'T12:00:00').toLocaleDateString('sr-Latn-RS', { weekday: 'long', day: 'numeric', month: 'long' }); }
@@ -4319,9 +4324,10 @@ const chatAv = (k, cls = '') => `<span class="n-av ${PEOPLE[k] ? k : 'system'} $
 function chatPreview(ch) {
   const m = (CHAT.msgs[ch] || []).slice(-1)[0]; if (!m) return { t: ch === 'tim' ? 'Grupa za ceo tim' : 'Privatna poruka', at: '' };
   const who_ = m.author === who() ? 'Ti: ' : ch === 'tim' ? personName(m.author) + ': ' : '';
+  if (m.deleted_at) return { t: who_ + 'poruka je obrisana', at: dayStr(new Date(m.created_at)) === dayStr(new Date()) ? chatTime(m.created_at) : new Date(m.created_at).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' }) };
   return { t: who_ + (m.body ? m.body.replace(/\s+/g, ' ') : (/\.gif(\?|$)/i.test(m.image_url || '') ? 'GIF' : '📷 Slika')), at: dayStr(new Date(m.created_at)) === dayStr(new Date()) ? chatTime(m.created_at) : new Date(m.created_at).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' }) };
 }
-function renderChat(toBottom) { renderChatSide(); renderChatTop(); renderChatMsgs(toBottom); renderChatTyping(); $('chatPanel').classList.toggle('show-list', isChatMobile() && CHAT.list); $('cpInput').placeholder = CHAT.ch === 'tim' ? (isChatMobile() ? 'Poruka timu…' : 'Poruka timu… (@ime da nekog označiš)') : `Piši ${({ konstantin: 'Konstantinu', stasa: 'Staši', marjan: 'Marjanu' })[chatOther(CHAT.ch)] || chatTitle(CHAT.ch)}…`; }
+function renderChat(toBottom) { chatActClose(); renderChatSide(); renderChatTop(); renderChatMsgs(toBottom); renderChatTyping(); renderChatReply(); $('chatPanel').classList.toggle('show-list', isChatMobile() && CHAT.list); $('cpInput').placeholder = CHAT.ch === 'tim' ? (isChatMobile() ? 'Poruka timu…' : 'Poruka timu… (@ime da nekog označiš)') : `Piši ${({ konstantin: 'Konstantinu', stasa: 'Staši', marjan: 'Marjanu' })[chatOther(CHAT.ch)] || chatTitle(CHAT.ch)}…`; }
 function renderChatSide() {
   const qn = fold(CHAT.q.trim());
   if (qn) {
@@ -4345,8 +4351,8 @@ const chatNearBottom = () => { const b = $('cpMsgs'); return !b || b.scrollHeigh
 function renderChatMsgs(toBottom) {
   const box = $('cpMsgs'); if (!box) return;
   const all = CHAT.msgs[CHAT.ch] || [], lim = CHAT.lim[CHAT.ch] || 300, list = all.slice(-lim), me = who();
-  let html = all.length && (all.length > lim || CHAT.older[CHAT.ch] !== 'done') ? '<button class="cm-older" data-chatolder>↑ Učitaj starije poruke</button>' : all.length ? '<div class="cm-start">Početak razgovora · ništa se ne briše</div>' : '';
-  if (!all.length) html += `<div class="cm-empty"><b>${CHAT.ch === 'tim' ? 'Ovo je početak timskog chata 👋' : 'Ovo je početak vašeg privatnog razgovora'}</b><span>${CHAT.ch === 'tim' ? 'Piši timu ovde. Obaveštenje na telefon dobija samo onaj koga označiš, npr. <b>@Staša</b>, ili svi sa <b>@svi</b>.' : `Ovo vidite samo ti i ${esc(chatTitle(CHAT.ch))}. Obaveštenje na telefon stiže kad napišeš <b>@${esc(chatTitle(CHAT.ch))}</b>.`}</span><small>Poruke se nikad ne brišu, istorija se čuva zauvek.</small></div>`;
+  let html = all.length && (all.length > lim || CHAT.older[CHAT.ch] !== 'done') ? '<button class="cm-older" data-chatolder>↑ Učitaj starije poruke</button>' : all.length ? '<div class="cm-start">Početak razgovora</div>' : '';
+  if (!all.length) html += `<div class="cm-empty"><b>${CHAT.ch === 'tim' ? 'Ovo je početak timskog chata 👋' : 'Ovo je početak vašeg privatnog razgovora'}</b><span>${CHAT.ch === 'tim' ? 'Piši timu ovde. Obaveštenje na telefon dobija samo onaj koga označiš, npr. <b>@Staša</b>, ili svi sa <b>@svi</b>.' : `Ovo vidite samo ti i ${esc(chatTitle(CHAT.ch))}. Obaveštenje na telefon stiže kad napišeš <b>@${esc(chatTitle(CHAT.ch))}</b>.`}</span><small>Na poruku odgovaraš i reaguješ dugim držanjem (na računaru ☺ pored poruke). Svoje poruke možeš da izmeniš ili obrišeš.</small></div>`;
   let prev = null, lastDay = '';
   const lastMine = [...list].reverse().find(m => m.author === me && !m._tmp);
   list.forEach(m => {
@@ -4354,9 +4360,15 @@ function renderChatMsgs(toBottom) {
     if (d !== lastDay) { html += `<div class="cm-day"><span>${chatDayLbl(d)}</span></div>`; lastDay = d; prev = null; }
     const mine = m.author === me, grp = prev && prev.author === m.author && (new Date(m.created_at) - new Date(prev.created_at)) < 5 * 60e3;
     const img = m.image_url ? `<img class="cm-img" src="${esc(m.image_url)}" alt="" loading="lazy" data-zoom>` : '';
-    html += `<div class="cm ${mine ? 'mine' : ''} ${grp ? 'grp' : ''} ${chatMentionsMe(m) ? 'ment' : ''} ${m._tmp ? 'tmp' : ''} ${m._err ? 'err' : ''} ${CHAT.focusId === m.id ? 'focus' : ''}" data-mid="${m.id}">
-      ${mine ? '' : grp ? '<span class="cm-sp"></span>' : chatAv(m.author, 'cm-av')}
-      <div class="cm-b">${!mine && !grp && CHAT.ch === 'tim' ? `<b class="cm-n ${m.author}">${esc(personName(m.author))}</b>` : ''}${img}${m.body ? `<div class="cm-t">${chatFmt(m.body)}</div>` : ''}<span class="cm-time">${m._err ? 'nije poslato' : m._tmp ? 'šalje se…' : chatTime(m.created_at)}</span></div></div>`;
+    if (m.deleted_at) {
+      html += `<div class="cm del ${mine ? 'mine' : ''} ${grp ? 'grp' : ''}" data-mid="${m.id}">${mine ? '' : grp ? '<span class="cm-sp"></span>' : chatAv(m.author, 'cm-av')}<div class="cm-w"><div class="cm-b"><span class="cm-del">🚫 ${mine ? (PEOPLE[me]?.f ? 'Obrisala si ovu poruku' : 'Obrisao si ovu poruku') : 'Poruka je obrisana'}</span><span class="cm-time">${chatTime(m.created_at)}</span></div></div></div>`;
+      prev = m; return;
+    }
+    const rx = chatRxHtml(m), q_ = m.reply_to ? chatQuoteHtml(m.reply_to) : '';
+    html += `<div class="cm ${mine ? 'mine' : ''} ${grp && !q_ ? 'grp' : ''} ${chatMentionsMe(m) ? 'ment' : ''} ${m._tmp ? 'tmp' : ''} ${m._err ? 'err' : ''} ${CHAT.focusId === m.id ? 'focus' : ''} ${rx ? 'has-rx' : ''} ${CHAT.edit && CHAT.edit.id === m.id ? 'editing' : ''}" data-mid="${m.id}">
+      ${mine ? '' : grp && !q_ ? '<span class="cm-sp"></span>' : chatAv(m.author, 'cm-av')}
+      <div class="cm-w"><div class="cm-b">${!mine && (!grp || q_) && CHAT.ch === 'tim' ? `<b class="cm-n ${m.author}">${esc(personName(m.author))}</b>` : ''}${q_}${img}${m.body ? `<div class="cm-t">${chatFmt(m.body)}</div>` : ''}<span class="cm-time">${m._err ? 'nije poslato' : m._tmp ? 'šalje se…' : (m.edited_at ? 'izmenjeno · ' : '') + chatTime(m.created_at)}</span></div>${rx}</div>
+      ${m._tmp ? '' : `<div class="cm-tools"><button type="button" data-actopen="${m.id}" title="${mine ? 'Reaguj, izmeni, obriši' : 'Reaguj'}">☺</button><button type="button" data-reply="${m.id}" title="Odgovori">↩</button></div>`}</div>`;
     if (lastMine && m.id === lastMine.id) {
       const seen = Object.entries(CHAT.seen[CHAT.ch] || {}).filter(([k, at]) => k !== me && at >= m.created_at).map(([k]) => k);
       if (seen.length) html += `<div class="cm-seen">${CHAT.ch === 'tim' ? 'Videli: ' + seen.map(personName).join(', ') : 'Viđeno'} ✓✓</div>`;
@@ -4364,6 +4376,7 @@ function renderChatMsgs(toBottom) {
     prev = m;
   });
   box.innerHTML = html;
+  chatNeedFetch();
   if (CHAT.focusId) { const el = box.querySelector(`[data-mid="${CHAT.focusId}"]`); if (el) { el.scrollIntoView({ block: 'center' }); box.querySelectorAll('img').forEach(i => i.addEventListener('load', () => el.scrollIntoView({ block: 'center' }), { once: true })); setTimeout(() => { CHAT.focusId = null; el.classList.remove('focus'); }, 2500); return; } }
   if (toBottom) { box.scrollTop = box.scrollHeight; box.querySelectorAll('img').forEach(i => i.addEventListener('load', () => { if (chatNearBottom() || toBottom) box.scrollTop = box.scrollHeight; }, { once: true })); }
 }
@@ -4376,14 +4389,16 @@ function chatTypingEvt(p) { if (!p || p.who === who() || !chatChannels().include
 function chatTypingSend() { const now = Date.now(); if (!CHAT.rt || now - CHAT.typeAt < 2500) return; CHAT.typeAt = now; try { CHAT.rt.send({ type: 'broadcast', event: 'typing', payload: { ch: CHAT.ch, who: who() } }); } catch (e) {} }
 /* ---- slanje ---- */
 async function chatSend(extra) {
+  if (!extra && CHAT.edit && CHAT.edit.ch === CHAT.ch) return chatEditSave();
   const inp = $('cpInput'), body = ((extra && 'body' in extra) ? extra.body : inp.value || '').trim(), image_url = (extra && extra.image_url) || null, ch = CHAT.ch;
   if (!body && !image_url) return;
   if (body.length > 4000) return toast('Poruka je preduga (najviše 4.000 znakova)');
-  const tmp = { id: 'tmp' + Date.now() + Math.random(), _tmp: true, channel: ch, author: who(), body: body || null, image_url, mentions: [], created_at: new Date().toISOString() };
+  const rt = CHAT.reply[ch], reply_to = rt && !rt._tmp ? rt.id : null; if (rt) { delete CHAT.reply[ch]; renderChatReply(); }
+  const tmp = { id: 'tmp' + Date.now() + Math.random(), _tmp: true, channel: ch, author: who(), body: body || null, image_url, reply_to, mentions: [], created_at: new Date().toISOString() };
   (CHAT.msgs[ch] = CHAT.msgs[ch] || []).push(tmp);
   if (!extra || !('body' in extra)) { inp.value = ''; chatGrow(); chatMentionBox(); }
   renderChatMsgs(true); sfx('move');
-  try { const r = await q(sb.from('h_chat_messages').insert({ channel: ch, author: who(), body: body || null, image_url }).select().single()); chatIncoming(r); chatMarkRead(ch); }
+  try { const r = await q(sb.from('h_chat_messages').insert({ channel: ch, author: who(), body: body || null, image_url, reply_to }).select().single()); chatIncoming(r); chatMarkRead(ch); }
   catch (e) { tmp._err = true; renderChatMsgs(); fail(e); }
 }
 async function chatUpload(file) {
@@ -4442,6 +4457,157 @@ function chatPop(m) {
   el.innerHTML = `${chatAv(m.author)}<div class="cpop-b"><b>${esc(personName(m.author))} ${m.channel === 'tim' ? (PEOPLE[m.author]?.f ? 'te je označila' : 'te je označio') : 'ti piše'}</b><span>${m.body ? chatFmt(tcut(m.body, 120)) : 'GIF / slika'}</span></div><button class="cpop-x" data-cpx>✕</button>`;
   void el.offsetWidth; el.classList.add('in'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('in'), 7000);
 }
+/* ---- odgovor na poruku (reply) ---- */
+const CHAT_DAT = { konstantin: 'Konstantinu', stasa: 'Staši', marjan: 'Marjanu' };
+function chatFind(id) { for (const a of Object.values(CHAT.msgs)) { const m = a.find(x => x.id === id); if (m) return m; } return CHAT.res[id] || null; }
+const chatSnip = (m, k = 90) => m.body ? tcut(m.body, k) : (/\.gif(\?|$)/i.test(m.image_url || '') || /giphy/.test(m.image_url || '') ? 'GIF' : '📷 Slika');
+function chatQuoteHtml(id) {
+  const o = chatFind(id);
+  if (!o) { CHAT.need.add(id); return `<button type="button" class="cm-q" data-qgo="${id}"><span>učitava se…</span></button>`; }
+  if (o.deleted_at) return `<button type="button" class="cm-q ${o.author}" data-qgo="${id}"><span class="q-t"><b>${o.author === who() ? 'Ti' : esc(personName(o.author))}</b><span>🚫 poruka je obrisana</span></span></button>`;
+  const th = o.image_url ? `<img src="${esc(o.image_url)}" alt="" loading="lazy">` : '';
+  return `<button type="button" class="cm-q ${o.author}" data-qgo="${id}"><span class="q-t"><b>${o.author === who() ? 'Ti' : esc(personName(o.author))}</b><span>${esc(chatSnip(o))}</span></span>${th}</button>`;
+}
+/* citirana poruka koja nije učitana (starija od učitanog dela): dovuci je jednom */
+let chatNeedT = 0;
+function chatNeedFetch() {
+  const ids = [...CHAT.need].filter(id => !chatFind(id) && !/^tmp/.test(id)); CHAT.need.clear(); if (!ids.length) return;
+  clearTimeout(chatNeedT); chatNeedT = setTimeout(async () => {
+    try { const rows = await q(sb.from('h_chat_messages').select('*').in('id', ids.slice(0, 80))); rows.forEach(r => { CHAT.res[r.id] = r; }); if (rows.length && CHAT.open) renderChatMsgs(); } catch (e) {}
+  }, 60);
+}
+function chatReplyTo(id) {
+  const m = chatFind(id); if (!m || m._tmp || m.deleted_at) return;
+  if (CHAT.edit) chatEditCancel();
+  chatActClose(); CHAT.reply[m.channel] = m; renderChatReply();
+  const t = $('cpInput'); t.focus(); try { navigator.vibrate && navigator.vibrate(8); } catch (e) {}
+}
+function renderChatReply() {
+  const el = $('cpReply'); if (!el) return;
+  if (CHAT.edit && CHAT.edit.ch === CHAT.ch) { el.innerHTML = `<span class="cr-ic">✎</span><div class="cr-t"><b>Menjaš poruku</b><span>Enter čuva izmenu, Esc otkazuje</span></div><button type="button" data-editx title="Otkaži izmenu">✕</button>`; el.classList.add('on', 'edit'); return; }
+  el.classList.remove('edit');
+  const m = CHAT.reply[CHAT.ch];
+  if (!m) { el.innerHTML = ''; el.classList.remove('on'); return; }
+  const to = m.author === who() ? 'Odgovaraš na svoju poruku' : `Odgovaraš ${CHAT_DAT[m.author] || personName(m.author)}`;
+  el.innerHTML = `<span class="cr-ic">↩</span><div class="cr-t"><b>${to}</b><span>${esc(chatSnip(m, 120))}</span></div>${m.image_url ? `<img src="${esc(m.image_url)}" alt="">` : ''}<button type="button" data-replyx title="Otkaži odgovor">✕</button>`;
+  el.classList.add('on');
+}
+/* ---- izmena i brisanje svojih poruka (original ostaje u h_chat_history) ---- */
+function chatUpdated(r) {
+  if (!r || !r.id) return; let hit = false;
+  Object.values(CHAT.msgs).forEach(a => { const m = a.find(x => x.id === r.id); if (m) { Object.assign(m, r); hit = true; } });
+  if (CHAT.res[r.id]) Object.assign(CHAT.res[r.id], r);
+  if (r.deleted_at) { Object.keys(CHAT.reply).forEach(ch => { if (CHAT.reply[ch] && CHAT.reply[ch].id === r.id) delete CHAT.reply[ch]; }); if (CHAT.edit && CHAT.edit.id === r.id) chatEditCancel(); if (CHAT.act && CHAT.act.id === r.id) chatActClose(); }
+  if (!hit && !CHAT.res[r.id]) return;
+  chatBadges(); if (CHAT.open) { renderChatSide(); renderChatMsgs(chatNearBottom()); renderChatReply(); }
+}
+function chatEditStart(id) {
+  const m = chatFind(id); if (!m || m._tmp || m.deleted_at || m.author !== who()) return;
+  chatActClose(); delete CHAT.reply[m.channel];
+  const inp = $('cpInput'); CHAT.edit = { id, ch: m.channel, draft: CHAT.edit ? CHAT.edit.draft : inp.value };
+  inp.value = m.body || ''; chatGrow(); renderChatReply(); inp.focus(); try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
+  document.querySelectorAll('.cm.editing').forEach(x => x.classList.remove('editing')); const row = $('cpMsgs').querySelector(`[data-mid="${id}"]`); if (row) row.classList.add('editing');
+}
+function chatEditCancel() {
+  const e = CHAT.edit; CHAT.edit = null; const inp = $('cpInput'); if (e) { inp.value = e.draft || ''; chatGrow(); }
+  document.querySelectorAll('.cm.editing').forEach(x => x.classList.remove('editing')); renderChatReply();
+}
+async function chatEditSave() {
+  const e = CHAT.edit, m = e && chatFind(e.id); if (!m) return chatEditCancel();
+  const body = $('cpInput').value.trim();
+  if (body === (m.body || '')) return chatEditCancel();
+  if (!body && !m.image_url) return toast('Poruka ne može biti prazna. Za brisanje: dugo drži poruku → Obriši', 3500);
+  if (body.length > 4000) return toast('Poruka je preduga (najviše 4.000 znakova)');
+  const old = { body: m.body, edited_at: m.edited_at, mentions: m.mentions };
+  m.body = body || null; m.edited_at = new Date().toISOString(); chatEditCancel(); renderChatMsgs(chatNearBottom()); renderChatSide();
+  try { const r = await q(sb.from('h_chat_messages').update({ body: body || null }).eq('id', m.id).select().single()); chatUpdated(r); toast('Poruka je izmenjena'); }
+  catch (err) { Object.assign(m, old); renderChatMsgs(chatNearBottom()); fail(err); }
+}
+async function chatDelete(id) {
+  const m = chatFind(id); if (!m || m.author !== who() || m.deleted_at) return;
+  const old = { body: m.body, image_url: m.image_url, deleted_at: m.deleted_at, mentions: m.mentions };
+  chatActClose(); if (CHAT.edit && CHAT.edit.id === id) chatEditCancel();
+  Object.keys(CHAT.reply).forEach(ch => { if (CHAT.reply[ch] && CHAT.reply[ch].id === id) delete CHAT.reply[ch]; }); renderChatReply();
+  Object.assign(m, { body: null, image_url: null, deleted_at: new Date().toISOString(), mentions: [] }); renderChatMsgs(chatNearBottom()); renderChatSide();
+  try { sfx('trash'); } catch (e) {}
+  try { const r = await q(sb.from('h_chat_messages').update({ deleted_at: new Date().toISOString() }).eq('id', id).select().single()); chatUpdated(r); }
+  catch (err) { Object.assign(m, old); renderChatMsgs(chatNearBottom()); fail(err); }
+}
+/* ---- reakcije ---- */
+const CHAT_EMO = ['❤️', '👍', '😂', '😮', '😢', '🔥', '🙏', '👏'];
+const CHAT_EMO_MORE = ['🎉', '✅', '💯', '😍', '🥰', '😘', '🤔', '😅', '🤣', '😎', '💪', '👀', '🥳', '🤝', '👌', '😡', '😭', '💸', '📦', '🛍️', '✨', '💖', '🙌', '❌'];
+async function chatRxLoad() {
+  try { const rows = await q(sb.from('h_chat_reactions').select('*').order('created_at', { ascending: false }).limit(5000)); const rx = {}; rows.forEach(r => { (rx[r.message_id] = rx[r.message_id] || []).push(r); }); CHAT.rx = rx; } catch (e) {}
+}
+function chatRxEvt(p) {
+  const n = p.new && p.new.message_id ? p.new : null, o = p.old && p.old.message_id ? p.old : null;
+  if (p.eventType === 'DELETE' && o) CHAT.rx[o.message_id] = (CHAT.rx[o.message_id] || []).filter(r => r.username !== o.username);
+  else if (n) { const a = (CHAT.rx[n.message_id] || []).filter(r => r.username !== n.username); a.push(n); CHAT.rx[n.message_id] = a; }
+  else return;
+  const mid = (n || o).message_id;
+  if (CHAT.open && (CHAT.msgs[CHAT.ch] || []).some(m => m.id === mid)) renderChatMsgs(chatNearBottom());
+  if (CHAT.act && CHAT.act.id === mid) chatActRender();
+}
+function chatRxHtml(m) {
+  const a = CHAT.rx[m.id] || []; if (!a.length || m.deleted_at) return '';
+  const g = {}; a.forEach(r => { (g[r.emoji] = g[r.emoji] || []).push(r.username); });
+  return `<div class="cm-rx">${Object.entries(g).sort((x, y) => y[1].length - x[1].length).map(([e, us]) => `<button type="button" class="rx ${us.includes(who()) ? 'me' : ''}" data-rx="${m.id}|${e}" title="${esc(us.map(u => u === who() ? 'Ti' : personName(u)).join(', '))}">${e}${us.length > 1 ? `<i>${us.length}</i>` : ''}</button>`).join('')}</div>`;
+}
+async function chatReact(id, emoji) {
+  const m = chatFind(id); if (!m || m._tmp || m.deleted_at) return;
+  const a = CHAT.rx[id] || [], mine = a.find(r => r.username === who()), off = mine && mine.emoji === emoji, prev = a.slice();
+  CHAT.rx[id] = a.filter(r => r.username !== who()).concat(off ? [] : [{ message_id: id, username: who(), emoji, created_at: new Date().toISOString() }]);
+  chatActClose(); renderChatMsgs(chatNearBottom());
+  if (!off) { try { sfx('tick', 0.8, true); navigator.vibrate && navigator.vibrate(10); } catch (e) {} }
+  try {
+    if (off) await q(sb.from('h_chat_reactions').delete().eq('message_id', id).eq('username', who()));
+    else await q(sb.from('h_chat_reactions').upsert({ message_id: id, username: who(), emoji }, { onConflict: 'message_id,username' }));
+  } catch (e) { CHAT.rx[id] = prev; renderChatMsgs(chatNearBottom()); fail(e); }
+}
+/* meni za poruku: reakcije, odgovori, kopiraj, ko je reagovao */
+function chatActOpen(id, more) { const m = chatFind(id); if (!m || m._tmp || m.deleted_at) return; CHAT.act = { id, more: !!more, del: false }; chatActRender(); }
+function chatActClose() { CHAT.act = null; const el = $('cpAct'); if (el) { el.classList.remove('open'); el.innerHTML = ''; } const ov = $('cpActOv'); if (ov) ov.classList.remove('open'); document.querySelectorAll('.cm.acting').forEach(x => x.classList.remove('acting')); }
+function chatActRender() {
+  const el = $('cpAct'), a = CHAT.act; if (!el || !a) return; const m = chatFind(a.id); if (!m) return chatActClose();
+  const rx = CHAT.rx[a.id] || [], mine = (rx.find(r => r.username === who()) || {}).emoji;
+  const emo = a.more ? CHAT_EMO.concat(CHAT_EMO_MORE) : CHAT_EMO;
+  el.innerHTML = `<div class="ca-emo ${a.more ? 'more' : ''}">${emo.map(e => `<button type="button" class="${e === mine ? 'on' : ''}" data-rx="${a.id}|${e}">${e}</button>`).join('')}${a.more ? '' : '<button type="button" class="ca-plus" data-actmore title="Još">＋</button>'}</div>
+    <div class="ca-btns"><button type="button" data-reply="${a.id}">↩ Odgovori</button>${m.body ? `<button type="button" data-copy="${a.id}">⧉ Kopiraj</button>` : ''}</div>
+    ${m.author === who() ? `<div class="ca-btns ca-own"><button type="button" data-edit="${a.id}">✎ Izmeni</button>${a.del ? `<button type="button" class="ca-delok" data-delok="${a.id}">Sigurno? Obriši za sve</button>` : `<button type="button" class="ca-del" data-del="${a.id}">🗑 Obriši</button>`}</div>` : ''}
+    ${rx.length ? `<div class="ca-who">${rx.map(r => `<span>${r.emoji} ${r.username === who() ? 'Ti' : esc(personName(r.username))}</span>`).join('')}</div>` : ''}`;
+  el.classList.add('open'); $('cpActOv').classList.add('open');
+  document.querySelectorAll('.cm.acting').forEach(x => x.classList.remove('acting'));
+  const row = $('cpMsgs').querySelector(`[data-mid="${a.id}"]`); if (row) row.classList.add('acting');
+  if (isChatMobile() || !row) { el.style.left = ''; el.style.top = ''; el.classList.add('sheet'); return; }
+  el.classList.remove('sheet');
+  const main = document.querySelector('.cp-main').getBoundingClientRect(), b = row.querySelector('.cm-b').getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+  let top = b.top - main.top - h - 8; if (top < 60) top = b.bottom - main.top + 8; top = Math.min(top, main.height - h - 70);
+  let left = row.classList.contains('mine') ? b.right - main.left - w : b.left - main.left; left = Math.max(8, Math.min(left, main.width - w - 8));
+  el.style.top = top + 'px'; el.style.left = left + 'px';
+}
+/* telefon: prevuci poruku udesno = odgovori, dugo drži = meni, dva dodira = ❤️ */
+function chatTouchBind(box) {
+  let t = null;
+  box.addEventListener('touchstart', (e) => {
+    const row = e.target.closest('.cm[data-mid]'); if (!row || row.classList.contains('tmp') || e.touches.length > 1) { t = null; return; }
+    const p = e.touches[0]; t = { row, id: row.dataset.mid, x: p.clientX, y: p.clientY, dx: 0, mode: null, long: setTimeout(() => { if (t && !t.mode) { t.mode = 'long'; try { navigator.vibrate && navigator.vibrate(12); } catch (x) {} chatActOpen(t.id); } }, 430) };
+  }, { passive: true });
+  box.addEventListener('touchmove', (e) => {
+    if (!t) return; const p = e.touches[0], dx = p.clientX - t.x, dy = p.clientY - t.y;
+    if (!t.mode && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) { clearTimeout(t.long); t.mode = dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.4 ? 'swipe' : 'scroll'; }
+    if (t.mode === 'swipe') { t.dx = Math.max(0, Math.min(dx, 90)); t.row.style.transform = `translateX(${t.dx}px)`; t.row.classList.toggle('swipe-ok', t.dx > 56); }
+  }, { passive: true });
+  box.addEventListener('touchend', (e) => {
+    if (!t) return; clearTimeout(t.long); const c = t; t = null;
+    if (c.mode === 'swipe') { c.row.style.transition = 'transform .2s'; c.row.style.transform = ''; setTimeout(() => { c.row.style.transition = ''; c.row.classList.remove('swipe-ok'); }, 220); if (c.dx > 56) chatReplyTo(c.id); return; }
+    if (c.mode) { if (c.mode === 'long') e.preventDefault(); return; }
+    if (e.target.closest('a,img,button')) return;
+    const now = Date.now(), last = CHAT.tap;
+    if (last && last.id === c.id && now - last.at < 320) { CHAT.tap = null; e.preventDefault(); chatReact(c.id, '❤️'); }
+    else CHAT.tap = { id: c.id, at: now };
+  });
+  box.addEventListener('touchcancel', () => { if (t) { clearTimeout(t.long); t.row.style.transform = ''; t = null; } });
+}
 /* ---- događaji ---- */
 function chatBind() {
   $('chatTop').addEventListener('click', () => (CHAT.open ? closeChat() : openChat()));
@@ -4455,6 +4621,19 @@ function chatBind() {
     const g = t.closest('[data-chatgo]'); if (g) { const [ch, id] = g.dataset.chatgo.split('|'); return chatJump(ch, id); }
     if (t.closest('[data-chatolder]')) return chatOlder(CHAT.ch);
     const mt = t.closest('[data-ment]'); if (mt) return chatMentionPick(mt.dataset.ment);
+    const rxb = t.closest('[data-rx]'); if (rxb) { const [id, e_] = rxb.dataset.rx.split('|'); return chatReact(id, e_); }
+    const rp = t.closest('[data-reply]'); if (rp) return chatReplyTo(rp.dataset.reply);
+    if (t.closest('[data-replyx]')) { delete CHAT.reply[CHAT.ch]; renderChatReply(); return $('cpInput').focus(); }
+    if (t.closest('[data-editx]')) { chatEditCancel(); return $('cpInput').focus(); }
+    const ed = t.closest('[data-edit]'); if (ed) return chatEditStart(ed.dataset.edit);
+    const dl = t.closest('[data-del]'); if (dl) { CHAT.act.del = true; return chatActRender(); }
+    const dk = t.closest('[data-delok]'); if (dk) return chatDelete(dk.dataset.delok);
+    const ao = t.closest('[data-actopen]'); if (ao) { e.stopPropagation(); return CHAT.act && CHAT.act.id === ao.dataset.actopen ? chatActClose() : chatActOpen(ao.dataset.actopen); }
+    if (t.closest('[data-actmore]')) { CHAT.act.more = true; return chatActRender(); }
+    const cp = t.closest('[data-copy]'); if (cp) { const m = chatFind(cp.dataset.copy); chatActClose(); try { navigator.clipboard.writeText(m.body || ''); toast('Kopirano'); } catch (x) { toast('Ne mogu da kopiram'); } return; }
+    const qg = t.closest('[data-qgo]'); if (qg) { const o = chatFind(qg.dataset.qgo); if (o) { CHAT.res[o.id] = o; return chatJump(o.channel, o.id); } return; }
+    if (t.closest('#cpActOv')) return chatActClose();
+    if (CHAT.act && !t.closest('#cpAct')) chatActClose();
     if (t.closest('[data-gifclose]')) return chatGifClose();
     if (t.closest('[data-gifup]')) return $('cpFile').click();
     if (t.closest('[data-gifmore]')) return chatGifSearch(CHAT.gif.q, true);
@@ -4470,6 +4649,10 @@ function chatBind() {
   });
   $('chatPanel').addEventListener('input', (e) => { if (e.target.id === 'gbQ') { clearTimeout(CHAT.gif.t); const v = e.target.value; CHAT.gif.t = setTimeout(() => chatGifSearch(v), 350); } });
   $('cpForm').addEventListener('submit', (e) => { e.preventDefault(); chatSend(); if (!isChatMobile()) $('cpInput').focus(); });
+  $('cpMsgs').addEventListener('dblclick', (e) => { const row = e.target.closest('.cm[data-mid]'); if (!row || row.classList.contains('tmp') || e.target.closest('a,img,button,.cm-rx')) return; try { getSelection().removeAllRanges(); } catch (x) {} chatReact(row.dataset.mid, '❤️'); });
+  $('cpMsgs').addEventListener('contextmenu', (e) => { const row = e.target.closest('.cm[data-mid]'); if (!row || row.classList.contains('tmp') || !matchMedia('(hover: none)').matches) return; e.preventDefault(); });
+  $('cpMsgs').addEventListener('scroll', () => { if (CHAT.act && !isChatMobile()) chatActClose(); }, { passive: true });
+  chatTouchBind($('cpMsgs'));
   const inp = $('cpInput');
   inp.addEventListener('input', () => { chatGrow(); chatMentionBox(); if (inp.value.trim()) chatTypingSend(); });
   inp.addEventListener('click', chatMentionBox);
@@ -4480,7 +4663,8 @@ function chatBind() {
       bs.forEach((b, k) => b.classList.toggle('on', k === n)); return;
     }
     if (open && (e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); const on = box.querySelector('.on') || box.children[0]; return chatMentionPick(on.dataset.ment); }
-    if (e.key === 'Escape') { e.stopPropagation(); if (open) { box.style.display = 'none'; return; } if (CHAT.gif.open) return chatGifClose(); return closeChat(); }
+    if (e.key === 'Escape') { e.stopPropagation(); if (open) { box.style.display = 'none'; return; } if (CHAT.act) return chatActClose(); if (CHAT.gif.open) return chatGifClose(); if (CHAT.edit) return chatEditCancel(); if (CHAT.reply[CHAT.ch]) { delete CHAT.reply[CHAT.ch]; return renderChatReply(); } return closeChat(); }
+    if (e.key === 'ArrowUp' && !inp.value && !CHAT.edit && !isChatMobile()) { const last = [...(CHAT.msgs[CHAT.ch] || [])].reverse().find(m => m.author === who() && !m._tmp && !m.deleted_at && m.body); if (last) { e.preventDefault(); chatEditStart(last.id); } return; }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !isChatMobile()) { e.preventDefault(); chatSend(); }
   });
   inp.addEventListener('paste', (e) => { const f = [...(e.clipboardData?.files || [])].find(x => /^image\//.test(x.type)); if (f) { e.preventDefault(); chatUpload(f); } });
@@ -4493,7 +4677,7 @@ function chatBind() {
   $('cpQ').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); if (e.target.value) { e.target.value = ''; chatSearch(''); } else closeChat(); } });
   document.addEventListener('keydown', (e) => {
     if (!state.user || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.key === 'Escape' && CHAT.open && !document.querySelector('.lightbox.open')) { closeChat(); return; }
+    if (e.key === 'Escape' && CHAT.open && !document.querySelector('.lightbox.open')) { if (CHAT.act) chatActClose(); else if (CHAT.edit) chatEditCancel(); else if (CHAT.reply[CHAT.ch]) { delete CHAT.reply[CHAT.ch]; renderChatReply(); } else closeChat(); return; }
     if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || e.target.isContentEditable) return;
     if ((e.key === 'c' || e.key === 'C') && !document.querySelector('.modal-wrap.open')) { e.preventDefault(); CHAT.open ? closeChat() : openChat(); }
   });

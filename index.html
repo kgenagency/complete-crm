@@ -1387,10 +1387,10 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
 .cm-time{display:block;text-align:right;font-size:10.5px;color:var(--muted);margin-top:1px;font-variant-numeric:tabular-nums}
 .cm.mine .cm-time{color:rgba(232,228,217,.55)}
 .cm-img{display:block;max-width:min(280px,58vw);max-height:300px;border-radius:12px;margin:3px -6px 4px;cursor:zoom-in;background:var(--gold-wash)}
-.cm-b:has(>.cm-img):not(:has(.cm-t)){padding:4px 4px 4px;background:transparent;border-color:transparent;box-shadow:none}
-.cm-b:has(>.cm-img):not(:has(.cm-t)) .cm-img{margin:0}
-.cm-b:has(>.cm-img):not(:has(.cm-t)) .cm-time{color:var(--muted);padding-right:4px}
-.cm-b:has(>.cm-img):not(:has(.cm-t)) .cm-n{padding-left:6px}
+.cm-b:has(>.cm-img):not(:has(.cm-t)):not(:has(.cm-q)){padding:4px 4px 4px;background:transparent;border-color:transparent;box-shadow:none}
+.cm-b:has(>.cm-img):not(:has(.cm-t)):not(:has(.cm-q)) .cm-img{margin:0}
+.cm-b:has(>.cm-img):not(:has(.cm-t)):not(:has(.cm-q)) .cm-time{color:var(--muted);padding-right:4px}
+.cm-b:has(>.cm-img):not(:has(.cm-t)):not(:has(.cm-q)) .cm-n{padding-left:6px}
 .cm.ment .cm-b{background:#fff8ea;border-color:#C9A96E;box-shadow:0 0 0 1.5px #C9A96E,0 6px 16px -10px rgba(201,169,110,.9)}
 .cm-at{font-weight:700;color:#2f4a3a}.cm.mine .cm-at{color:#e9d3a4}
 .cm-at.me{background:#f2dfb5;color:#4d3810;padding:0 4px;border-radius:5px}.cm.mine .cm-at.me{background:rgba(201,169,110,.28);color:#f3e3bf}
@@ -1468,6 +1468,69 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
   .chat-top .ct-l{display:none}.chat-top{width:38px;padding:0;justify-content:center}
 }
 @media (prefers-reduced-motion:reduce){body.chat-ment .chat-fab::after,body.chat-ment .chat-top::after{animation:none}}
+/* chat: odgovori i reakcije */
+.cm{position:relative;touch-action:pan-y}
+.cm-w{display:flex;flex-direction:column;align-items:flex-start;min-width:0;max-width:100%}
+.cm.mine .cm-w{align-items:flex-end}
+.cm-tools{display:flex;gap:2px;align-self:center;opacity:0;transition:opacity .15s;flex:none}
+.cm:hover .cm-tools,.cm.acting .cm-tools{opacity:1}
+.cm-tools button{width:28px;height:28px;border-radius:50%;border:0;background:transparent;color:var(--muted);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.cm-tools button:hover{background:var(--gold-wash-2);color:var(--ink)}
+.cm.acting .cm-b{box-shadow:0 0 0 2px #C9A96E}
+.cm::before{content:"↩";position:absolute;left:-36px;top:50%;width:28px;height:28px;margin-top:-14px;border-radius:50%;background:var(--gold-wash-2);color:#5b4313;display:flex;align-items:center;justify-content:center;font-size:15px;opacity:0;transform:scale(.5);transition:opacity .15s,transform .15s;pointer-events:none}
+.cm.swipe-ok::before{opacity:1;transform:none;background:#f2dfb5}
+.cm-q{display:flex;align-items:center;gap:8px;width:100%;min-width:150px;margin:2px 0 5px;padding:5px 8px;border:0;border-left:3px solid #7E8C74;border-radius:8px;background:rgba(27,38,32,.055);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.cm-q:hover{background:rgba(27,38,32,.09)}
+.cm-q.stasa{border-left-color:#d77a98}.cm-q.marjan{border-left-color:#6c9be0}.cm-q.konstantin{border-left-color:#7E8C74}
+.cm-q .q-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.cm-q b{font-size:12px;font-weight:750;color:#2f4a3a}.cm-q.stasa b{color:#a03a5c}.cm-q.marjan b{color:#1c5cab}
+.cm-q .q-t>span,.cm-q>span{font-size:12.5px;line-height:1.35;opacity:.8;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cm-q img{width:38px;height:38px;border-radius:6px;object-fit:cover;flex:none}
+.cm.mine .cm-q{background:rgba(232,228,217,.1)}.cm.mine .cm-q:hover{background:rgba(232,228,217,.16)}
+.cm.mine .cm-q b{color:#e9d3a4}.cm.mine .cm-q.stasa b{color:#f2b3c6}.cm.mine .cm-q.marjan b{color:#a9c6f2}
+.cm-rx{display:flex;flex-wrap:wrap;gap:4px;margin-top:-7px;padding:0 8px;position:relative;z-index:1}
+.rx{display:inline-flex;align-items:center;gap:3px;height:25px;padding:0 7px;border-radius:99px;border:1px solid var(--line);background:var(--surface);box-shadow:0 2px 6px -3px rgba(27,38,32,.3);font-size:14px;line-height:1;cursor:pointer;transition:transform .12s}
+.rx:hover{transform:scale(1.08)}
+.rx i{font-style:normal;font-size:11.5px;font-weight:750;color:var(--ink-2)}
+.rx.me{border-color:#C9A96E;background:#fff3d9}
+@keyframes rxPop{0%{transform:scale(.4)}60%{transform:scale(1.2)}100%{transform:none}}
+.cm-rx .rx{animation:rxPop .3s var(--ease)}
+.cp-act-ov{position:absolute;inset:0;z-index:6;display:none}.cp-act-ov.open{display:block}
+.cp-act{position:absolute;z-index:7;display:none;width:max-content;max-width:calc(100% - 16px);padding:8px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-lg)}
+.cp-act.open{display:block;animation:pop .2s var(--ease)}
+.ca-emo{display:flex;flex-wrap:wrap;gap:2px;max-width:362px}
+.ca-emo button{width:38px;height:38px;border:0;border-radius:10px;background:none;font-size:22px;line-height:1;cursor:pointer;transition:transform .12s,background .12s}
+.ca-emo button:hover{background:var(--gold-wash);transform:scale(1.15)}
+.ca-emo button.on{background:#f2dfb5}
+.ca-emo .ca-plus{font-size:18px;color:var(--muted)}
+.ca-btns{display:flex;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--line-soft)}
+.ca-btns button{flex:1;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font:600 13.5px var(--font-ui);color:var(--ink);cursor:pointer;white-space:nowrap}
+.ca-btns button:hover{border-color:#C9A96E}
+.ca-who{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;padding:0 4px;font-size:12.5px;color:var(--ink-2)}
+.cp-reply{display:none;align-items:center;gap:10px;padding:8px 12px 8px 14px;background:#fffaf0;border-top:1px solid var(--line);box-shadow:inset 3px 0 0 #C9A96E}
+.cp-reply.on{display:flex}
+.cr-ic{font-size:18px;color:#b08b50;flex:none}
+.cr-t{flex:1;min-width:0}.cr-t b{display:block;font-size:12.5px;color:#5b4313}.cr-t span{display:block;font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cp-reply img{width:36px;height:36px;border-radius:6px;object-fit:cover;flex:none}
+.cp-reply button{flex:none;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:#fff;cursor:pointer;color:var(--ink-2)}
+@media (hover:none){.cm-tools{display:none}.cm-b{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}}
+@media (max-width:759px){
+  .cp-act-ov{background:rgba(15,20,17,.35)}
+  .cp-act.sheet{left:8px!important;right:8px;top:auto!important;bottom:8px;width:auto;max-width:none;padding:12px 12px calc(12px + env(safe-area-inset-bottom));border-radius:20px}
+  .cp-act.sheet .ca-emo{max-width:none;justify-content:space-between}
+  .cp-act.sheet .ca-emo button{width:calc((100% - 16px) / 9);height:44px;font-size:24px}
+  .cp-act.sheet .ca-emo.more button{width:calc((100% - 14px) / 8)}
+  .cp-act.sheet .ca-btns button{padding:12px;font-size:15px}
+}
+.cm.del .cm-b{background:transparent!important;border:1px dashed var(--line)!important;box-shadow:none!important;color:var(--muted)}
+.cm.mine.del .cm-b{border-color:rgba(27,38,32,.25)!important}
+.cm-del{font-style:italic;font-size:13.5px;color:var(--muted)}
+.cm.del .cm-time{color:var(--muted)!important}
+.cm.editing .cm-b{box-shadow:0 0 0 2px #C9A96E,0 0 0 6px rgba(201,169,110,.2)}
+.cp-reply.edit{background:#f3f6f1;box-shadow:inset 3px 0 0 #7E8C74}.cp-reply.edit .cr-t b{color:#2f4a3a}.cp-reply.edit .cr-ic{color:#7E8C74}
+.ca-own{margin-top:6px;padding-top:6px}
+.ca-btns .ca-del{color:#a32c2c}
+.ca-btns .ca-delok{background:#a32c2c;border-color:#a32c2c;color:#fff;animation:pop .2s var(--ease)}
 </style>
 </head>
 <body>
@@ -2322,15 +2385,17 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
     <div class="cp-head"><b>Tim chat</b><button class="cp-x" type="button" data-chatclose title="Zatvori">✕</button></div>
     <div class="cp-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="cpQ" placeholder="Pretraži celu istoriju…" autocomplete="off"></div>
     <div class="cp-list" id="cpList"></div>
-    <div class="cp-tip">Na telefon stiže samo kad nekog označiš: <b>@ime</b> ili <b>@svi</b>. Poruke se ne brišu, istorija ostaje zauvek.</div>
+    <div class="cp-tip">Na telefon stiže samo kad nekog označiš: <b>@ime</b> ili <b>@svi</b>. Odgovor, reakcija, izmena i brisanje: <b>dugo drži poruku</b> (na računaru <b>☺</b> pored poruke). Prevuci poruku udesno za brz odgovor.</div>
   </aside>
   <div class="cp-main">
     <header class="cp-top" id="cpTop"></header>
     <div class="cp-msgs" id="cpMsgs"></div>
     <div class="cp-typing" id="cpTyping"></div>
+    <div class="cp-act-ov" id="cpActOv"></div><div class="cp-act" id="cpAct"></div>
     <div class="cp-compose">
       <div class="cp-mention" id="cpMention" style="display:none"></div>
       <div class="cp-gif" id="cpGifBox"></div>
+      <div class="cp-reply" id="cpReply"></div>
       <form class="cp-form" id="cpForm" autocomplete="off">
         <button type="button" class="cp-ic" id="cpAttach" title="Slika sa uređaja"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></button>
         <button type="button" class="cp-ic cp-gifbtn" id="cpGifBtn" title="Pošalji GIF">GIF</button>
@@ -2345,8 +2410,8 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610081026"></script>
-<script>window.HTML_BUILD="202610081026";</script>
-<script src="app.js?v=202610081026"></script>
+<script src="config.js?v=202610081046"></script>
+<script>window.HTML_BUILD="202610081046";</script>
+<script src="app.js?v=202610081046"></script>
 </body>
 </html>

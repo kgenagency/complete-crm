@@ -780,3 +780,102 @@ select cron.schedule('crm-backup-daily', '30 1 * * *', $c$
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-crm-hook', (select v from public.h_private where k = 'push_hook')), timeout_milliseconds := 120000)
 $c$);
 -- GIF pretraga: funkcija crm-gif (verify_jwt=true) traži preko Giphy-ja kad postoji tajna GIPHY_API_KEY; bez nje vraća configured:false
+
+-- ===== v23: chat odgovori, reakcije, izmena i brisanje svojih poruka =====
+-- v23: odgovor na poruku (reply). Poruka može da citira drugu poruku iz istog razgovora.
+alter table public.h_chat_messages add column if not exists reply_to uuid references public.h_chat_messages(id);
+create index if not exists h_chat_messages_reply on public.h_chat_messages (reply_to) where reply_to is not null;
+create or replace function public.h_chat_before() returns trigger language plpgsql as $$
+begin
+  if crm_user() is not null then new.author := crm_user(); end if;
+  new.created_at := now();
+  if new.reply_to is not null and not exists (select 1 from public.h_chat_messages r where r.id = new.reply_to and r.channel = new.channel) then
+    raise exception 'Odgovor mora biti na poruku iz istog razgovora';
+  end if;
+  select coalesce(array_agg(distinct x), '{}') into new.mentions from (
+    select case translate(lower(m[1]), 'š', 's') when 'all' then 'svi' else translate(lower(m[1]), 'š', 's') end x
+    from regexp_matches(coalesce(new.body, ''), '@(konstantin|stasa|staša|marjan|svi|all)\M', 'gi') as m) t;
+  return new;
+end $$;
+
+-- v23: reakcije na poruke (jedna po osobi po poruci, kao na WhatsApp-u; nova zamenjuje staru, ponovni klik je skida)
+create table if not exists public.h_chat_reactions (
+  message_id uuid not null references public.h_chat_messages(id),
+  username text not null,
+  emoji text not null check (length(emoji) between 1 and 16),
+  created_at timestamptz not null default now(),
+  primary key (message_id, username)
+);
+alter table public.h_chat_reactions enable row level security;
+create or replace function public.h_chat_msg_can(mid uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.h_chat_messages m where m.id = mid and public.h_chat_can(m.channel))
+$$;
+drop policy if exists "reakcije citanje" on public.h_chat_reactions;
+drop policy if exists "reakcije upis" on public.h_chat_reactions;
+drop policy if exists "reakcije izmena" on public.h_chat_reactions;
+drop policy if exists "reakcije brisanje" on public.h_chat_reactions;
+create policy "reakcije citanje" on public.h_chat_reactions for select to authenticated using (h_chat_msg_can(message_id));
+create policy "reakcije upis" on public.h_chat_reactions for insert to authenticated with check (username = crm_user() and h_chat_msg_can(message_id));
+create policy "reakcije izmena" on public.h_chat_reactions for update to authenticated using (username = crm_user()) with check (username = crm_user() and h_chat_msg_can(message_id));
+create policy "reakcije brisanje" on public.h_chat_reactions for delete to authenticated using (username = crm_user());
+create or replace function public.h_chat_rx_before() returns trigger language plpgsql as $$
+begin
+  if crm_user() is not null then new.username := crm_user(); end if;
+  new.created_at := now();
+  return new;
+end $$;
+drop trigger if exists h_chat_rx_before_trg on public.h_chat_reactions;
+create trigger h_chat_rx_before_trg before insert or update on public.h_chat_reactions for each row execute function public.h_chat_rx_before();
+do $$ begin
+  begin alter publication supabase_realtime add table public.h_chat_reactions; exception when duplicate_object then null; end;
+end $$;
+
+-- v23: izmena i brisanje SVOJIH poruka. Original se ne gubi: svaka izmena i brisanje upisuje staru verziju u h_chat_history
+-- (klijenti je ne vide, ide u dnevnu kopiju baze). Pravo brisanje reda i dalje nije moguće.
+alter table public.h_chat_messages add column if not exists edited_at timestamptz;
+alter table public.h_chat_messages add column if not exists deleted_at timestamptz;
+do $$ declare c text; begin
+  select conname into c from pg_constraint where conrelid = 'public.h_chat_messages'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%image_url IS NOT NULL%';
+  if c is not null then execute format('alter table public.h_chat_messages drop constraint %I', c); end if;
+end $$;
+alter table public.h_chat_messages add constraint h_chat_messages_content_chk check (body is not null or image_url is not null or deleted_at is not null);
+create table if not exists public.h_chat_history (
+  id bigint generated always as identity primary key,
+  message_id uuid not null references public.h_chat_messages(id),
+  action text not null check (action in ('edit', 'delete')),
+  body text, image_url text, mentions text[],
+  by_user text, at timestamptz not null default now()
+);
+alter table public.h_chat_history enable row level security;  -- bez politika: klijenti ne čitaju ni ne pišu
+create or replace function public.h_chat_before_upd() returns trigger language plpgsql security definer set search_path = public as $$
+declare u text := coalesce(crm_user(), '');
+begin
+  if u <> '' and u <> old.author then raise exception 'Možeš da menjaš i brišeš samo svoje poruke'; end if;
+  if old.deleted_at is not null then raise exception 'Poruka je već obrisana'; end if;
+  new.id := old.id; new.channel := old.channel; new.author := old.author; new.created_at := old.created_at; new.reply_to := old.reply_to;
+  if new.deleted_at is not null then
+    insert into public.h_chat_history (message_id, action, body, image_url, mentions, by_user) values (old.id, 'delete', old.body, old.image_url, old.mentions, nullif(u, ''));
+    new.deleted_at := now(); new.edited_at := old.edited_at; new.body := null; new.image_url := null; new.mentions := '{}';
+    return new;
+  end if;
+  new.image_url := old.image_url; new.edited_at := old.edited_at;
+  new.body := nullif(btrim(coalesce(new.body, '')), '');
+  if new.body is not distinct from old.body then new.mentions := old.mentions; return new; end if;
+  if new.body is null and new.image_url is null then raise exception 'Poruka ne može biti prazna (za to je Obriši)'; end if;
+  if length(new.body) > 4000 then raise exception 'Poruka je preduga'; end if;
+  insert into public.h_chat_history (message_id, action, body, image_url, mentions, by_user) values (old.id, 'edit', old.body, old.image_url, old.mentions, nullif(u, ''));
+  new.edited_at := now();
+  select coalesce(array_agg(distinct x), '{}') into new.mentions from (
+    select case translate(lower(m[1]), 'š', 's') when 'all' then 'svi' else translate(lower(m[1]), 'š', 's') end x
+    from regexp_matches(coalesce(new.body, ''), '@(konstantin|stasa|staša|marjan|svi|all)\M', 'gi') as m) t;
+  return new;
+end $$;
+create or replace function public.h_chat_lock() returns trigger language plpgsql as $$
+begin raise exception 'Poruke se ne brišu iz baze (koristi Obriši u chatu)'; end $$;
+drop trigger if exists h_chat_lock_trg on public.h_chat_messages;
+create trigger h_chat_lock_trg before delete on public.h_chat_messages for each row execute function public.h_chat_lock();
+drop trigger if exists h_chat_upd_trg on public.h_chat_messages;
+create trigger h_chat_upd_trg before update on public.h_chat_messages for each row execute function public.h_chat_before_upd();
+drop policy if exists "chat izmena" on public.h_chat_messages;
+create policy "chat izmena" on public.h_chat_messages for update to authenticated using (author = crm_user() and h_chat_can(channel)) with check (author = crm_user());
+create index if not exists h_chat_messages_upd on public.h_chat_messages (greatest(edited_at, deleted_at)) where edited_at is not null or deleted_at is not null;
