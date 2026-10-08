@@ -879,3 +879,72 @@ create trigger h_chat_upd_trg before update on public.h_chat_messages for each r
 drop policy if exists "chat izmena" on public.h_chat_messages;
 create policy "chat izmena" on public.h_chat_messages for update to authenticated using (author = crm_user() and h_chat_can(channel)) with check (author = crm_user());
 create index if not exists h_chat_messages_upd on public.h_chat_messages (greatest(edited_at, deleted_at)) where edited_at is not null or deleted_at is not null;
+
+-- ===== v25: komentari na zadacima, huddle pozivi, glasovne poruke =====
+-- v25: komentari na zadacima (kanal task:<tabela>:<id>) i huddle pozivi (poruka kind='huddle')
+alter table public.h_chat_messages drop constraint if exists h_chat_messages_channel_check;
+do $$ declare c text; begin
+  for c in select conname from pg_constraint where conrelid = 'public.h_chat_messages'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%channel%' loop
+    execute format('alter table public.h_chat_messages drop constraint %I', c);
+  end loop;
+end $$;
+alter table public.h_chat_messages add constraint h_chat_messages_channel_chk check (
+  channel = 'tim' or channel ~ '^dm:[a-z]+:[a-z]+$'
+  or channel ~ '^task:h_(notes|posts|site_ideas|packaging|returns|promotions|orders|customers|products|story_sections):[0-9a-f-]{36}$');
+alter table public.h_chat_messages add column if not exists kind text;
+alter table public.h_chat_messages drop constraint if exists h_chat_messages_kind_chk;
+alter table public.h_chat_messages add constraint h_chat_messages_kind_chk check (kind is null or kind = 'huddle');
+create or replace function public.h_chat_can(ch text) returns boolean language sql stable as $$
+  select crm_user() in ('konstantin', 'stasa', 'marjan')
+    and (ch = 'tim' or ch like 'task:%' or (ch ~ '^dm:[a-z]+:[a-z]+$' and crm_user() = any(string_to_array(substr(ch, 4), ':'))))
+$$;
+-- push: oznake, huddle poziv, ili komentar na zadatku (tada funkcija sama bira ko prati zadatak)
+create or replace function public.h_chat_push() returns trigger language plpgsql security definer set search_path = public, extensions as $$
+declare sec text;
+begin
+  if coalesce(array_length(new.mentions, 1), 0) = 0 and new.kind is null and new.channel not like 'task:%' then return new; end if;
+  select v into sec from public.h_private where k = 'push_hook';
+  perform net.http_post(url := 'https://treqdonahihterhaxxfw.supabase.co/functions/v1/crm-push',
+    body := jsonb_build_object('chat', to_jsonb(new)),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-crm-hook', sec), timeout_milliseconds := 15000);
+  return new;
+exception when others then return new;
+end $$;
+-- tajno ime kanala za signalizaciju poziva (vide ga samo članovi tima)
+insert into public.h_private (k, v) values ('rt_room', encode(extensions.gen_random_bytes(18), 'hex')) on conflict (k) do nothing;
+create or replace function public.h_rt_room() returns text language sql stable security definer set search_path = public as $$
+  select v from public.h_private where k = 'rt_room' and crm_user() in ('konstantin', 'stasa', 'marjan')
+$$;
+revoke all on function public.h_rt_room() from public, anon;
+grant execute on function public.h_rt_room() to authenticated;
+alter table public.h_push_subs alter column prefs set default '{"tasks":true,"done":true,"orders":true,"returns":true,"daily":true,"chat":true,"comments":true,"calls":true}'::jsonb;
+
+-- v25: glasovne poruke (audio_url + trajanje)
+alter table public.h_chat_messages add column if not exists audio_url text;
+alter table public.h_chat_messages add column if not exists audio_sec real;
+alter table public.h_chat_messages drop constraint if exists h_chat_messages_content_chk;
+alter table public.h_chat_messages add constraint h_chat_messages_content_chk check (body is not null or image_url is not null or audio_url is not null or deleted_at is not null);
+alter table public.h_chat_history add column if not exists audio_url text;
+create or replace function public.h_chat_before_upd() returns trigger language plpgsql security definer set search_path = public as $$
+declare u text := coalesce(crm_user(), '');
+begin
+  if u <> '' and u <> old.author then raise exception 'Možeš da menjaš i brišeš samo svoje poruke'; end if;
+  if old.deleted_at is not null then raise exception 'Poruka je već obrisana'; end if;
+  new.id := old.id; new.channel := old.channel; new.author := old.author; new.created_at := old.created_at; new.reply_to := old.reply_to; new.kind := old.kind;
+  if new.deleted_at is not null then
+    insert into public.h_chat_history (message_id, action, body, image_url, audio_url, mentions, by_user) values (old.id, 'delete', old.body, old.image_url, old.audio_url, old.mentions, nullif(u, ''));
+    new.deleted_at := now(); new.edited_at := old.edited_at; new.body := null; new.image_url := null; new.audio_url := null; new.mentions := '{}';
+    return new;
+  end if;
+  new.image_url := old.image_url; new.audio_url := old.audio_url; new.audio_sec := old.audio_sec; new.edited_at := old.edited_at;
+  new.body := nullif(btrim(coalesce(new.body, '')), '');
+  if new.body is not distinct from old.body then new.mentions := old.mentions; return new; end if;
+  if new.body is null and new.image_url is null and new.audio_url is null then raise exception 'Poruka ne može biti prazna (za to je Obriši)'; end if;
+  if length(new.body) > 4000 then raise exception 'Poruka je preduga'; end if;
+  insert into public.h_chat_history (message_id, action, body, image_url, audio_url, mentions, by_user) values (old.id, 'edit', old.body, old.image_url, old.audio_url, old.mentions, nullif(u, ''));
+  new.edited_at := now();
+  select coalesce(array_agg(distinct x), '{}') into new.mentions from (
+    select case translate(lower(m[1]), 'š', 's') when 'all' then 'svi' else translate(lower(m[1]), 'š', 's') end x
+    from regexp_matches(coalesce(new.body, ''), '@(konstantin|stasa|staša|marjan|svi|all)\M', 'gi') as m) t;
+  return new;
+end $$;

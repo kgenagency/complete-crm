@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610081105';
+const APP_BUILD = '202610081132';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -1009,7 +1009,7 @@ async function saveTaskModal() {
   if (src.k === 'note' && 'task_done_at' in f) Object.assign(f, f.task_done_at ? { done: true, done_by: who() } : { done: false });
   try {
     const r = await q(sb.from(src.tbl).update(f).eq('id', x.id).select().single());
-    Object.assign(x, r); $('taskModal').classList.remove('open'); renderAll(); toast('Zadatak sačuvan ✓'); taskAfterSave('tm', src.title(x), src.sec ? src.sec(x) : src.label);
+    Object.assign(x, r); $('taskModal').classList.remove('open'); renderAll(); toast('Zadatak sačuvan ✓'); if (CHAT.open && isTaskCh(CHAT.ch)) { renderChat(); setTimeout(() => taskAuditLoad(CHAT.ch), 900); } taskAfterSave('tm', src.title(x), src.sec ? src.sec(x) : src.label);
   } catch (e) { fail(e); }
 }
 /* klik na kružić u Taskovima: gotovo / vrati */
@@ -1033,9 +1033,9 @@ function tkRow(t, i) {
     : x.task_by ? `<span>${byF ? 'dodelila' : 'dodelio'} ${esc(personName(x.task_by))}${x.task_at ? ' · ' + relTime(x.task_at) : ''}</span>` : '';
   return `<div class="tk-row ${t.done ? 'done' : ''} ${d ? d.level : ''}" data-tkopen="${src.k}:${x.id}" style="animation-delay:${Math.min(i, 20) * 18}ms">
     <button class="tk-check" data-tkdone="${src.k}:${x.id}" title="${t.done ? 'Vrati u otvorene' : 'Gotovo'}">✓</button>
-    <div class="tk-main"><div class="tk-t">${esc(x.task_note && src.k !== 'note' ? x.task_note : src.title(x))}</div>${x.task_note && src.k !== 'note' ? `<div class="tk-ref">${src.ic} ${esc(src.title(x))}</div>` : ''}
+    <div class="tk-main"><div class="tk-t">${esc(x.task_note && src.k !== 'note' ? x.task_note : src.title(x))}</div>${src.k !== 'note' ? `<button type="button" class="tk-ref" data-tkitem="${src.k}:${x.id}" title="Otvori stavku">${src.ic} ${esc(src.title(x))} ↗</button>` : ''}
       <div class="tk-s"><span class="tk-sec">${src.ic} ${esc(t.sec)}</span>${src.sub(x) ? `<span>${esc(src.sub(x))}</span>` : ''}${info}</div></div>
-    <div class="tk-side">${d ? `<span class="tk-due ${d.level}">⏱ ${d.txt}</span>` : ''}<span class="tk-avs">${t.as.map(a => `<span class="n-av ${PEOPLE[a] ? a : 'system'}" title="${esc(personName(a))}">${esc(personName(a).charAt(0))}</span>`).join('')}</span><button class="tk-edit" data-tkedit="${src.k}:${x.id}" title="Zaduženi i rok">👤</button></div>
+    <div class="tk-side">${taskCmChip(src, x)}${d ? `<span class="tk-due ${d.level}">⏱ ${d.txt}</span>` : ''}<span class="tk-avs">${t.as.map(a => `<span class="n-av ${PEOPLE[a] ? a : 'system'}" title="${esc(personName(a))}">${esc(personName(a).charAt(0))}</span>`).join('')}</span><button class="tk-edit" data-tkedit="${src.k}:${x.id}" title="Zaduženi i rok">👤</button></div>
   </div>`;
 }
 const TAB_SEC = { notes: 'Ostalo', orders: 'Porudžbine', customers: 'Kupci', products: 'Garderoba', returns: 'Povrati', promos: 'Promocije', posts: 'Objave + reklame', packaging: 'Pakovanje', site: 'Sajt', story: 'Brand story', ads: 'Reklame' };
@@ -3357,9 +3357,8 @@ function bindEvents() {
     const dn = e.target.closest('[data-tkdone]'); if (dn) { e.preventDefault(); e.stopPropagation(); return taskToggle(dn.dataset.tkdone); }
     const ed = e.target.closest('[data-tkedit]'); if (ed) { e.preventDefault(); e.stopPropagation(); const [k, id] = ed.dataset.tkedit.split(':'); return openTaskModal(k, id); }
     const md = e.target.closest('[data-tmode]'); if (md) { e.preventDefault(); const st = $(md.dataset.px + '_tstate'); st.dataset.mode = md.dataset.tmode; return renderTaskState(md.dataset.px); }
-    const op = e.target.closest('[data-tkopen]'); if (op) { const [k, id] = op.dataset.tkopen.split(':'); const src = taskSrcOf(k), x = src && src.list().find(y => y.id === id); if (!x) return;
-      if (k === 'note') return openTaskModal(k, id);
-      const ref = src.ref(x); if (ref.startsWith('tab:')) return setTab(ref.slice(4)); if (k === 'cust') return openCustModal(id); return openRef(ref); }
+    const ti = e.target.closest('[data-tkitem]'); if (ti) { e.preventDefault(); e.stopPropagation(); const [k, id] = ti.dataset.tkitem.split(':'); return openTaskItem(k, id); }
+    const op = e.target.closest('[data-tkopen]'); if (op) { const [k, id] = op.dataset.tkopen.split(':'); return openTaskView(k, id); }
   }, true);
   $('tkWho').addEventListener('click', (e) => { const b = e.target.closest('[data-tw]'); if (!b) return; tkState.who = b.dataset.tw; renderTasks(); });
   $('tkState').addEventListener('click', (e) => { const b = e.target.closest('[data-ts]'); if (!b) return; tkState.st = b.dataset.ts; renderTasks(); });
@@ -3495,6 +3494,9 @@ const BOT_FAQ = [
   { g: [['backup', 'rezerv', 'sigurn', 'bezbed']], a: 'Podaci se čuvaju zauvek: obrisano ide u arhivu, svaka promena se beleži, a svake noći u 03:30 pravi se rezervna kopija cele baze na GitHub-u.', b: [['Istorija', 'tab:history']] },
   { g: [['istorij', 'prekretnic', 'dogadja', 'vremensk']], a: 'Istorija je vremenska linija svega. Važan događaj (lansiranje, nova kolekcija…) dodaješ dugmetom <b>Zabeleži događaj</b>.', b: [['Zabeleži događaj', 'act:Zabeleži događaj u istoriji'], ['Istorija', 'tab:history']] },
   { g: [['obavestenj', 'notifikac', 'push', 'na telefon', 'stize poruka', 'stizu poruke']], a: 'CRM može da šalje <b>obaveštenja na telefon i računar</b>, i kad je zatvoren: kad ti neko dodeli zadatak, kad neko završi zadatak koji si dodelio/la, nova porudžbina, nova prijava povrata i jutarnji podsetnik u 8h. Uključuješ ih na svakom uređaju posebno: <b>zvonce gore → Obaveštenja na ovom uređaju → Uključi</b> (na telefonu i u meniju sa tri crtice, dugme 📲). Tu biraš šta da ti stiže i šalješ probu. Na iPhone-u prvo dodaj CRM na početni ekran iz Safari-ja. Na Androidu instaliraj CRM kao aplikaciju (u istom prozoru dugme <b>Instaliraj HARIZMA aplikaciju</b>), pa obaveštenja stižu kao od aplikacije HARIZMA, i tu možeš da preuzmeš <b>HARIZMA zvuk</b> i postaviš ga kao zvuk obaveštenja. Na iPhone-u Apple ne dozvoljava poseban zvuk.', b: [] },
+  { g: [['huddle', 'poziv', 'pozov', 'zovem', 'zvati', 'video', 'kamer', 'ekran']], a: '<b>Huddle</b> je brz poziv u CRM-u (kao na Slack-u): u chatu gore dugme <b>📞 Huddle</b> (u Tim chatu) ili <b>Pozovi</b> (u privatnom razgovoru). Ostali dobiju zvono u CRM-u i obaveštenje na telefon, pa klik na <b>Pridruži se</b>. U traci poziva su mikrofon, kamera, deljenje ekrana (na računaru), veliki prikaz i crveno dugme za izlaz. Glas ide direktno između uređaja, šifrovano.', b: [['Otvori chat', 'act:Tim chat']] },
+  { g: [['glasovn', 'glasom', 'snimi', 'snimak', 'voice', 'mikrofon']], a: 'Glasovna poruka: u chatu ili komentaru na zadatku, kad je polje prazno, desno je dugme <b>🎤</b>. Klik počinje snimanje, <b>➤</b> šalje, 🗑 odustaje (najviše 5 minuta). Ako uz snimak ukucaš i tekst sa @ime, ta osoba dobije obaveštenje. Snimak se pušta dugmetom ▶, a 1× menja brzinu na 1,5× i 2×.', b: [['Otvori chat', 'act:Tim chat']] },
+  { g: [['koment', 'dopisiv'], ['task', 'zadat']], a: '<b>Komentari na zadatku</b> (kao u ClickUp-u): u Taskovima klikni na zadatak i otvara se prozor sa detaljima levo (status, zaduženi, rok, ko je dodelio) i <b>Aktivnošću</b> desno: komentari i promene na zadatku. Piši, odgovaraj, reaguj, šalji slike i glasovne. Zaduženi i ko je dodelio zadatak dobijaju obaveštenje za svaki komentar, a <b>@ime</b> obaveštava bilo koga. Strelica pored naziva stavke otvara samu stavku.', b: [['Taskovi', 'tab:tasks']] },
   { g: [['chat', 'cet', 'caskanj', 'dopisiv', 'privatn', 'gif', 'tagu', 'taguj', 'oznac', 'pominj', 'reakc', 'lajk', 'odgovor na poruk', 'reply', 'izmeni poruk', 'obrisi poruk', 'edit']], a: '<b>Tim chat</b> je zlatno dugme <b>💬 Chat</b> dole desno (i gore u traci, i prvo u meniju sa tri crtice, taster <kbd>C</kbd>). Ima grupu <b>Tim HARIZMA</b> i privatne poruke sa svakim posebno (vidite ih samo vas dvoje). Obaveštenje na telefon stiže <b>samo kad nekog označiš</b>: napiši <b>@</b> i izaberi ime, ili <b>@svi</b> za ceo tim. Dugme <b>GIF</b> šalje GIF ili sliku (iz galerije, nalepljen link ili pretraga). Na poruku <b>odgovaraš i reaguješ</b> (❤️ 👍 😂…) dugim držanjem poruke na telefonu, a na računaru dugmetom ☺ pored poruke; brz odgovor je prevlačenje poruke udesno, a dva dodira daju ❤️. <b>Svoje poruke</b> možeš da izmeniš ili obrišeš (isti meni, na računaru i strelica gore u praznom polju menja poslednju). Kod drugih piše „izmenjeno“ ili „Poruka je obrisana“, a original ostaje sačuvan u bazi i dnevnoj kopiji. Pretraga gore levo traži kroz celu istoriju.', b: [['Otvori chat', 'act:Tim chat']] },
   { g: [['nov zadatak', 'novi zadatak', 'novi task', 'nov task', 'zadatak za', 'task za', 'dodeli', 'zaduzi']], a: 'Klikni <b>Nov zadatak</b> (u Taskovima ili taster B), upiši šta treba i izaberi <b>Sekciju</b>. Ispod se pojavi <b>Za šta je zadatak?</b>: <b>＋ nova stavka</b> (npr. cela forma za ideju u Objave + reklame, predlog za Sajt, promocija), <b>postojeća</b> stavka iz liste (porudžbina, kupac, model, prijava…) ili <b>Samo zadatak</b> kao beleška. Izaberi ko radi i rok, pa Sačuvaj.', b: [['Nov zadatak', 'act:Nov zadatak'], ['Taskovi', 'tab:tasks']] },
   { g: [['zvuk', 'zvuc', 'ting', 'muzik', 'utisa', 'tisin', 'sound']], a: 'CRM ima zvuke: uvod kad uđeš, „ka-čing“ za novu porudžbinu (tiši kad je unese neko drugi), zvonce za zadatke, šuškanje papira za belešku, zvuk za poslato i isporučeno, brisanje i vraćanje, a za prvu, 10., 25., 50., 100. porudžbinu i za rekordan dan i mala proslava sa konfetama. Sve se gasi i pali u zvoncetu gore (Zvuci) ili u meniju sa tri crtice (Zvuk); tu je i <b>▶ Probaj</b>.', b: [] },
@@ -4080,7 +4082,7 @@ function botLocalFirst(raw) {
    dodeljen zadatak, završen zadatak koji si dodelio/la, nova porudžbina, nova prijava i jutarnji podsetnik u 8h */
 const VAPID_PUBLIC = 'BO9fqbcK6L9yA4bKN-m3gp2RxmbZ6Gt7UOsIjGDzOZDScOuWOtwSWT_nM8GeM__UZr6vE2bBSH2ou37jkf5_MTg';
 const PUSH_URL = () => SUPABASE_URL + '/functions/v1/crm-push';
-const PUSH_PREFS = [['tasks', 'Zadaci za mene', 'kad ti neko dodeli zadatak'], ['done', 'Završeni zadaci', 'kad neko završi zadatak koji si ti dodelio/la'], ['orders', 'Nove porudžbine', 'kad neko drugi unese porudžbinu'], ['returns', 'Povrati i reklamacije', 'nova prijava sa forme ili ručno'], ['daily', 'Jutarnji podsetnik u 8h', 'šta ti ističe danas i šta kasni'], ['chat', 'Tim chat', 'samo kad te neko označi (@tvoje ime ili @svi)']];
+const PUSH_PREFS = [['tasks', 'Zadaci za mene', 'kad ti neko dodeli zadatak'], ['done', 'Završeni zadaci', 'kad neko završi zadatak koji si ti dodelio/la'], ['orders', 'Nove porudžbine', 'kad neko drugi unese porudžbinu'], ['returns', 'Povrati i reklamacije', 'nova prijava sa forme ili ručno'], ['daily', 'Jutarnji podsetnik u 8h', 'šta ti ističe danas i šta kasni'], ['chat', 'Tim chat', 'samo kad te neko označi (@tvoje ime ili @svi)'], ['comments', 'Komentari na zadacima', 'kad neko napiše komentar na zadatku koji pratiš'], ['calls', 'Huddle pozivi', 'kad te neko zove ili pokrene huddle sa timom']];
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -4224,28 +4226,44 @@ function renderPushBar() {
 /* ================= TIM CHAT =================
    grupa „Tim HARIZMA“ + privatne poruke. Poruke se ne menjaju i ne brišu (baza to ne dozvoljava),
    pa se istorija čuva zauvek (plus dnevna kopija). Obaveštenje na telefon stiže samo kad te neko označi (@ime ili @svi). */
-const CHAT = { open: false, ch: 'tim', msgs: {}, reads: {}, seen: {}, loaded: false, online: new Set(), typing: {}, list: true, q: '', older: {}, rt: null, typeAt: 0, gif: { open: false, q: '', items: [], configured: null, off: 0 }, focusId: null, readT: {}, lim: {}, res: {}, srv: [], qT: 0, poll: 0, rx: {}, reply: {}, act: null, need: new Set(), tap: null, edit: null, updSince: '' };
+const CHAT = { open: false, ch: 'tim', msgs: {}, reads: {}, seen: {}, loaded: false, online: new Set(), typing: {}, list: true, q: '', older: {}, rt: null, typeAt: 0, gif: { open: false, q: '', items: [], configured: null, off: 0 }, focusId: null, readT: {}, lim: {}, res: {}, srv: [], qT: 0, poll: 0, rx: {}, reply: {}, act: null, need: new Set(), tap: null, edit: null, updSince: '', prevCh: 'tim', audit: {} };
 const dmKey = (a, b) => 'dm:' + [a, b].sort().join(':');
-const chatChannels = () => ['tim', ...Object.keys(PEOPLE).filter(k => k !== who()).map(k => dmKey(who(), k))];
-const chatOther = (ch) => (ch === 'tim' ? null : ch.slice(3).split(':').find(k => k !== who()));
-const chatTitle = (ch) => (ch === 'tim' ? 'Tim HARIZMA' : personName(chatOther(ch)));
-const chatMembers = (ch) => (ch === 'tim' ? Object.keys(PEOPLE) : ch.slice(3).split(':'));
+const isTaskCh = (ch) => String(ch || '').startsWith('task:');
+const chatBase = () => ['tim', ...Object.keys(PEOPLE).filter(k => k !== who()).map(k => dmKey(who(), k))];
+const chatTaskChs = () => Object.keys(CHAT.msgs).filter(c => isTaskCh(c) && (CHAT.msgs[c] || []).some(m => !m._tmp));
+const chatChannels = () => [...chatBase(), ...chatTaskChs()];
+const chatKnown = (ch) => isTaskCh(ch) || chatBase().includes(ch);
+const chatOther = (ch) => (ch === 'tim' || isTaskCh(ch) ? null : ch.slice(3).split(':').find(k => k !== who()));
+/* komentari na zadatku: kanal task:<tabela>:<id> */
+const taskChOf = (src, x) => `task:${src.tbl}:${x.id}`;
+function taskOfCh(ch) { const [, tbl, id] = String(ch).split(':'); for (const src of TASK_SRC) { if (src.tbl !== tbl) continue; const x = src.list().find(y => y.id === id); if (x) return { src, x }; } return null; }
+const taskLabel = (t) => (t.x.task_note && t.src.k !== 'note' ? t.x.task_note : t.src.title(t.x));
+const chatTitle = (ch) => (ch === 'tim' ? 'Tim HARIZMA' : isTaskCh(ch) ? (() => { const t = taskOfCh(ch); return t ? tcut(taskLabel(t), 70) : 'Zadatak'; })() : personName(chatOther(ch)));
+const chatMembers = (ch) => (ch === 'tim' || isTaskCh(ch) ? Object.keys(PEOPLE) : ch.slice(3).split(':'));
+/* zadatak „pratiš“ ako si zadužen/a, ako si ga dodelio/la, komentarisao/la ili si označen/a u njemu */
+function chatWatch(ch) {
+  if (!isTaskCh(ch)) return true;
+  const t = taskOfCh(ch), me = who();
+  if (t && (assigneesOf(t.x).includes(me) || t.x.task_by === me)) return true;
+  return (CHAT.msgs[ch] || []).some(m => m.author === me || (m.mentions || []).includes(me) || (m.mentions || []).includes('svi'));
+}
 const MENTION_RE = /@(konstantin|stasa|staša|marjan|svi|all)(?![\p{L}\p{N}_])/giu;
 const normMention = (m) => { m = m.toLowerCase().replace(/š/g, 's'); return m === 'all' ? 'svi' : m; };
 const chatMentionsMe = (m) => m.author !== who() && (m.mentions || []).some(x => x === who() || x === 'svi');
 const isChatMobile = () => innerWidth < 760;
 function chatUnread(ch) { const r = CHAT.reads[ch] || ''; return (CHAT.msgs[ch] || []).filter(m => !m._tmp && !m.deleted_at && m.author !== who() && m.created_at > r).length; }
-const chatUnreadTotal = () => chatChannels().reduce((a, c) => a + chatUnread(c), 0);
+const chatUnreadTotal = () => chatChannels().filter(chatWatch).reduce((a, c) => a + chatUnread(c), 0);
 function chatAddMsgs(rows) { rows.forEach(m => { const a = CHAT.msgs[m.channel] = CHAT.msgs[m.channel] || []; if (!a.some(x => x.id === m.id)) a.push(m); }); Object.values(CHAT.msgs).forEach(a => a.sort((x, y) => x.created_at.localeCompare(y.created_at))); }
 async function chatLoad() {
   try {
-    const chs = chatChannels();
-    const res = await Promise.all([...chs.map(c => q(sb.from('h_chat_messages').select('*').eq('channel', c).order('created_at', { ascending: false }).limit(300))), q(sb.from('h_chat_reads').select('*'))]);
-    const reads = res.pop();
+    const chs = chatBase();
+    const res = await Promise.all([...chs.map(c => q(sb.from('h_chat_messages').select('*').eq('channel', c).order('created_at', { ascending: false }).limit(300))), q(sb.from('h_chat_reads').select('*')), q(sb.from('h_chat_messages').select('*').like('channel', 'task:%').order('created_at', { ascending: false }).limit(2000))]);
+    const tasks = res.pop(), reads = res.pop();
+    chatAddMsgs(tasks); if (tasks.length < 2000) [...new Set(tasks.map(m => m.channel))].forEach(c => { CHAT.older[c] = 'done'; });
     res.forEach((rows, i) => { if (rows.length < 300) CHAT.older[chs[i]] = 'done'; chatAddMsgs(rows); });
     await chatRxLoad();
     reads.forEach(r => { if (r.username === who()) { if ((CHAT.reads[r.channel] || '') < r.last_read_at) CHAT.reads[r.channel] = r.last_read_at; } else (CHAT.seen[r.channel] = CHAT.seen[r.channel] || {})[r.username] = r.last_read_at; });
-    CHAT.loaded = true; chatBadges(); if (CHAT.open) renderChat(true);
+    CHAT.loaded = true; chatBadges(); if (CHAT.open) renderChat(true); if (state.tab === 'tasks') renderTasks();
   } catch (e) { console.warn('chat', e); }
 }
 async function chatPoll() {
@@ -4308,20 +4326,22 @@ function chatLive() {
 }
 function chatInit() { document.body.classList.add('chat-ready'); chatLoad(); chatLive(); CHAT.poll = setInterval(chatPoll, 20000); document.addEventListener('visibilitychange', () => { if (!document.hidden) { chatPoll(); if (CHAT.open && !(isChatMobile() && CHAT.list)) chatMarkRead(CHAT.ch); } }); }
 function chatIncoming(m) {
-  if (!m || !m.channel || !chatChannels().includes(m.channel)) return;
+  if (!m || !m.channel || !chatKnown(m.channel)) return;
   const a = CHAT.msgs[m.channel] = CHAT.msgs[m.channel] || [];
-  if (m.author === who()) { const ti = a.findIndex(x => x._tmp && (x.body || null) === (m.body || null) && (x.image_url || null) === (m.image_url || null)); if (ti >= 0) a.splice(ti, 1); }
+  if (m.author === who()) { const ti = a.findIndex(x => x._tmp && (x.body || null) === (m.body || null) && (x.image_url || null) === (m.image_url || null) && (x.audio_url || null) === (m.audio_url || null)); if (ti >= 0) a.splice(ti, 1); }
   if (a.some(x => x.id === m.id)) { if (CHAT.open) renderChatMsgs(); return; }
   a.push(m); a.sort((x, y) => x.created_at.localeCompare(y.created_at));
   if (CHAT.typing[m.channel]) delete CHAT.typing[m.channel][m.author];
   const viewing = CHAT.open && CHAT.ch === m.channel && !document.hidden && !(isChatMobile() && CHAT.list);
+  if (m.kind === 'huddle' && m.author !== who() && !m.deleted_at && Date.now() - new Date(m.created_at) < 90000) hudRing(m.channel, m.author);
   if (viewing) chatMarkRead(m.channel);
-  else if (chatMentionsMe(m)) { sfx('notif'); chatPop(m); }
-  chatBadges();
+  else if (m.kind === 'huddle') {}
+  else if (chatMentionsMe(m) || (isTaskCh(m.channel) && m.author !== who() && chatWatch(m.channel))) { sfx('notif'); chatPop(m); }
+  chatBadges(); if (isTaskCh(m.channel) && state.tab === 'tasks') renderTasks();
   if (CHAT.open) { renderChatSide(); if (CHAT.ch === m.channel) renderChatMsgs(m.author === who() || chatNearBottom()); }
 }
 function chatReadEvt(r) {
-  if (!r || !chatChannels().includes(r.channel)) return;
+  if (!r || !chatKnown(r.channel)) return;
   if (r.username === who()) { if ((CHAT.reads[r.channel] || '') < r.last_read_at) { CHAT.reads[r.channel] = r.last_read_at; chatBadges(); if (CHAT.open) renderChatSide(); } }
   else { (CHAT.seen[r.channel] = CHAT.seen[r.channel] || {})[r.username] = r.last_read_at; if (CHAT.open && CHAT.ch === r.channel) renderChatMsgs(chatNearBottom()); }
 }
@@ -4341,7 +4361,9 @@ function chatBadges() {
 /* ---- otvaranje ---- */
 function openChat(ch) {
   if (!state.user) return;
-  if (ch && chatChannels().includes(ch)) { CHAT.ch = ch; CHAT.list = false; } else if (isChatMobile()) CHAT.list = true;
+  if (ch && chatKnown(ch)) { if (isTaskCh(ch) && !isTaskCh(CHAT.ch)) CHAT.prevCh = CHAT.ch; CHAT.ch = ch; CHAT.list = false; }
+  else { if (isTaskCh(CHAT.ch)) CHAT.ch = CHAT.prevCh || 'tim'; if (isChatMobile()) CHAT.list = true; }
+  if (isTaskCh(CHAT.ch)) taskAuditLoad(CHAT.ch);
   CHAT.open = true; document.body.classList.add('chat-open'); $('chatPanel').classList.add('open');
   try { closeNav(); closeCmd(); if (BOT.open) closeBot(); } catch (e) {}
   chatVV();
@@ -4349,14 +4371,14 @@ function openChat(ch) {
   if (!(isChatMobile() && CHAT.list)) { chatMarkRead(CHAT.ch); if (!isChatMobile()) setTimeout(() => $('cpInput').focus(), 60); }
   if (!CHAT.loaded) chatLoad();
 }
-function closeChat() { chatActClose(); CHAT.open = false; document.body.classList.remove('chat-open'); $('chatPanel').classList.remove('open'); chatGifClose(); $('cpMention').style.display = 'none'; try { $('cpInput').blur(); } catch (e) {} chatVV(); }
+function closeChat() { if (VOICE.rec) voiceStop(false); chatActClose(); CHAT.open = false; document.body.classList.remove('chat-open', 'chat-task'); $('chatPanel').classList.remove('open'); chatGifClose(); $('cpMention').style.display = 'none'; try { $('cpInput').blur(); } catch (e) {} chatVV(); }
 /* telefon: kad se otvori tastatura, chat staje tačno u vidljivi deo ekrana */
 function chatVV() {
   const p = $('chatPanel'), v = window.visualViewport; if (!p) return;
   if (!v || !CHAT.open || !isChatMobile()) { p.style.height = ''; p.style.top = ''; return; }
   p.style.height = v.height + 'px'; p.style.top = v.offsetTop + 'px';
 }
-function chatSelect(ch) { if (CHAT.edit) chatEditCancel(); CHAT.ch = ch; CHAT.list = false; CHAT.q = ''; if ($('cpQ')) $('cpQ').value = ''; renderChat(true); chatMarkRead(ch); if (!isChatMobile()) setTimeout(() => $('cpInput').focus(), 40); }
+function chatSelect(ch) { if (CHAT.edit) chatEditCancel(); if (isTaskCh(ch) && !isTaskCh(CHAT.ch)) CHAT.prevCh = CHAT.ch; if (isTaskCh(ch)) taskAuditLoad(ch); CHAT.ch = ch; CHAT.list = false; CHAT.q = ''; if ($('cpQ')) $('cpQ').value = ''; renderChat(true); chatMarkRead(ch); if (!isChatMobile()) setTimeout(() => $('cpInput').focus(), 40); }
 /* ---- prikaz ---- */
 const chatTime = (iso) => new Date(iso).toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' });
 function chatDayLbl(d) { const t = dayStr(new Date()), y = new Date(); y.setDate(y.getDate() - 1); return d === t ? 'Danas' : d === dayStr(y) ? 'Juče' : new Date(d + 'T12:00:00').toLocaleDateString('sr-Latn-RS', { weekday: 'long', day: 'numeric', month: 'long' }); }
@@ -4369,34 +4391,51 @@ function chatFmt(t) {
 const chatAv = (k, cls = '') => `<span class="n-av ${PEOPLE[k] ? k : 'system'} ${cls}">${esc(personName(k).charAt(0))}${CHAT.online.has(k) && k !== who() ? '<i class="on-dot"></i>' : ''}</span>`;
 function chatPreview(ch) {
   const m = (CHAT.msgs[ch] || []).slice(-1)[0]; if (!m) return { t: ch === 'tim' ? 'Grupa za ceo tim' : 'Privatna poruka', at: '' };
-  const who_ = m.author === who() ? 'Ti: ' : ch === 'tim' ? personName(m.author) + ': ' : '';
+  const who_ = m.author === who() ? 'Ti: ' : ch === 'tim' || isTaskCh(ch) ? personName(m.author) + ': ' : '';
   if (m.deleted_at) return { t: who_ + 'poruka je obrisana', at: dayStr(new Date(m.created_at)) === dayStr(new Date()) ? chatTime(m.created_at) : new Date(m.created_at).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' }) };
+  if (m.kind === 'huddle') return { t: who_ + '📞 huddle poziv', at: dayStr(new Date(m.created_at)) === dayStr(new Date()) ? chatTime(m.created_at) : new Date(m.created_at).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' }) };
+  if (m.audio_url && !m.body) return { t: who_ + '🎤 glasovna poruka', at: dayStr(new Date(m.created_at)) === dayStr(new Date()) ? chatTime(m.created_at) : new Date(m.created_at).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' }) };
   return { t: who_ + (m.body ? m.body.replace(/\s+/g, ' ') : (/\.gif(\?|$)/i.test(m.image_url || '') ? 'GIF' : '📷 Slika')), at: dayStr(new Date(m.created_at)) === dayStr(new Date()) ? chatTime(m.created_at) : new Date(m.created_at).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' }) };
 }
-function renderChat(toBottom) { chatActClose(); renderChatSide(); renderChatTop(); renderChatMsgs(toBottom); renderChatTyping(); renderChatReply(); $('chatPanel').classList.toggle('show-list', isChatMobile() && CHAT.list); $('cpInput').placeholder = CHAT.ch === 'tim' ? (isChatMobile() ? 'Poruka timu…' : 'Poruka timu… (@ime da nekog označiš)') : `Piši ${({ konstantin: 'Konstantinu', stasa: 'Staši', marjan: 'Marjanu' })[chatOther(CHAT.ch)] || chatTitle(CHAT.ch)}…`; }
+function renderChat(toBottom) { const tm = isTaskCh(CHAT.ch); $('chatPanel').classList.toggle('task-mode', tm); document.body.classList.toggle('chat-task', tm); if (tm) CHAT.list = false; chatActClose(); renderChatSide(); renderChatTop(); renderChatMsgs(toBottom); renderChatTyping(); renderChatReply(); $('chatPanel').classList.toggle('show-list', isChatMobile() && CHAT.list); $('cpInput').placeholder = tm ? 'Napiši komentar…' : CHAT.ch === 'tim' ? (isChatMobile() ? 'Poruka timu…' : 'Poruka timu… (@ime da nekog označiš)') : `Piši ${({ konstantin: 'Konstantinu', stasa: 'Staši', marjan: 'Marjanu' })[chatOther(CHAT.ch)] || chatTitle(CHAT.ch)}…`; }
 function renderChatSide() {
+  if (isTaskCh(CHAT.ch)) { if ($('cpTask')) $('cpTask').innerHTML = isChatMobile() ? '' : taskDetailsHtml(CHAT.ch); return; }
   const qn = fold(CHAT.q.trim());
   if (qn) {
     const seen = new Set(), res = [];
-    chatChannels().flatMap(c => (CHAT.msgs[c] || []).filter(m => !m._tmp && m.body && fold(m.body + ' ' + personName(m.author)).includes(qn))).concat(CHAT.srv.filter(m => chatChannels().includes(m.channel))).forEach(m => { if (!seen.has(m.id)) { seen.add(m.id); res.push(m); CHAT.res[m.id] = m; } });
+    chatChannels().flatMap(c => (CHAT.msgs[c] || []).filter(m => !m._tmp && m.body && fold(m.body + ' ' + personName(m.author)).includes(qn))).concat(CHAT.srv.filter(m => chatKnown(m.channel))).forEach(m => { if (!seen.has(m.id)) { seen.add(m.id); res.push(m); CHAT.res[m.id] = m; } });
     res.sort((a, b) => b.created_at.localeCompare(a.created_at)); res.splice(80);
     $('cpList').innerHTML = res.map(m => `<button class="cl-it res" data-chatgo="${m.channel}|${m.id}">${chatAv(m.author)}<span class="cl-t"><b>${esc(personName(m.author))} <small>· ${esc(chatTitle(m.channel))}</small></b><small>${esc(tcut(m.body, 90))}</small></span><span class="cl-r"><small>${new Date(m.created_at).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short', year: new Date(m.created_at).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' })}</small></span></button>`).join('') || '<div class="cl-empty">Ništa nije nađeno.</div>';
     return;
   }
   const lastAt = (c) => ((CHAT.msgs[c] || []).slice(-1)[0] || {}).created_at || '';
-  const order = ['tim', ...chatChannels().slice(1).sort((a, b) => lastAt(b).localeCompare(lastAt(a)))];
+  const order = ['tim', ...chatBase().slice(1).sort((a, b) => lastAt(b).localeCompare(lastAt(a)))];
   $('cpList').innerHTML = order.map(c => { const p = chatPreview(c), u = chatUnread(c), o = chatOther(c), ment = (CHAT.msgs[c] || []).some(m => m.created_at > (CHAT.reads[c] || '') && chatMentionsMe(m));
-    return `<button class="cl-it ${c === CHAT.ch && !(isChatMobile() && CHAT.list) ? 'on' : ''} ${u ? 'unread' : ''}" data-chat="${c}">${c === 'tim' ? '<span class="n-av cl-grp">H</span>' : chatAv(o)}<span class="cl-t"><b>${esc(chatTitle(c))}</b><small>${esc(tcut(p.t, 60))}</small></span><span class="cl-r"><small>${p.at}</small>${u ? `<span class="cl-n ${ment ? 'ment' : ''}">${ment ? '@' : u}</span>` : ''}</span></button>`; }).join('');
+    return `<button class="cl-it ${c === CHAT.ch && !(isChatMobile() && CHAT.list) ? 'on' : ''} ${u ? 'unread' : ''}" data-chat="${c}">${c === 'tim' ? '<span class="n-av cl-grp">H</span>' : chatAv(o)}<span class="cl-t"><b>${esc(chatTitle(c))}${hudOthers(c).length || HUD.room === c ? ' <i class="cl-hud">📞</i>' : ''}</b><small>${esc(tcut(p.t, 60))}</small></span><span class="cl-r"><small>${p.at}</small>${u ? `<span class="cl-n ${ment ? 'ment' : ''}">${ment ? '@' : u}</span>` : ''}</span></button>`; }).join('') + chatTaskListHtml();
+}
+/* lista „Zadaci“ u chatu: razgovori na zadacima (prvo oni koje pratiš) */
+function chatTaskListHtml() {
+  const lastAt = (c) => ((CHAT.msgs[c] || []).slice(-1)[0] || {}).created_at || '';
+  const chs = chatTaskChs().sort((a, b) => (chatWatch(b) - chatWatch(a)) || lastAt(b).localeCompare(lastAt(a))).slice(0, 40);
+  if (!chs.length) return '<div class="cl-sec">Zadaci</div><div class="cl-empty sm">Komentari na zadacima će se pojaviti ovde. Otvori zadatak u Taskovima i piši.</div>';
+  return '<div class="cl-sec">Komentari na zadacima</div>' + chs.map(c => {
+    const t = taskOfCh(c), p = chatPreview(c), u = chatWatch(c) ? chatUnread(c) : 0, ment = (CHAT.msgs[c] || []).some(m => m.created_at > (CHAT.reads[c] || '') && chatMentionsMe(m));
+    return `<button class="cl-it task ${u ? 'unread' : ''}" data-chat="${c}"><span class="n-av cl-tk">${t ? t.src.ic : '☑'}</span><span class="cl-t"><b>${esc(chatTitle(c))}</b><small>${esc(tcut(p.t, 60))}</small></span><span class="cl-r"><small>${p.at}</small>${u ? `<span class="cl-n ${ment ? 'ment' : ''}">${ment ? '@' : u}</span>` : ''}</span></button>`;
+  }).join('');
 }
 function renderChatTop() {
   const c = CHAT.ch, o = chatOther(c);
+  if (isTaskCh(c)) { const n = (CHAT.msgs[c] || []).filter(m => !m._tmp && !m.deleted_at).length; $('cpTop').innerHTML = `<button class="cp-tback" data-tdback title="Nazad u chat">‹ Chat</button><span class="cp-tt"><b>Aktivnost</b><small>${n ? `${n} ${bpl(n, 'komentar', 'komentara', 'komentara')}` : 'komentari i promene na zadatku'}</small></span><button class="cp-x" data-chatclose title="Zatvori">✕</button>`; return; }
   const sub = c === 'tim' ? (() => { const on = Object.keys(PEOPLE).filter(k => k !== who() && CHAT.online.has(k)).map(personName); return on.length ? `na mreži: ${on.join(', ')}` : 'Konstantin, Staša i Marjan'; })() : (CHAT.online.has(o) ? 'na mreži' : 'privatno, vidite samo vas dvoje');
-  $('cpTop').innerHTML = `<button class="cp-back" data-chatback title="Nazad">‹</button>${c === 'tim' ? '<span class="n-av cl-grp">H</span>' : chatAv(o)}<span class="cp-tt"><b>${esc(chatTitle(c))}</b><small>${esc(sub)}</small></span><button class="cp-x" data-chatclose title="Zatvori">✕</button>`;
+  const live = hudOthers(c), inRoom = HUD.room === c;
+  const hb = inRoom ? `<button class="cp-hud in" data-hudstage title="Prikaži huddle">${HUD_IC.phone}<span>U huddle-u</span></button>` : live.length ? `<button class="cp-hud live" data-hudjoin="${c}" title="Pridruži se">${HUD_IC.phone}<span>Pridruži se · ${esc(live.map(personName).join(', '))}</span></button>` : `<button class="cp-hud" data-hudjoin="${c}" title="${c === 'tim' ? 'Pokreni huddle sa timom' : 'Pozovi'}">${HUD_IC.phone}<span>${c === 'tim' ? 'Huddle' : 'Pozovi'}</span></button>`;
+  $('cpTop').innerHTML = `<button class="cp-back" data-chatback title="Nazad">‹</button>${c === 'tim' ? '<span class="n-av cl-grp">H</span>' : chatAv(o)}<span class="cp-tt"><b>${esc(chatTitle(c))}</b><small>${esc(sub)}</small></span>${HUD.tx ? hb : ''}<button class="cp-x" data-chatclose title="Zatvori">✕</button>`;
 }
 const chatNearBottom = () => { const b = $('cpMsgs'); return !b || b.scrollHeight - b.scrollTop - b.clientHeight < 140; };
 function renderChatMsgs(toBottom) {
   const box = $('cpMsgs'); if (!box) return;
   const all = CHAT.msgs[CHAT.ch] || [], lim = CHAT.lim[CHAT.ch] || 300, list = all.slice(-lim), me = who();
+  if (isTaskCh(CHAT.ch)) return renderTaskThread(box, all, toBottom);
   let html = all.length && (all.length > lim || CHAT.older[CHAT.ch] !== 'done') ? '<button class="cm-older" data-chatolder>↑ Učitaj starije poruke</button>' : all.length ? '<div class="cm-start">Početak razgovora</div>' : '';
   if (!all.length) html += `<div class="cm-empty"><b>${CHAT.ch === 'tim' ? 'Ovo je početak timskog chata 👋' : 'Ovo je početak vašeg privatnog razgovora'}</b><span>${CHAT.ch === 'tim' ? 'Piši timu ovde. Obaveštenje na telefon dobija samo onaj koga označiš, npr. <b>@Staša</b>, ili svi sa <b>@svi</b>.' : `Ovo vidite samo ti i ${esc(chatTitle(CHAT.ch))}. Obaveštenje na telefon stiže kad napišeš <b>@${esc(chatTitle(CHAT.ch))}</b>.`}</span><small>Na poruku odgovaraš i reaguješ dugim držanjem (na računaru ☺ pored poruke). Svoje poruke možeš da izmeniš ili obrišeš.</small></div>`;
   let prev = null, lastDay = '';
@@ -4406,6 +4445,11 @@ function renderChatMsgs(toBottom) {
     if (d !== lastDay) { html += `<div class="cm-day"><span>${chatDayLbl(d)}</span></div>`; lastDay = d; prev = null; }
     const mine = m.author === me, grp = prev && prev.author === m.author && (new Date(m.created_at) - new Date(prev.created_at)) < 5 * 60e3;
     const img = m.image_url ? `<img class="cm-img" src="${esc(m.image_url)}" alt="" loading="lazy" data-zoom>` : '';
+    if (m.kind === 'huddle' && !m.deleted_at) {
+      const lastH = [...list].reverse().find(x => x.kind === 'huddle'), live = lastH && lastH.id === m.id ? hudOthers(CHAT.ch) : [], inRoom = HUD.room === CHAT.ch && lastH && lastH.id === m.id;
+      html += `<div class="cm-sys" data-hmid="${m.id}"><span class="cs-ic">${HUD_IC.phone}</span><span><b>${mine ? 'Ti' : esc(personName(m.author))}</b> ${mine ? (PEOPLE[me]?.f ? 'si pokrenula' : 'si pokrenuo') : (PEOPLE[m.author]?.f ? 'je pokrenula' : 'je pokrenuo')} huddle · ${chatTime(m.created_at)}</span>${inRoom ? '<small class="cs-on">u toku, ti si unutra</small>' : live.length ? `<button type="button" data-hudjoin="${CHAT.ch}">Pridruži se · ${esc(live.map(personName).join(', '))}</button>` : '<small>završen</small>'}</div>`;
+      prev = null; return;
+    }
     if (m.deleted_at) {
       html += `<div class="cm del ${mine ? 'mine' : ''} ${grp ? 'grp' : ''}" data-mid="${m.id}">${mine ? '' : grp ? '<span class="cm-sp"></span>' : chatAv(m.author, 'cm-av')}<div class="cm-w"><div class="cm-b"><span class="cm-del">🚫 ${mine ? (PEOPLE[me]?.f ? 'Obrisala si ovu poruku' : 'Obrisao si ovu poruku') : 'Poruka je obrisana'}</span><span class="cm-time">${chatTime(m.created_at)}</span></div></div></div>`;
       prev = m; return;
@@ -4413,7 +4457,7 @@ function renderChatMsgs(toBottom) {
     const rx = chatRxHtml(m), q_ = m.reply_to ? chatQuoteHtml(m.reply_to) : '';
     html += `<div class="cm ${mine ? 'mine' : ''} ${grp && !q_ ? 'grp' : ''} ${chatMentionsMe(m) ? 'ment' : ''} ${m._tmp ? 'tmp' : ''} ${m._err ? 'err' : ''} ${CHAT.focusId === m.id ? 'focus' : ''} ${rx ? 'has-rx' : ''} ${CHAT.edit && CHAT.edit.id === m.id ? 'editing' : ''}" data-mid="${m.id}">
       ${mine ? '' : grp && !q_ ? '<span class="cm-sp"></span>' : chatAv(m.author, 'cm-av')}
-      <div class="cm-w"><div class="cm-b">${!mine && (!grp || q_) && CHAT.ch === 'tim' ? `<b class="cm-n ${m.author}">${esc(personName(m.author))}</b>` : ''}${q_}${img}${m.body ? `<div class="cm-t">${chatFmt(m.body)}</div>` : ''}<span class="cm-time">${m._err ? 'nije poslato' : m._tmp ? 'šalje se…' : (m.edited_at ? 'izmenjeno · ' : '') + chatTime(m.created_at)}</span></div>${rx}</div>
+      <div class="cm-w"><div class="cm-b">${!mine && (!grp || q_) && CHAT.ch === 'tim' ? `<b class="cm-n ${m.author}">${esc(personName(m.author))}</b>` : ''}${q_}${img}${voiceHtml(m)}${m.body ? `<div class="cm-t">${chatFmt(m.body)}</div>` : ''}<span class="cm-time">${m._err ? 'nije poslato' : m._tmp ? 'šalje se…' : (m.edited_at ? 'izmenjeno · ' : '') + chatTime(m.created_at)}</span></div>${rx}</div>
       ${m._tmp ? '' : `<div class="cm-tools"><button type="button" data-actopen="${m.id}" title="${mine ? 'Reaguj, izmeni, obriši' : 'Reaguj'}">☺</button><button type="button" data-reply="${m.id}" title="Odgovori">↩</button></div>`}</div>`;
     if (lastMine && m.id === lastMine.id) {
       const seen = Object.entries(CHAT.seen[CHAT.ch] || {}).filter(([k, at]) => k !== me && at >= m.created_at).map(([k]) => k);
@@ -4431,20 +4475,20 @@ function renderChatTyping() {
   const ks = Object.keys(t).filter(k => now - t[k] < 3800);
   el.innerHTML = ks.length ? `<span class="ty-dots"><i></i><i></i><i></i></span>${esc(ks.map(personName).join(', '))} ${ks.length > 1 ? 'kucaju' : 'kuca'}…` : '';
 }
-function chatTypingEvt(p) { if (!p || p.who === who() || !chatChannels().includes(p.ch)) return; (CHAT.typing[p.ch] = CHAT.typing[p.ch] || {})[p.who] = Date.now(); if (CHAT.open && CHAT.ch === p.ch) { renderChatTyping(); setTimeout(renderChatTyping, 4000); } }
+function chatTypingEvt(p) { if (!p || p.who === who() || !chatKnown(p.ch)) return; (CHAT.typing[p.ch] = CHAT.typing[p.ch] || {})[p.who] = Date.now(); if (CHAT.open && CHAT.ch === p.ch) { renderChatTyping(); setTimeout(renderChatTyping, 4000); } }
 function chatTypingSend() { const now = Date.now(); if (!CHAT.rt || now - CHAT.typeAt < 2500) return; CHAT.typeAt = now; try { CHAT.rt.send({ type: 'broadcast', event: 'typing', payload: { ch: CHAT.ch, who: who() } }); } catch (e) {} }
 /* ---- slanje ---- */
 async function chatSend(extra) {
   if (!extra && CHAT.edit && CHAT.edit.ch === CHAT.ch) return chatEditSave();
-  const inp = $('cpInput'), body = ((extra && 'body' in extra) ? extra.body : inp.value || '').trim(), image_url = (extra && extra.image_url) || null, ch = CHAT.ch;
-  if (!body && !image_url) return;
+  const inp = $('cpInput'), body = ((extra && 'body' in extra) ? extra.body : inp.value || '').trim(), image_url = (extra && extra.image_url) || null, audio_url = (extra && extra.audio_url) || null, audio_sec = (extra && extra.audio_sec) || null, kind = (extra && extra.kind) || null, ch = (extra && extra.ch) || CHAT.ch;
+  if (!body && !image_url && !audio_url) return;
   if (body.length > 4000) return toast('Poruka je preduga (najviše 4.000 znakova)');
-  const rt = CHAT.reply[ch], reply_to = rt && !rt._tmp ? rt.id : null; if (rt) { delete CHAT.reply[ch]; renderChatReply(); }
-  const tmp = { id: 'tmp' + Date.now() + Math.random(), _tmp: true, channel: ch, author: who(), body: body || null, image_url, reply_to, mentions: [], created_at: new Date().toISOString() };
+  const rt = kind ? null : CHAT.reply[ch], reply_to = rt && !rt._tmp ? rt.id : null; if (rt) { delete CHAT.reply[ch]; renderChatReply(); }
+  const tmp = { id: 'tmp' + Date.now() + Math.random(), _tmp: true, channel: ch, author: who(), body: body || null, image_url, audio_url, audio_sec, kind, reply_to, mentions: [], created_at: new Date().toISOString() };
   (CHAT.msgs[ch] = CHAT.msgs[ch] || []).push(tmp);
-  if (!extra || !('body' in extra)) { inp.value = ''; chatGrow(); chatMentionBox(); }
+  if (!extra || !('body' in extra)) { inp.value = ''; chatGrow(); chatMentionBox(); chatFormState(); }
   renderChatMsgs(true); sfx('move');
-  try { const r = await q(sb.from('h_chat_messages').insert({ channel: ch, author: who(), body: body || null, image_url, reply_to }).select().single()); chatIncoming(r); chatMarkRead(ch); }
+  try { const r = await q(sb.from('h_chat_messages').insert({ channel: ch, author: who(), body: body || null, image_url, audio_url, audio_sec, kind, reply_to }).select().single()); chatIncoming(r); chatMarkRead(ch); return r; }
   catch (e) { tmp._err = true; renderChatMsgs(); fail(e); }
 }
 async function chatUpload(file) {
@@ -4500,13 +4544,372 @@ function renderGifBox() {
 function chatPop(m) {
   let el = $('cpop'); if (!el) { el = document.createElement('div'); el.id = 'cpop'; el.className = 'cpop'; document.body.appendChild(el); el.addEventListener('click', (e) => { if (e.target.closest('[data-cpx]')) { el.classList.remove('in'); return; } el.classList.remove('in'); openChat(el.dataset.ch); }); }
   el.dataset.ch = m.channel;
-  el.innerHTML = `${chatAv(m.author)}<div class="cpop-b"><b>${esc(personName(m.author))} ${m.channel === 'tim' ? (PEOPLE[m.author]?.f ? 'te je označila' : 'te je označio') : 'ti piše'}</b><span>${m.body ? chatFmt(tcut(m.body, 120)) : 'GIF / slika'}</span></div><button class="cpop-x" data-cpx>✕</button>`;
+  el.innerHTML = `${chatAv(m.author)}<div class="cpop-b"><b>${esc(personName(m.author))} ${isTaskCh(m.channel) ? `· ${esc(tcut(chatTitle(m.channel), 50))}` : m.channel === 'tim' ? (PEOPLE[m.author]?.f ? 'te je označila' : 'te je označio') : 'ti piše'}</b><span>${m.body ? chatFmt(tcut(m.body, 120)) : 'GIF / slika'}</span></div><button class="cpop-x" data-cpx>✕</button>`;
   void el.offsetWidth; el.classList.add('in'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('in'), 7000);
 }
+/* ================= ZADATAK: detalji + komentari (kao ClickUp) ================= */
+const fmtTaskTime = (iso) => { const d = new Date(iso), t = d.toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' }); return dayStr(d) === dayStr(new Date()) ? 'danas ' + t : d.toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' }) + ' ' + t; };
+const stLbl = (v) => ST[v] || (IDEA_ST.find(s => s.key === v) || {}).label || v || '—';
+function taskEvtText(a) {
+  const f = PEOPLE[a.actor]?.f, v = (m, z) => (f ? z : m), ch = a.changed || {}, out = [];
+  if (a.op === 'INSERT') return v('napravio', 'napravila') + ' stavku';
+  if (ch.assignees) {
+    const od = ch.assignees.od || [], na = ch.assignees.na || [], add = na.filter(x => !od.includes(x)), rem = od.filter(x => !na.includes(x));
+    if (add.length) out.push(`${v('dodelio', 'dodelila')} zadatak: ${add.map(personName).join(', ')}`);
+    if (rem.length) out.push(`${v('skinuo', 'skinula')} sa zadatka: ${rem.map(personName).join(', ')}`);
+  }
+  if (ch.task_due) out.push(ch.task_due.na ? `rok: ${fmtDate(ch.task_due.na)}` : v('skinuo', 'skinula') + ' rok');
+  if (ch.task_done_at) out.push(ch.task_done_at.na ? `${v('završio', 'završila')} zadatak ✓` : `${v('ponovo otvorio', 'ponovo otvorila')} zadatak`);
+  else if (ch.done) out.push(ch.done.na ? `${v('završio', 'završila')} belešku ✓` : `${v('vratio', 'vratila')} belešku`);
+  if (ch.status) out.push(`status: ${stLbl(ch.status.od)} → ${stLbl(ch.status.na)}`);
+  if (ch.task_note) out.push(`${v('promenio', 'promenila')} opis zadatka`);
+  if (ch.deleted_at) out.push(ch.deleted_at.na ? `${v('obrisao', 'obrisala')} stavku` : `${v('vratio', 'vratila')} stavku iz arhive`);
+  return out.join(' · ');
+}
+async function taskAuditLoad(ch) {
+  const [, tbl, id] = String(ch).split(':');
+  try { const rows = await q(sb.from('h_audit').select('id,at,actor,op,changed').eq('tbl', tbl).eq('row_id', id).order('at').limit(300)); CHAT.audit[ch] = rows; if (CHAT.open && CHAT.ch === ch) renderChatMsgs(chatNearBottom()); } catch (e) {}
+}
+function taskDetailsHtml(ch) {
+  const t = taskOfCh(ch);
+  if (!t) return '<div class="td"><div class="td-miss">Ova stavka više ne postoji ili je u arhivi. Komentari ostaju sačuvani.</div></div>';
+  const { src, x } = t, as = assigneesOf(x), done = taskIsDone(x, src), d = !done && dueInfo(x.task_due), sec = src.sec ? src.sec(x) : src.label;
+  const df = PEOPLE[x.task_done_by]?.f, bf = PEOPLE[x.task_by]?.f, hasNote = x.task_note && src.k !== 'note';
+  const desc = src.k === 'note' ? x.body : hasNote ? '' : '';
+  return `<div class="td">
+    <div class="td-crumb"><span>${src.ic} ${esc(sec)}</span>${src.k !== 'note' ? `<span>›</span><button type="button" data-tdopen>${esc(tcut(src.title(x), 60))} ↗</button>` : ''}</div>
+    <h2 class="td-title">${esc(src.k === 'note' ? tcut(x.body, 90) : taskLabel(t))}</h2>
+    <div class="td-grid">
+      <span class="td-l">◉ Status</span><span><button type="button" class="td-st ${done ? 'done' : ''}" data-tdtoggle title="${done ? 'Vrati u otvorene' : 'Označi kao gotovo'}">${done ? '✓ GOTOVO' : 'OTVOREN'}</button>${done ? '' : ' <button type="button" class="td-mini td-done" data-tdtoggle>✓ Završi zadatak</button>'}${done && x.task_done_by ? ` <small class="td-sm">${df ? 'završila' : 'završio'} ${esc(personName(x.task_done_by))}${x.task_done_at ? ' · ' + fmtDT(x.task_done_at) : ''}</small>` : ''}</span>
+      <span class="td-l">👤 Zaduženi</span><span class="td-as">${as.length ? as.map(a => `<span class="td-p">${chatAv(a)}${esc(personName(a))}</span>`).join('') : '<small class="td-sm">niko</small>'}<button type="button" class="td-mini" data-tdedit>Promeni</button></span>
+      <span class="td-l">📅 Rok</span><span>${x.task_due ? `<b class="td-due ${d ? d.level : ''}">${fmtDate(x.task_due)}</b>${d ? ` <small class="td-sm">· ${d.txt}</small>` : ''}` : '<small class="td-sm">bez roka</small>'} <button type="button" class="td-mini" data-tdedit>Promeni</button></span>
+      <span class="td-l">↗ Dodelio/la</span><span>${x.task_by ? `${esc(personName(x.task_by))} <small class="td-sm">· ${bf ? 'dodelila' : 'dodelio'} ${x.task_at ? relTime(x.task_at) : ''}</small>` : '<small class="td-sm">—</small>'}</span>
+      <span class="td-l">▦ Sekcija</span><span>${esc(sec)}</span>
+    </div>
+    ${src.k === 'note' ? `<div class="td-desc"><small>Beleška</small>${esc(x.body || '')}</div>` : `<div class="td-desc"><small>${hasNote ? 'Stavka' : 'Detalji'}</small>${esc(src.title(x))}${src.sub(x) ? `\n<span class="td-sub">${esc(src.sub(x))}</span>` : ''}</div>`}
+    <div class="td-actions">${src.k !== 'note' ? `<button type="button" class="btn-ghost" data-tdopen>Otvori ${esc(src.label.toLowerCase())} ↗</button>` : ''}<button type="button" class="btn-ghost" data-tdedit>Zaduženi, rok i opis</button></div>
+  </div>`;
+}
+function renderTaskThread(box, all, toBottom) {
+  const ch = CHAT.ch, me = who(), lim = CHAT.lim[ch] || 300, list = all.slice(-lim);
+  const evts = (CHAT.audit[ch] || []).map(a => ({ ev: true, at: a.at, a, txt: taskEvtText(a) })).filter(e => e.txt);
+  const items = [...list.map(m => ({ at: m.created_at, m })), ...evts].sort((x, y) => String(x.at).localeCompare(String(y.at)));
+  let html = isChatMobile() ? `<div class="td-m">${taskDetailsHtml(ch)}</div><div class="ta-h">Aktivnost</div>` : '';
+  if (all.length > lim || (all.length && CHAT.older[ch] !== 'done')) html += '<button class="cm-older" data-chatolder>↑ Starija aktivnost</button>';
+  if (!list.length) html += '<div class="ta-empty"><b>Još nema komentara</b>Piši ovde sve o ovom zadatku. <b class="in">@ime</b> šalje obaveštenje toj osobi, a zaduženi i ko je dodelio zadatak dobijaju obaveštenje za svaki komentar.</div>';
+  items.forEach(it => {
+    if (it.ev) { html += `<div class="tev">${chatAv(it.a.actor, 'tev-av')}<span><b>${esc(personName(it.a.actor))}</b> ${esc(it.txt)}</span><time>${fmtTaskTime(it.at)}</time></div>`; return; }
+    const m = it.m, mine = m.author === me;
+    const head = `<div class="tc-h">${chatAv(m.author, 'cm-av')}<b>${esc(personName(m.author))}</b><time>${m._err ? 'nije poslato' : m._tmp ? 'šalje se…' : fmtTaskTime(m.created_at)}${m.edited_at ? ' · izmenjeno' : ''}</time></div>`;
+    if (m.deleted_at) { html += `<div class="cm tc del ${mine ? 'mine' : ''}" data-mid="${m.id}"><div class="cm-w"><div class="cm-b">${head}<span class="cm-del">🚫 ${mine ? (PEOPLE[me]?.f ? 'Obrisala si ovaj komentar' : 'Obrisao si ovaj komentar') : 'Komentar je obrisan'}</span></div></div></div>`; return; }
+    const rx = chatRxHtml(m), q_ = m.reply_to ? chatQuoteHtml(m.reply_to) : '', img = m.image_url ? `<img class="cm-img" src="${esc(m.image_url)}" alt="" loading="lazy" data-zoom>` : '';
+    html += `<div class="cm tc ${mine ? 'mine' : ''} ${chatMentionsMe(m) ? 'ment' : ''} ${m._tmp ? 'tmp' : ''} ${m._err ? 'err' : ''} ${CHAT.focusId === m.id ? 'focus' : ''} ${CHAT.edit && CHAT.edit.id === m.id ? 'editing' : ''}" data-mid="${m.id}"><div class="cm-w"><div class="cm-b">${head}${q_}${img}${voiceHtml(m)}${m.body ? `<div class="cm-t">${chatFmt(m.body)}</div>` : ''}<div class="tc-f">${rx}<span class="tc-sp"></span>${m._tmp ? '' : `<button type="button" class="tc-b" data-actopen="${m.id}" title="Reaguj${mine ? ', izmeni, obriši' : ''}">☺</button><button type="button" class="tc-b" data-reply="${m.id}">↩ Odgovori</button>`}</div></div></div></div>`;
+  });
+  box.innerHTML = html; chatNeedFetch();
+  if (CHAT.focusId) { const el = box.querySelector(`[data-mid="${CHAT.focusId}"]`); if (el) { el.scrollIntoView({ block: 'center' }); setTimeout(() => { CHAT.focusId = null; el.classList.remove('focus'); }, 2500); return; } }
+  if (toBottom) { box.scrollTop = box.scrollHeight; box.querySelectorAll('img').forEach(i => i.addEventListener('load', () => { if (chatNearBottom() || toBottom) box.scrollTop = box.scrollHeight; }, { once: true })); }
+}
+function openTaskView(k, id) { const src = taskSrcOf(k), x = src && src.list().find(y => y.id === id); if (!x) return; openChat(taskChOf(src, x)); }
+function openTaskItem(k, id) {
+  const src = taskSrcOf(k), x = src && src.list().find(y => y.id === id); if (!x) return;
+  if (k === 'note') return openTaskModal(k, id);
+  const ref = src.ref(x); if (ref.startsWith('tab:')) return setTab(ref.slice(4)); if (k === 'cust') return openCustModal(id); return openRef(ref);
+}
+function taskCmChip(src, x) {
+  const ch = taskChOf(src, x), a = (CHAT.msgs[ch] || []).filter(m => !m._tmp && !m.deleted_at); if (!a.length) return '';
+  const u = chatWatch(ch) ? chatUnread(ch) : 0;
+  return `<span class="tk-cm ${u ? 'new' : ''}" title="${a.length} komentara${u ? ', ' + u + ' novih' : ''}">💬 ${a.length}</span>`;
+}
+/* ---- glasovne poruke: snimanje (MediaRecorder), slanje, puštanje ---- */
+const VOICE = { rec: null, chunks: [], stream: null, t0: 0, timer: 0, ana: null, ctx: null, mime: '', lv: [] };
+const fmtSec = (s) => { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+function voiceMime() { for (const m of ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm']) { try { if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; } catch (e) {} } return ''; }
+async function voiceStart() {
+  if (VOICE.rec) return;
+  if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) return toast('Ovaj pretraživač ne može da snima glas', 4000);
+  if (HUD.room) return toast('Dok si u huddle-u, glasovne poruke su isključene', 3500);
+  try { VOICE.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+  catch (e) { return toast('Mikrofon nije dozvoljen. Dozvoli mikrofon za ovaj sajt (ikonica levo od adrese ili podešavanja pretraživača).', 5500); }
+  VOICE.mime = voiceMime(); VOICE.chunks = []; VOICE.lv = [];
+  try { VOICE.rec = new MediaRecorder(VOICE.stream, VOICE.mime ? { mimeType: VOICE.mime, audioBitsPerSecond: 48000 } : undefined); }
+  catch (e) { VOICE.rec = new MediaRecorder(VOICE.stream); }
+  VOICE.rec.ondataavailable = (e) => { if (e.data && e.data.size) VOICE.chunks.push(e.data); };
+  VOICE.rec.start(250); VOICE.t0 = Date.now();
+  try { VOICE.ctx = new (window.AudioContext || window.webkitAudioContext)(); const src = VOICE.ctx.createMediaStreamSource(VOICE.stream); VOICE.ana = VOICE.ctx.createAnalyser(); VOICE.ana.fftSize = 512; src.connect(VOICE.ana); } catch (e) { VOICE.ana = null; }
+  try { navigator.vibrate && navigator.vibrate(15); } catch (e) {}
+  renderVoiceBar(); VOICE.timer = setInterval(voiceTick, 120);
+}
+function voiceTick() {
+  const s = (Date.now() - VOICE.t0) / 1000;
+  if (VOICE.ana) { const a = new Uint8Array(VOICE.ana.fftSize); VOICE.ana.getByteTimeDomainData(a); let m = 0; for (const v of a) m = Math.max(m, Math.abs(v - 128)); VOICE.lv.push(Math.min(1, m / 70)); if (VOICE.lv.length > 48) VOICE.lv.shift(); }
+  const t = document.querySelector('.cp-rec .rec-t'); if (t) t.textContent = fmtSec(s);
+  const lv = document.querySelector('.cp-rec .rec-lv'); if (lv) lv.innerHTML = VOICE.lv.map(v => `<i style="height:${Math.max(3, Math.round(v * 26))}px"></i>`).join('');
+  if (s >= 300) { toast('Najduže 5 minuta, šaljem'); voiceStop(true); }
+}
+async function voiceStop(send) {
+  const rec = VOICE.rec; if (!rec) return; clearInterval(VOICE.timer);
+  const dur = (Date.now() - VOICE.t0) / 1000;
+  const stopped = new Promise(r => { rec.onstop = r; setTimeout(r, 1500); }); try { rec.stop(); } catch (e) {}
+  await stopped;
+  try { VOICE.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { VOICE.ctx && VOICE.ctx.close(); } catch (e) {}
+  const type = String(rec.mimeType || VOICE.mime || 'audio/webm').split(';')[0], blob = new Blob(VOICE.chunks, { type });
+  VOICE.rec = null; VOICE.stream = null; VOICE.ana = null; renderVoiceBar();
+  if (!send) return;
+  if (dur < 0.8 || blob.size < 1200) return toast('Prekratko. Snimaj bar jednu sekundu.');
+  await chatSendVoice(blob, dur);
+}
+function renderVoiceBar() {
+  const f = $('cpForm'); if (!f) return; let el = f.querySelector('.cp-rec');
+  if (!VOICE.rec) { if (el) el.remove(); f.classList.remove('recording'); return; }
+  if (!el) { el = document.createElement('div'); el.className = 'cp-rec'; f.appendChild(el); }
+  f.classList.add('recording');
+  el.innerHTML = '<button type="button" class="rec-x" data-vcancel title="Odustani">🗑</button><span class="rec-dot"></span><span class="rec-t">0:00</span><span class="rec-lv"></span><button type="button" class="cp-send rec-send" data-vsend title="Pošalji glasovnu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>';
+}
+async function chatSendVoice(blob, dur) {
+  const ch = CHAT.ch, inp = $('cpInput'), body = (inp.value || '').trim(), ext = /mp4|aac|m4a/.test(blob.type) ? 'm4a' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
+  const tmp = { id: 'tmp' + Date.now(), _tmp: true, channel: ch, author: who(), body: body || null, image_url: null, audio_url: URL.createObjectURL(blob), audio_sec: dur, mentions: [], created_at: new Date().toISOString() };
+  (CHAT.msgs[ch] = CHAT.msgs[ch] || []).push(tmp); inp.value = ''; chatGrow(); chatFormState(); renderChatMsgs(true);
+  try {
+    const file = new File([blob], `glas_${Date.now()}.${ext}`, { type: blob.type || 'audio/webm' });
+    const url = await uploadImage(file, 'chat');
+    CHAT.msgs[ch] = CHAT.msgs[ch].filter(x => x !== tmp);
+    await chatSend({ body, audio_url: url, audio_sec: Math.round(dur * 10) / 10, ch });
+  } catch (e) { tmp._err = true; renderChatMsgs(); fail(e); }
+}
+const voiceHtml = (m) => m.audio_url ? `<div class="vm ${VPLAY.id === m.id ? 'on' : ''}" data-voice="${m.id}"><button type="button" class="vm-p" data-vplay="${m.id}" title="Pusti">${VPLAY.id === m.id && !VPLAY.el.paused ? '❚❚' : '▶'}</button><span class="vm-w"><span class="vm-bar"><i style="width:${VPLAY.id === m.id && VPLAY.el.duration ? (VPLAY.el.currentTime / VPLAY.el.duration * 100) : 0}%"></i></span><span class="vm-t">${fmtSec(m.audio_sec)}</span></span><button type="button" class="vm-s" data-vspeed title="Brzina">${VPLAY.rate}×</button></div>` : '';
+const VPLAY = { el: new Audio(), id: null, rate: 1 };
+VPLAY.el.preload = 'auto';
+function vplayUi() {
+  const box = document.querySelector(`.vm[data-voice="${VPLAY.id}"]`); if (!box) return; const a = VPLAY.el, m = chatFind(VPLAY.id);
+  box.classList.toggle('on', !a.paused); box.querySelector('.vm-p').textContent = a.paused ? '▶' : '❚❚';
+  const pct = a.duration && isFinite(a.duration) ? a.currentTime / a.duration * 100 : (m && m.audio_sec ? a.currentTime / m.audio_sec * 100 : 0);
+  box.querySelector('.vm-bar i').style.width = Math.min(100, pct) + '%';
+  box.querySelector('.vm-t').textContent = !a.paused || a.currentTime > 0 ? fmtSec(a.currentTime) : fmtSec(m && m.audio_sec);
+}
+['timeupdate', 'play', 'pause'].forEach(ev => VPLAY.el.addEventListener(ev, vplayUi));
+VPLAY.el.addEventListener('ended', () => { const id = VPLAY.id; VPLAY.el.currentTime = 0; vplayUi(); VPLAY.id = null; const b = document.querySelector(`.vm[data-voice="${id}"]`); if (b) { b.classList.remove('on'); b.querySelector('.vm-bar i').style.width = '0%'; } });
+function voicePlay(id) {
+  const m = chatFind(id); if (!m || !m.audio_url) return; const a = VPLAY.el;
+  if (VPLAY.id === id) { a.paused ? a.play().catch(() => {}) : a.pause(); return; }
+  const prev = VPLAY.id; a.pause(); VPLAY.id = id; a.src = m.audio_url; a.playbackRate = VPLAY.rate; a.currentTime = 0;
+  if (prev) { const b = document.querySelector(`.vm[data-voice="${prev}"]`); if (b) { b.classList.remove('on'); b.querySelector('.vm-p').textContent = '▶'; b.querySelector('.vm-bar i').style.width = '0%'; const pm = chatFind(prev); b.querySelector('.vm-t').textContent = fmtSec(pm && pm.audio_sec); } }
+  a.play().catch(() => toast('Ne mogu da pustim ovaj snimak na ovom uređaju'));
+}
+function voiceSpeed() { VPLAY.rate = VPLAY.rate === 1 ? 1.5 : VPLAY.rate === 1.5 ? 2 : 1; VPLAY.el.playbackRate = VPLAY.rate; document.querySelectorAll('.vm-s').forEach(b => { b.textContent = VPLAY.rate + '×'; }); }
+function chatFormState() { const f = $('cpForm'); if (f) f.classList.toggle('has-text', !!($('cpInput').value || '').trim() || !!CHAT.edit); }
+/* ================= HUDDLE: brzi pozivi (kao Slack huddle) =================
+   Glas (i po želji kamera ili deljenje ekrana) direktno između članova tima, WebRTC, šifrovano od uređaja do uređaja.
+   Signalizacija ide preko Supabase Realtime na tajnom kanalu koji vidi samo tim (h_rt_room). Soba = razgovor u chatu (Tim ili privatni). */
+const HUD = { secret: null, ch: null, ready: false, room: null, at: 0, local: null, camT: null, scrT: null, muted: false, peers: {}, rooms: {}, sig: '', ring: null, ringTimer: 0, stage: false, actx: null, levels: {}, lvTimer: 0, tx: null, needTap: false };
+const HUD_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }];
+const hudRoomTitle = (r) => (r === 'tim' ? 'Tim HARIZMA' : personName(chatOther(r)));
+const hudCanRoom = (r) => r === 'tim' || chatBase().includes(r);
+const hudOthers = (r) => Object.keys(HUD.rooms[r] || {}).filter(u => u !== who());
+const hudCanScreen = () => !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !/Android|iPhone|iPad/.test(navigator.userAgent);
+async function hudInit() {
+  ['hudBar', 'hudStage', 'hudRing', 'hudMedia'].forEach(id => { if (!$(id)) { const d = document.createElement('div'); d.id = id; d.className = id === 'hudBar' ? 'hud-bar' : id === 'hudStage' ? 'hud-stage' : id === 'hudRing' ? 'hud-ring' : 'hud-media'; document.body.appendChild(d); } });
+  if (!window.RTCPeerConnection || !navigator.mediaDevices) return;
+  try { const { data } = await sb.rpc('h_rt_room'); if (!data) return; HUD.secret = data; } catch (e) { return; }
+  HUD.tx = {
+    send: (payload) => { try { HUD.ch && HUD.ch.send({ type: 'broadcast', event: 'sig', payload }); } catch (e) {} },
+    track: (st) => { try { if (!HUD.ch || !HUD.ready) return; st ? HUD.ch.track(st) : HUD.ch.untrack(); } catch (e) {} },
+  };
+  HUD.ch = sb.channel('hud-' + HUD.secret, { config: { presence: { key: who() }, broadcast: { self: false } } })
+    .on('presence', { event: 'sync' }, () => { try { hudOnPresence(HUD.ch.presenceState()); } catch (e) {} })
+    .on('broadcast', { event: 'sig' }, ({ payload }) => hudSig(payload))
+    .subscribe((s) => { if (s === 'SUBSCRIBED') { HUD.ready = true; hudTrack(); } });
+  addEventListener('pagehide', () => { if (HUD.room) hudLeave(true); });
+}
+const hudSend = (to, t, d) => HUD.tx && HUD.tx.send({ from: who(), to, room: HUD.room, t, d });
+function hudTrack() { if (HUD.tx) HUD.tx.track(HUD.room ? { room: HUD.room, mic: !HUD.muted, cam: !!HUD.camT, scr: !!HUD.scrT, at: HUD.at } : null); }
+function hudOnPresence(st) {
+  const rooms = {};
+  Object.entries(st || {}).forEach(([u, arr]) => { const p = (arr || []).find(x => x && x.room); if (p && PEOPLE[u] && hudCanRoom(p.room)) (rooms[p.room] = rooms[p.room] || {})[u] = p; });
+  HUD.rooms = rooms;
+  if (HUD.room) {
+    const here = rooms[HUD.room] || {};
+    Object.keys(here).forEach(u => { if (u !== who() && !HUD.peers[u] && who() < u) hudPeer(u); });
+    Object.keys(HUD.peers).forEach(u => { if (!here[u] && HUD.peers[u].seen) hudDrop(u, true); else if (here[u]) HUD.peers[u].seen = true; });
+  }
+  if (HUD.ring && Date.now() - HUD.ring.at > 8000 && !hudOthers(HUD.ring.room).length) hudRingStop();
+  const sig = JSON.stringify(Object.fromEntries(Object.entries(rooms).map(([r, o]) => [r, Object.keys(o).sort()])));
+  renderHud();
+  if (sig !== HUD.sig) { HUD.sig = sig; if (CHAT.open && !isTaskCh(CHAT.ch)) { renderChatTop(); renderChatMsgs(chatNearBottom()); } if (CHAT.open) renderChatSide(); }
+}
+async function hudJoin(room) {
+  if (!HUD.tx) return toast('Pozivi trenutno nisu dostupni. Osveži CRM i probaj ponovo.', 4500);
+  if (!hudCanRoom(room)) return;
+  if (HUD.room === room) { HUD.stage = true; return renderHud(); }
+  if (HUD.room) await hudLeave(true);
+  if (VOICE.rec) voiceStop(false);
+  hudRingStop();
+  try { HUD.local = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false }); }
+  catch (e) { return toast('Za huddle treba mikrofon. Dozvoli mikrofon za ovaj sajt (ikonica levo od adrese) i probaj ponovo.', 6000); }
+  const starting = !hudOthers(room).length;
+  HUD.room = room; HUD.at = Date.now(); HUD.muted = false; HUD.stage = false;
+  hudLevels(); hudTrack(); renderHud();
+  try { sfx('delivered', 0.6); } catch (e) {}
+  if (starting) chatSend({ body: '📞 Huddle', kind: 'huddle', ch: room }).catch(() => {});
+  if (CHAT.open) renderChat();
+}
+async function hudLeave(silent) {
+  if (!HUD.room) return;
+  Object.keys(HUD.peers).forEach(u => { hudSend(u, 'bye'); hudDrop(u, true); });
+  [HUD.local, HUD.camT && { getTracks: () => [HUD.camT] }, HUD.scrT && { getTracks: () => [HUD.scrT] }].forEach(s => { try { s && s.getTracks().forEach(t => t.stop()); } catch (e) {} });
+  HUD.local = null; HUD.camT = null; HUD.scrT = null; HUD.room = null; HUD.stage = false; HUD.levels = {};
+  clearInterval(HUD.lvTimer); hudTrack(); renderHud();
+  if (!silent) { try { sfx('bye', 0.6); } catch (e) {} }
+  if (CHAT.open) renderChat();
+}
+function hudPeer(u) {
+  if (HUD.peers[u]) return HUD.peers[u];
+  const pc = new RTCPeerConnection({ iceServers: HUD_ICE });
+  const p = HUD.peers[u] = { u, pc, polite: who() > u, making: false, ignore: false, iceQ: [], stream: new MediaStream(), audioEl: null, vSender: null, state: 'new', seen: false };
+  if (HUD.local) HUD.local.getAudioTracks().forEach(t => pc.addTrack(t, HUD.local));
+  else pc.addTransceiver('audio', { direction: 'recvonly' });
+  const vt = HUD.scrT || HUD.camT; if (vt) p.vSender = pc.addTrack(vt, HUD.local || new MediaStream());
+  pc.onnegotiationneeded = async () => { try { p.making = true; await pc.setLocalDescription(); hudSend(u, 'sdp', pc.localDescription.toJSON ? pc.localDescription.toJSON() : pc.localDescription); } catch (e) { console.warn('huddle', e); } finally { p.making = false; } };
+  pc.onicecandidate = ({ candidate }) => { if (candidate) hudSend(u, 'ice', candidate.toJSON ? candidate.toJSON() : candidate); };
+  pc.ontrack = ({ track }) => {
+    if (!p.stream.getTracks().includes(track)) p.stream.addTrack(track);
+    track.onunmute = () => renderHud(); track.onmute = () => renderHud(); track.onended = () => { try { p.stream.removeTrack(track); } catch (e) {} renderHud(); };
+    if (track.kind === 'audio') hudAudio(p);
+    renderHud();
+  };
+  pc.onconnectionstatechange = () => {
+    const was = p.state; p.state = pc.connectionState;
+    if (p.state === 'connected' && was !== 'connected') { try { sfx('notif', 0.5); } catch (e) {} }
+    if (p.state === 'failed') { try { pc.restartIce(); } catch (e) {} }
+    renderHud();
+  };
+  return p;
+}
+function hudAudio(p) {
+  if (!p.audioEl) { p.audioEl = document.createElement('audio'); p.audioEl.autoplay = true; p.audioEl.setAttribute('playsinline', ''); $('hudMedia').appendChild(p.audioEl); }
+  p.audioEl.srcObject = p.stream;
+  p.audioEl.play().then(() => { HUD.needTap = false; }).catch(() => { HUD.needTap = true; renderHud(); });
+}
+async function hudSig(m) {
+  if (!m || m.to !== who() || !HUD.room || m.room !== HUD.room || !PEOPLE[m.from]) return;
+  if (m.t === 'bye') return hudDrop(m.from);
+  const p = hudPeer(m.from), pc = p.pc;
+  try {
+    if (m.t === 'sdp') {
+      const d = m.d, offer = d.type === 'offer', collision = offer && (p.making || pc.signalingState !== 'stable');
+      p.ignore = !p.polite && collision; if (p.ignore) return;
+      await pc.setRemoteDescription(d);
+      while (p.iceQ.length) { try { await pc.addIceCandidate(p.iceQ.shift()); } catch (e) {} }
+      if (offer) { await pc.setLocalDescription(); hudSend(m.from, 'sdp', pc.localDescription.toJSON ? pc.localDescription.toJSON() : pc.localDescription); }
+    } else if (m.t === 'ice') {
+      if (!pc.remoteDescription) p.iceQ.push(m.d);
+      else { try { await pc.addIceCandidate(m.d); } catch (e) { if (!p.ignore) console.warn('ice', e); } }
+    }
+  } catch (e) { console.warn('huddle signal', e); }
+}
+function hudDrop(u, silent) {
+  const p = HUD.peers[u]; if (!p) return;
+  try { p.pc.close(); } catch (e) {} if (p.audioEl) { p.audioEl.srcObject = null; p.audioEl.remove(); }
+  delete HUD.peers[u]; delete HUD.levels[u];
+  if (!silent) { try { sfx('bye', 0.4); } catch (e) {} }
+  renderHud();
+}
+function hudMute() { HUD.muted = !HUD.muted; if (HUD.local) HUD.local.getAudioTracks().forEach(t => { t.enabled = !HUD.muted; }); hudTrack(); renderHud(); }
+function hudSetVideo(track) { Object.values(HUD.peers).forEach(p => { if (p.vSender) p.vSender.replaceTrack(track).catch(() => {}); else if (track) p.vSender = p.pc.addTrack(track, HUD.local || new MediaStream()); }); }
+async function hudCam() {
+  if (HUD.camT) { HUD.camT.stop(); HUD.camT = null; hudSetVideo(HUD.scrT || null); }
+  else {
+    try { const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24 } } }); HUD.camT = s.getVideoTracks()[0]; }
+    catch (e) { return toast('Kamera nije dozvoljena za ovaj sajt', 4000); }
+    if (!HUD.scrT) hudSetVideo(HUD.camT); HUD.stage = true;
+  }
+  hudTrack(); renderHud();
+}
+async function hudScreen() {
+  if (HUD.scrT) { HUD.scrT.stop(); HUD.scrT = null; hudSetVideo(HUD.camT || null); hudTrack(); return renderHud(); }
+  if (!hudCanScreen()) return toast('Deljenje ekrana radi na računaru');
+  try {
+    const s = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false }); HUD.scrT = s.getVideoTracks()[0];
+    HUD.scrT.onended = () => { HUD.scrT = null; hudSetVideo(HUD.camT || null); hudTrack(); renderHud(); };
+    hudSetVideo(HUD.scrT); HUD.stage = true;
+  } catch (e) { return; }
+  hudTrack(); renderHud();
+}
+/* ko priča: zelena ivica oko avatara */
+function hudLevels() {
+  try { HUD.actx = HUD.actx || new (window.AudioContext || window.webkitAudioContext)(); if (HUD.actx.state === 'suspended') HUD.actx.resume(); } catch (e) { HUD.actx = null; }
+  clearInterval(HUD.lvTimer);
+  HUD.lvTimer = setInterval(() => {
+    const t = document.querySelector('#hudBar .hud-time'); if (t) t.textContent = fmtSec((Date.now() - HUD.at) / 1000);
+    if (!HUD.actx || !HUD.room) return;
+    const srcs = [[who(), HUD.local], ...Object.values(HUD.peers).map(p => [p.u, p.stream])];
+    srcs.forEach(([u, st]) => {
+      const tr = st && st.getAudioTracks()[0]; if (!tr) return;
+      let a = HUD.levels[u];
+      if (!a || a.tid !== tr.id) { try { const src = HUD.actx.createMediaStreamSource(new MediaStream([tr])), an = HUD.actx.createAnalyser(); an.fftSize = 512; src.connect(an); a = HUD.levels[u] = { tid: tr.id, an }; } catch (e) { return; } }
+      const buf = new Uint8Array(a.an.fftSize); a.an.getByteTimeDomainData(buf); let mx = 0; for (const v of buf) mx = Math.max(mx, Math.abs(v - 128));
+      const on = mx > 12 && !(u === who() && HUD.muted);
+      document.querySelectorAll(`[data-hudu="${u}"]`).forEach(el => el.classList.toggle('speak', on));
+    });
+  }, 160);
+}
+/* zvono kad te neko zove ili pokrene huddle */
+function hudRing(room, from, quiet) {
+  if (HUD.room === room || (HUD.ring && HUD.ring.room === room)) return;
+  if (HUD.room) { HUD.ring = { room, from, at: Date.now(), quiet: true }; return renderHudRing(); }
+  HUD.ring = { room, from, at: Date.now(), quiet: !!quiet };
+  renderHudRing();
+  if (quiet) return;
+  const ding = () => { try { sfx('notif', 1.3); } catch (e) {} try { navigator.vibrate && navigator.vibrate([180, 90, 180]); } catch (e) {} };
+  ding(); clearInterval(HUD.ringTimer);
+  HUD.ringTimer = setInterval(() => { if (!HUD.ring || Date.now() - HUD.ring.at > 35000) return hudRingStop(); ding(); }, 2600);
+}
+function hudRingStop() { clearInterval(HUD.ringTimer); HUD.ring = null; renderHudRing(); }
+function renderHudRing() {
+  const el = $('hudRing'); if (!el) return; const r = HUD.ring;
+  if (!r) { el.classList.remove('in'); return; }
+  const dm = r.room !== 'tim', f = PEOPLE[r.from]?.f;
+  el.innerHTML = `<div class="hr-av">${chatAv(r.from || 'system')}<i></i></div><div class="hr-t"><b>${r.from ? esc(personName(r.from)) : 'Huddle'} ${dm ? 'te zove' : (f ? 'je pokrenula huddle' : 'je pokrenuo huddle')}</b><small>${dm ? 'privatni huddle' : 'Tim HARIZMA'}${HUD.room ? ' · već si u drugom huddle-u' : ''}</small></div><button type="button" class="hr-no" data-hudno title="Odbij">✕</button><button type="button" class="hr-yes" data-hudjoin="${r.room}">📞 Pridruži se</button>`;
+  void el.offsetWidth; el.classList.add('in');
+}
+const HUD_IC = {
+  mic: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5"/></svg>',
+  micOff: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 9.3V5a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1M5 10a7 7 0 0 0 11.9 5M19 10a7 7 0 0 1-.3 2M12 17v5M3 3l18 18"/></svg>',
+  cam: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></svg>',
+  scr: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M9 10l3-3 3 3M12 7v6"/></svg>',
+  big: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>',
+  small: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>',
+  end: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-3.3 0-6.3 1-8.6 2.7-.6.4-.7 1.3-.3 1.9l1.5 2c.4.5 1.1.7 1.7.4l2.6-1.2c.5-.2.8-.8.7-1.3l-.3-1.7c1.7-.5 3.7-.5 5.4 0l-.3 1.7c-.1.5.2 1.1.7 1.3l2.6 1.2c.6.3 1.3.1 1.7-.4l1.5-2c.4-.6.3-1.5-.3-1.9C18.3 10 15.3 9 12 9z"/></svg>',
+  phone: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>',
+};
+function hudCtlHtml(big) {
+  return `<button type="button" class="hc ${HUD.muted ? 'off' : ''}" data-hudmute title="${HUD.muted ? 'Uključi mikrofon' : 'Utišaj mikrofon'}">${HUD.muted ? HUD_IC.micOff : HUD_IC.mic}</button>
+    <button type="button" class="hc ${HUD.camT ? 'on' : ''}" data-hudcam title="Kamera">${HUD_IC.cam}</button>
+    ${hudCanScreen() ? `<button type="button" class="hc ${HUD.scrT ? 'on' : ''}" data-hudscr title="Podeli ekran">${HUD_IC.scr}</button>` : ''}
+    <button type="button" class="hc" data-hudstage title="${big ? 'Smanji' : 'Prikaži veliko'}">${big ? HUD_IC.small : HUD_IC.big}</button>
+    <button type="button" class="hc end" data-hudleave title="Izađi iz huddle-a">${HUD_IC.end}</button>`;
+}
+function hudPeople() { const me = who(); return [me, ...Object.keys(HUD.rooms[HUD.room] || {}).filter(u => u !== me), ...Object.keys(HUD.peers).filter(u => !(HUD.rooms[HUD.room] || {})[u])].filter((u, i, a) => a.indexOf(u) === i); }
+function hudPState(u) { if (u === who()) return { mic: !HUD.muted, cam: !!HUD.camT, scr: !!HUD.scrT }; return (HUD.rooms[HUD.room] || {})[u] || {}; }
+function renderHud() {
+  const bar = $('hudBar'), stage = $('hudStage'); if (!bar) return;
+  document.body.classList.toggle('in-huddle', !!HUD.room); document.body.classList.toggle('hud-big', !!HUD.room && HUD.stage);
+  if (!HUD.room) { bar.classList.remove('in'); stage.classList.remove('open'); stage.innerHTML = ''; bar.innerHTML = ''; return; }
+  const ppl = hudPeople(), conn = Object.values(HUD.peers).some(p => p.state === 'connected'), waiting = ppl.length < 2;
+  bar.innerHTML = `<div class="hud-info"><span class="hud-live ${conn ? 'ok' : ''}"></span><span class="hud-tt"><b>${esc(hudRoomTitle(HUD.room))}</b><small>${waiting ? 'čeka se da se neko pridruži…' : conn ? 'huddle · <span class="hud-time">' + fmtSec((Date.now() - HUD.at) / 1000) + '</span>' : 'povezivanje…'}</small></span></div>
+    <div class="hud-ppl">${ppl.map(u => { const s = hudPState(u); return `<span class="hud-p" data-hudu="${u}" title="${esc(personName(u))}">${chatAv(u)}${s.mic === false ? '<i class="hud-mut">' + HUD_IC.micOff + '</i>' : ''}</span>`; }).join('')}</div>
+    ${HUD.needTap ? '<button type="button" class="hud-tap" data-hudtap>🔊 Dodirni da čuješ</button>' : ''}
+    <div class="hud-ctl">${hudCtlHtml(false)}</div>`;
+  bar.classList.add('in');
+  if (!HUD.stage) { stage.classList.remove('open'); stage.innerHTML = ''; return; }
+  stage.innerHTML = `<div class="hs-top"><b>${esc(hudRoomTitle(HUD.room))}</b><small>${ppl.length} ${bpl(ppl.length, 'osoba', 'osobe', 'osoba')}</small></div><div class="hs-grid n${Math.min(ppl.length, 4)}">${ppl.map(u => { const s = hudPState(u), vid = (s.cam || s.scr) && hudVideoTrack(u); return `<div class="hs-tile ${vid ? 'vid' : ''} ${s.scr ? 'scr' : ''}" data-hudu="${u}">${vid ? `<video autoplay playsinline ${u === who() ? 'muted' : ''} data-hudv="${u}"></video>` : `<div class="hs-av">${chatAv(u)}</div>`}<span class="hs-name">${esc(u === who() ? 'Ti' : personName(u))}${s.mic === false ? ' · utišan' : ''}</span></div>`; }).join('')}</div><div class="hs-ctl">${hudCtlHtml(true)}</div>`;
+  stage.classList.add('open');
+  stage.querySelectorAll('video[data-hudv]').forEach(v => { const u = v.dataset.hudv, tr = hudVideoTrack(u); if (tr) { v.srcObject = new MediaStream([tr]); v.play().catch(() => {}); } });
+}
+function hudVideoTrack(u) { if (u === who()) return HUD.scrT || HUD.camT || null; const p = HUD.peers[u]; return p ? p.stream.getVideoTracks().find(t => t.readyState === 'live') || null : null; }
 /* ---- odgovor na poruku (reply) ---- */
 const CHAT_DAT = { konstantin: 'Konstantinu', stasa: 'Staši', marjan: 'Marjanu' };
 function chatFind(id) { for (const a of Object.values(CHAT.msgs)) { const m = a.find(x => x.id === id); if (m) return m; } return CHAT.res[id] || null; }
-const chatSnip = (m, k = 90) => m.body ? tcut(m.body, k) : (/\.gif(\?|$)/i.test(m.image_url || '') || /giphy/.test(m.image_url || '') ? 'GIF' : '📷 Slika');
+const chatSnip = (m, k = 90) => m.audio_url && !m.body ? '🎤 Glasovna poruka' : m.kind === 'huddle' ? '📞 Huddle' : m.body ? tcut(m.body, k) : (/\.gif(\?|$)/i.test(m.image_url || '') || /giphy/.test(m.image_url || '') ? 'GIF' : '📷 Slika');
 function chatQuoteHtml(id) {
   const o = chatFind(id);
   if (!o) { CHAT.need.add(id); return `<button type="button" class="cm-q" data-qgo="${id}"><span>učitava se…</span></button>`; }
@@ -4551,11 +4954,11 @@ function chatEditStart(id) {
   const m = chatFind(id); if (!m || m._tmp || m.deleted_at || m.author !== who()) return;
   chatActClose(); delete CHAT.reply[m.channel];
   const inp = $('cpInput'); CHAT.edit = { id, ch: m.channel, draft: CHAT.edit ? CHAT.edit.draft : inp.value };
-  inp.value = m.body || ''; chatGrow(); renderChatReply(); inp.focus(); try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
+  inp.value = m.body || ''; chatGrow(); renderChatReply(); chatFormState(); inp.focus(); try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
   document.querySelectorAll('.cm.editing').forEach(x => x.classList.remove('editing')); const row = $('cpMsgs').querySelector(`[data-mid="${id}"]`); if (row) row.classList.add('editing');
 }
 function chatEditCancel() {
-  const e = CHAT.edit; CHAT.edit = null; const inp = $('cpInput'); if (e) { inp.value = e.draft || ''; chatGrow(); }
+  const e = CHAT.edit; CHAT.edit = null; const inp = $('cpInput'); if (e) { inp.value = e.draft || ''; chatGrow(); } chatFormState();
   document.querySelectorAll('.cm.editing').forEach(x => x.classList.remove('editing')); renderChatReply();
 }
 async function chatEditSave() {
@@ -4657,16 +5060,38 @@ function chatTouchBind(box) {
 /* ---- događaji ---- */
 function chatBind() {
   $('chatTop').addEventListener('click', () => (CHAT.open ? closeChat() : openChat()));
+  $('chatOv').addEventListener('click', () => closeChat());
+  document.addEventListener('click', (e) => {
+    const t = e.target; if (!t.closest) return;
+    const hj = t.closest('[data-hudjoin]'); if (hj) { e.stopPropagation(); return hudJoin(hj.dataset.hudjoin); }
+    if (t.closest('[data-hudno]')) return hudRingStop();
+    if (t.closest('[data-hudmute]')) return hudMute();
+    if (t.closest('[data-hudcam]')) return hudCam();
+    if (t.closest('[data-hudscr]')) return hudScreen();
+    if (t.closest('[data-hudstage]')) { HUD.stage = !HUD.stage; return renderHud(); }
+    if (t.closest('[data-hudleave]')) return hudLeave();
+    if (t.closest('[data-hudtap]')) { Object.values(HUD.peers).forEach(p => p.audioEl && p.audioEl.play().catch(() => {})); HUD.needTap = false; return renderHud(); }
+    if (t.closest('#hudBar .hud-info')) { HUD.stage = true; return renderHud(); }
+  }, true);
   $('chatFab').addEventListener('click', () => (CHAT.open ? closeChat() : openChat()));
   $('navChat').addEventListener('click', () => openChat());
   $('chatPanel').addEventListener('click', (e) => {
     const t = e.target;
     if (t.closest('[data-chatclose]')) return closeChat();
     if (t.closest('[data-chatback]')) { CHAT.list = true; chatGifClose(); return renderChat(); }
+    if (t.closest('[data-tdback]')) { if (CHAT.edit) chatEditCancel(); CHAT.ch = CHAT.prevCh && !isTaskCh(CHAT.prevCh) ? CHAT.prevCh : 'tim'; CHAT.list = isChatMobile(); renderChat(true); if (!CHAT.list) chatMarkRead(CHAT.ch); return; }
+    if (t.closest('[data-tdtoggle]')) { const tk = taskOfCh(CHAT.ch); if (tk) taskToggle(`${tk.src.k}:${tk.x.id}`).then(() => { if (CHAT.open) { renderChat(); setTimeout(() => taskAuditLoad(CHAT.ch), 900); } }); return; }
+    if (t.closest('[data-tdedit]')) { const tk = taskOfCh(CHAT.ch); if (tk) openTaskModal(tk.src.k, tk.x.id); return; }
+    if (t.closest('[data-tdopen]')) { const tk = taskOfCh(CHAT.ch); if (tk) { closeChat(); openTaskItem(tk.src.k, tk.x.id); } return; }
     const c = t.closest('[data-chat]'); if (c) return chatSelect(c.dataset.chat);
     const g = t.closest('[data-chatgo]'); if (g) { const [ch, id] = g.dataset.chatgo.split('|'); return chatJump(ch, id); }
     if (t.closest('[data-chatolder]')) return chatOlder(CHAT.ch);
     const mt = t.closest('[data-ment]'); if (mt) return chatMentionPick(mt.dataset.ment);
+    if (t.closest('#cpMic')) return voiceStart();
+    if (t.closest('[data-vcancel]')) return voiceStop(false);
+    if (t.closest('[data-vsend]')) return voiceStop(true);
+    const vp = t.closest('[data-vplay]'); if (vp) return voicePlay(vp.dataset.vplay);
+    if (t.closest('[data-vspeed]')) return voiceSpeed();
     const rxb = t.closest('[data-rx]'); if (rxb) { const [id, e_] = rxb.dataset.rx.split('|'); return chatReact(id, e_); }
     const rp = t.closest('[data-reply]'); if (rp) return chatReplyTo(rp.dataset.reply);
     if (t.closest('[data-replyx]')) { delete CHAT.reply[CHAT.ch]; renderChatReply(); return $('cpInput').focus(); }
@@ -4700,7 +5125,7 @@ function chatBind() {
   $('cpMsgs').addEventListener('scroll', () => { if (CHAT.act && !isChatMobile()) chatActClose(); }, { passive: true });
   chatTouchBind($('cpMsgs'));
   const inp = $('cpInput');
-  inp.addEventListener('input', () => { chatGrow(); chatMentionBox(); if (inp.value.trim()) chatTypingSend(); });
+  inp.addEventListener('input', () => { chatGrow(); chatMentionBox(); chatFormState(); if (inp.value.trim()) chatTypingSend(); });
   inp.addEventListener('click', chatMentionBox);
   inp.addEventListener('keydown', (e) => {
     const box = $('cpMention'), open = box.style.display !== 'none' && box.children.length;
@@ -4739,6 +5164,7 @@ function crmGo(r) {
   ['notifModal', 'pushModal'].forEach(id => { const m = $(id); if (m) m.classList.remove('open'); });
   if (r.startsWith('tab:')) return setTab(r.slice(4));
   if (r.startsWith('chat:')) return openChat(r.slice(5));
+  if (r.startsWith('huddle:')) { const room = r.slice(7); openChat(room); if (HUD.room !== room) { HUD.ring = null; hudRing(room, null, true); } return; }
   if (r.startsWith('ref:')) r = r.slice(4);
   const tabFor = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' };
   const k = r.split(':')[0]; if (tabFor[k] && state.tab !== tabFor[k]) setTab(tabFor[k]);
@@ -4763,6 +5189,7 @@ async function enterApp(user, restored, pre) {
   chgInit(); renderTray(); chgEnter(state.tab); renderChgBadges(); startLive();
   pushInit();
   chatInit();
+  hudInit();
   { const m = location.hash.match(/^#go=(.+)$/); if (m) { history.replaceState(null, '', location.pathname + location.search); setTimeout(() => crmGo(decodeURIComponent(m[1])), 300); } }
   botStart();
   setInterval(renderTray, 60000);

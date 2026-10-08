@@ -12,10 +12,11 @@ self.addEventListener('push', (e) => {
   e.waitUntil((async () => {
     // chat: ako je CRM upravo otvoren i ispred tebe, poruku već vidiš u aplikaciji, pa obaveštenje stiže tiho i samo se skloni
     let quiet = false;
-    if (d.kind === 'chat') { try { const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true }); quiet = wins.some(c => c.visibilityState === 'visible' && c.focused); } catch (x) {} }
+    if (d.kind === 'chat' || d.kind === 'call') { try { const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true }); quiet = wins.some(c => c.visibilityState === 'visible' && c.focused); } catch (x) {} }
+    const call = d.kind === 'call' && !quiet;
     await self.registration.showNotification(d.title || 'HARIZMA CRM', {
-      body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag && !quiet, silent: quiet,
-      icon: 'icon-192.png', badge: 'badge-96.png', vibrate: quiet ? undefined : [60, 40, 60],
+      body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag && !quiet, silent: quiet, requireInteraction: call,
+      icon: 'icon-192.png', badge: 'badge-96.png', vibrate: quiet ? undefined : call ? [300, 150, 300, 150, 300, 150, 300] : [60, 40, 60],
       timestamp: d.ts || Date.now(), data: { go: d.go || '' },
     });
     if (quiet && d.tag) { await new Promise(r => setTimeout(r, 2500)); try { (await self.registration.getNotifications({ tag: d.tag })).forEach(n => n.close()); } catch (x) {} }

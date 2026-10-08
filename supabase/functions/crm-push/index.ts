@@ -26,14 +26,14 @@ const pl = (n: number, a: string, b: string, c: string) => { const m10 = n % 10,
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } });
 
-type Msg = { title: string; body: string; tag?: string; go?: string; kind?: string };
+type Msg = { title: string; body: string; tag?: string; go?: string; kind?: string; ttl?: number };
 async function pushTo(users: string[], kind: string, msg: Msg) {
   users = [...new Set(users)].filter(u => PEOPLE[u]); if (!users.length) return { sent: 0, subs: 0 };
   const { data: subs } = await db.from('h_push_subs').select('*').in('username', users);
   let sent = 0; const errs: string[] = [];
   await Promise.all((subs || []).filter((s: any) => kind === 'test' || s.prefs?.[kind] !== false).map(async (s: any) => {
     try {
-      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ ...msg, ts: Date.now() }), { TTL: 60 * 60 * 24, urgency: 'high' });
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ ...msg, ttl: undefined, ts: Date.now() }), { TTL: msg.ttl || 60 * 60 * 24, urgency: 'high' });
       sent++; await db.from('h_push_subs').update({ last_ok_at: new Date().toISOString(), fails: 0 }).eq('id', s.id);
     } catch (e: any) {
       const code = e?.statusCode; errs.push(String(code || e?.message || e));
@@ -75,17 +75,44 @@ async function onAudit(a: any) {
   return out;
 }
 
-// tim chat: obaveštenje samo onome ko je označen (@ime ili @svi)
+// tim chat: obaveštenje samo onome ko je označen (@ime ili @svi); huddle poziv svima u razgovoru;
+// komentar na zadatku: označenima + onima koji prate zadatak (zaduženi, ko je dodelio, ko je već komentarisao)
+const snip = (m: any) => m.body ? (m.audio_url ? '🎤 ' : '') + cut(m.body, 180) : m.audio_url ? `🎤 Glasovna poruka${m.audio_sec ? ' · ' + Math.max(1, Math.round(m.audio_sec)) + ' s' : ''}` : (m.image_url && /\.gif(\?|$)|giphy/i.test(m.image_url) ? 'GIF' : '📷 Slika');
 async function onChat(m: any) {
-  const members: string[] = m.channel === 'tim' ? USERS : String(m.channel || '').split(':').slice(1);
+  if (!PEOPLE[m.author] || m.deleted_at) return { sent: 0 };
   const ment: string[] = Array.isArray(m.mentions) ? m.mentions : [];
+  const ch = String(m.channel || '');
+  if (ch.startsWith('task:')) {
+    const [, tbl, id] = ch.split(':');
+    if (!NAME[tbl]) return { sent: 0 };
+    const { data: row } = await db.from(tbl).select('*').eq('id', id).maybeSingle();
+    const { data: prev } = await db.from('h_chat_messages').select('author').eq('channel', ch).neq('id', m.id).limit(500);
+    const label = row ? cut(row.task_note && tbl !== 'h_notes' ? row.task_note : NAME[tbl](row), 70) : 'zadatak';
+    const watch = new Set<string>([...(Array.isArray(row?.assignees) ? row.assignees : []), row?.task_by, ...(prev || []).map((r: any) => r.author)].filter((u) => u && PEOPLE[u]));
+    const mentioned = (ment.includes('svi') ? USERS : ment.filter((u) => PEOPLE[u])).filter((u) => u !== m.author);
+    const watchers = [...watch].filter((u) => u !== m.author && !mentioned.includes(u));
+    const msg = (t: string) => ({ title: t, body: snip(m), tag: `chat-${ch}`, go: `chat:${ch}`, kind: 'chat' });
+    const out: any[] = [];
+    if (mentioned.length) out.push(await pushTo(mentioned, 'chat', msg(`💬 ${pname(m.author)} te ${vb(m.author, 'pominje', 'pominje')} · ${label}`)));
+    if (watchers.length) out.push(await pushTo(watchers, 'comments', msg(`💬 ${pname(m.author)} · ${label}`)));
+    return { out };
+  }
+  const members: string[] = ch === 'tim' ? USERS : ch.split(':').slice(1);
+  if (!members.includes(m.author)) return { sent: 0 };
+  const dm = ch !== 'tim';
+  if (m.kind === 'huddle') {
+    const to = members.filter((u) => u !== m.author);
+    return await pushTo(to, 'calls', {
+      title: dm ? `📞 ${pname(m.author)} te zove` : `📞 ${pname(m.author)} je ${vb(m.author, 'pokrenuo', 'pokrenula')} huddle`,
+      body: dm ? 'Huddle poziv u CRM-u · dodirni da se javiš' : 'Tim HARIZMA · dodirni da se pridružiš',
+      tag: `huddle-${ch}`, go: `huddle:${ch}`, kind: 'call', ttl: 90,
+    });
+  }
   const to = (ment.includes('svi') ? members : ment.filter((u) => members.includes(u))).filter((u) => u !== m.author);
-  if (!to.length || !PEOPLE[m.author]) return { sent: 0 };
-  const dm = m.channel !== 'tim';
+  if (!to.length) return { sent: 0 };
   return await pushTo(to, 'chat', {
     title: dm ? `💬 ${pname(m.author)} ti piše` : `💬 ${pname(m.author)} te ${vb(m.author, 'pominje', 'pominje')} u Tim chatu`,
-    body: m.body ? cut(m.body, 180) : (m.image_url && /\.gif(\?|$)/i.test(m.image_url) ? 'GIF' : '📷 Slika'),
-    tag: `chat-${m.channel}`, go: `chat:${m.channel}`, kind: 'chat',
+    body: snip(m), tag: `chat-${ch}`, go: `chat:${ch}`, kind: 'chat',
   });
 }
 
