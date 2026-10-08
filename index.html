@@ -1477,8 +1477,8 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
 .cm-tools button{width:28px;height:28px;border-radius:50%;border:0;background:transparent;color:var(--muted);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .cm-tools button:hover{background:var(--gold-wash-2);color:var(--ink)}
 .cm.acting .cm-b{box-shadow:0 0 0 2px #C9A96E}
-.cm::before{content:"↩";position:absolute;left:-36px;top:50%;width:28px;height:28px;margin-top:-14px;border-radius:50%;background:var(--gold-wash-2);color:#5b4313;display:flex;align-items:center;justify-content:center;font-size:15px;opacity:0;transform:scale(.5);transition:opacity .15s,transform .15s;pointer-events:none}
-.cm.swipe-ok::before{opacity:1;transform:none;background:#f2dfb5}
+.cm::before{content:"↩";position:absolute;left:-40px;top:50%;width:30px;height:30px;margin-top:-15px;border-radius:50%;background:var(--gold-wash-2);color:#5b4313;display:flex;align-items:center;justify-content:center;font-size:16px;opacity:var(--sw,0);transform:scale(calc(.4 + var(--sw,0) * .6));pointer-events:none}
+.cm.swipe-ok::before{background:#C9A96E;color:#1B2620}
 .cm-q{display:flex;align-items:center;gap:8px;width:100%;min-width:150px;margin:2px 0 5px;padding:5px 8px;border:0;border-left:3px solid #7E8C74;border-radius:8px;background:rgba(27,38,32,.055);color:inherit;font:inherit;text-align:left;cursor:pointer}
 .cm-q:hover{background:rgba(27,38,32,.09)}
 .cm-q.stasa{border-left-color:#d77a98}.cm-q.marjan{border-left-color:#6c9be0}.cm-q.konstantin{border-left-color:#7E8C74}
@@ -1691,6 +1691,32 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
   body.hud-big .hud-bar{display:none}
   .cp-hud span{display:none}.cp-hud{padding:0 10px;max-width:none}
 }
+/* ko je kad bio aktivan */
+.team-pres{position:relative;flex:none}
+.tmp-avs{display:flex;align-items:center;border:0;background:none;padding:2px 4px;cursor:pointer}
+.tmp-avs .tmp-av+.tmp-av{margin-left:-7px}
+.tmp-av{position:relative;display:inline-flex;flex:none}
+.tmp-av .n-av{width:30px;height:30px;font-size:14px;border-radius:50%;margin:0;transform:none;box-shadow:0 0 0 2px #1B2620;position:relative}
+.tmp-av .on-dot{display:none}
+.tmp-av::after{content:"";position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-radius:50%;background:#7d867c;box-shadow:0 0 0 2px #1B2620;z-index:1}
+.tmp-av.on::after{background:#58c26a}.tmp-av.recent::after{background:#C9A96E}
+.tmp-pop{position:absolute;right:0;top:calc(100% + 10px);width:320px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-lg);padding:8px;display:none;z-index:72}
+.tmp-pop.open{display:block;animation:pop .2s var(--ease)}
+.tmp-h,.nd-tl{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:6px 8px 2px}
+.tmp-row{display:flex;align-items:center;gap:10px;padding:8px}
+.tmp-pop .tmp-av .n-av{box-shadow:0 0 0 2px var(--surface)}.tmp-pop .tmp-av::after{box-shadow:0 0 0 2px var(--surface)}
+.tmp-row .tmp-av .n-av{width:36px;height:36px;font-size:17px}
+.tmp-t{flex:1;min-width:0;display:flex;flex-direction:column}.tmp-t b{font-size:14px}.tmp-t small{font-size:12px;color:var(--muted)}
+.tmp-b{flex:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:14px}
+.tmp-b:hover{border-color:#C9A96E}
+.nd-team{margin:0 16px 10px;padding:4px;border-radius:14px;background:rgba(232,228,217,.07)}
+.nd-team .nd-tl{color:#8fa08b}
+.nd-team .tmp-t b{color:#E8E4D9}.nd-team .tmp-t small{color:#aab8a6}
+.nd-team .tmp-b{background:rgba(232,228,217,.1);border-color:rgba(232,228,217,.2);color:#E8E4D9}
+.cl-seen{font-style:normal;font-weight:500;font-size:11px;color:#8fa08b;margin-left:3px}.cl-seen.recent{color:#d8c08f}
+.cp-mention button .mb-seen{margin-left:auto;padding-left:12px;font-size:11.5px;color:var(--muted)}
+.td-seen{font-weight:500;font-size:11.5px;color:var(--muted);margin-left:2px}.td-seen.on{color:#2f6b3a}.td-seen.recent{color:#a0700f}
+@media (max-width:980px){.team-pres{display:none}}
 </style>
 </head>
 <body>
@@ -1739,6 +1765,7 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
     <button class="cmd-filter" id="cmdFilter" type="button" style="display:none"></button>
     <button class="icon-btn cmd-mobile" id="cmdBtnM" type="button" title="Pretraga"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
     <div class="top-right">
+      <div class="team-pres" id="teamPres"><button type="button" class="tmp-avs" title="Tim: ko je kad bio aktivan"></button><div class="tmp-pop"></div></div>
       <button class="chat-top" id="chatTop" type="button" title="Tim chat (taster C)" aria-label="Tim chat"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg><span class="ct-l">Chat</span><span class="ct-n" id="chatTopBadge" style="display:none"></span></button>
       <div class="bell-wrap">
         <button class="icon-btn bell" id="bellBtn" title="Obaveštenja"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="bell-n" id="bellN" style="display:none"></span><span class="bell-zz" id="bellZz" style="display:none">zz</span></button>
@@ -2445,6 +2472,7 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
   </div>
   <div class="nd-search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="navQ" placeholder="Pretraži sekcije, kupce, porudžbine…" autocomplete="off"></div>
   <button class="nd-chat" id="navChat" type="button"><svg class="cf-ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg><span><b>Tim chat</b><small>grupa i privatne poruke</small></span><span class="nd-cn" id="navChatBadge" style="display:none"></span></button>
+  <div class="nd-team" id="navTeam"></div>
   <nav class="nd-list" id="navList"></nav>
   <div class="nd-foot">
     <div class="select-wrap nd-proj"><select id="navProj"><option value="harizma">HARIZMA</option><option value="kgen">KGEN (uskoro)</option><option value="potkovice">POTKOVICE (uskoro)</option><option value="admotive">ADMOTIVE (uskoro)</option></select></div>
@@ -2577,8 +2605,8 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610081132"></script>
-<script>window.HTML_BUILD="202610081132";</script>
-<script src="app.js?v=202610081132"></script>
+<script src="config.js?v=202610081148"></script>
+<script>window.HTML_BUILD="202610081148";</script>
+<script src="app.js?v=202610081148"></script>
 </body>
 </html>

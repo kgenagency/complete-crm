@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610081132';
+const APP_BUILD = '202610081148';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -1035,7 +1035,7 @@ function tkRow(t, i) {
     <button class="tk-check" data-tkdone="${src.k}:${x.id}" title="${t.done ? 'Vrati u otvorene' : 'Gotovo'}">✓</button>
     <div class="tk-main"><div class="tk-t">${esc(x.task_note && src.k !== 'note' ? x.task_note : src.title(x))}</div>${src.k !== 'note' ? `<button type="button" class="tk-ref" data-tkitem="${src.k}:${x.id}" title="Otvori stavku">${src.ic} ${esc(src.title(x))} ↗</button>` : ''}
       <div class="tk-s"><span class="tk-sec">${src.ic} ${esc(t.sec)}</span>${src.sub(x) ? `<span>${esc(src.sub(x))}</span>` : ''}${info}</div></div>
-    <div class="tk-side">${taskCmChip(src, x)}${d ? `<span class="tk-due ${d.level}">⏱ ${d.txt}</span>` : ''}<span class="tk-avs">${t.as.map(a => `<span class="n-av ${PEOPLE[a] ? a : 'system'}" title="${esc(personName(a))}">${esc(personName(a).charAt(0))}</span>`).join('')}</span><button class="tk-edit" data-tkedit="${src.k}:${x.id}" title="Zaduženi i rok">👤</button></div>
+    <div class="tk-side">${taskCmChip(src, x)}${d ? `<span class="tk-due ${d.level}">⏱ ${d.txt}</span>` : ''}<span class="tk-avs">${t.as.map(a => `<span class="n-av ${PEOPLE[a] ? a : 'system'}" title="${esc(personName(a) + (a !== who() ? ' · ' + seenText(a) : ''))}">${esc(personName(a).charAt(0))}</span>`).join('')}</span><button class="tk-edit" data-tkedit="${src.k}:${x.id}" title="Zaduženi i rok">👤</button></div>
   </div>`;
 }
 const TAB_SEC = { notes: 'Ostalo', orders: 'Porudžbine', customers: 'Kupci', products: 'Garderoba', returns: 'Povrati', promos: 'Promocije', posts: 'Objave + reklame', packaging: 'Pakovanje', site: 'Sajt', story: 'Brand story', ads: 'Reklame' };
@@ -3494,6 +3494,7 @@ const BOT_FAQ = [
   { g: [['backup', 'rezerv', 'sigurn', 'bezbed']], a: 'Podaci se čuvaju zauvek: obrisano ide u arhivu, svaka promena se beleži, a svake noći u 03:30 pravi se rezervna kopija cele baze na GitHub-u.', b: [['Istorija', 'tab:history']] },
   { g: [['istorij', 'prekretnic', 'dogadja', 'vremensk']], a: 'Istorija je vremenska linija svega. Važan događaj (lansiranje, nova kolekcija…) dodaješ dugmetom <b>Zabeleži događaj</b>.', b: [['Zabeleži događaj', 'act:Zabeleži događaj u istoriji'], ['Istorija', 'tab:history']] },
   { g: [['obavestenj', 'notifikac', 'push', 'na telefon', 'stize poruka', 'stizu poruke']], a: 'CRM može da šalje <b>obaveštenja na telefon i računar</b>, i kad je zatvoren: kad ti neko dodeli zadatak, kad neko završi zadatak koji si dodelio/la, nova porudžbina, nova prijava povrata i jutarnji podsetnik u 8h. Uključuješ ih na svakom uređaju posebno: <b>zvonce gore → Obaveštenja na ovom uređaju → Uključi</b> (na telefonu i u meniju sa tri crtice, dugme 📲). Tu biraš šta da ti stiže i šalješ probu. Na iPhone-u prvo dodaj CRM na početni ekran iz Safari-ja. Na Androidu instaliraj CRM kao aplikaciju (u istom prozoru dugme <b>Instaliraj HARIZMA aplikaciju</b>), pa obaveštenja stižu kao od aplikacije HARIZMA, i tu možeš da preuzmeš <b>HARIZMA zvuk</b> i postaviš ga kao zvuk obaveštenja. Na iPhone-u Apple ne dozvoljava poseban zvuk.', b: [] },
+  { g: [['aktivan', 'aktivna', 'na mrezi', 'online', 'poslednji put', 'kad je bio', 'kad je bila', 'ko je tu']], a: 'Ko je kad bio aktivan: na računaru gore pored dugmeta Chat su avatari tima (zelena tačka = CRM je otvoren ispred te osobe, zlatna = aktivna u poslednjih 15 min, siva = ranije). Klik pokazuje „aktivna pre 12 min · telefon“ i dugmad Piši i Pozovi. Na telefonu je isto u meniju sa tri crtice (Tim). Vidi se i u chatu pored imena, u zadatku kod zaduženih i kad pređeš mišem preko avatara u Taskovima.', b: [['Otvori chat', 'act:Tim chat']] },
   { g: [['huddle', 'poziv', 'pozov', 'zovem', 'zvati', 'video', 'kamer', 'ekran']], a: '<b>Huddle</b> je brz poziv u CRM-u (kao na Slack-u): u chatu gore dugme <b>📞 Huddle</b> (u Tim chatu) ili <b>Pozovi</b> (u privatnom razgovoru). Ostali dobiju zvono u CRM-u i obaveštenje na telefon, pa klik na <b>Pridruži se</b>. U traci poziva su mikrofon, kamera, deljenje ekrana (na računaru), veliki prikaz i crveno dugme za izlaz. Glas ide direktno između uređaja, šifrovano.', b: [['Otvori chat', 'act:Tim chat']] },
   { g: [['glasovn', 'glasom', 'snimi', 'snimak', 'voice', 'mikrofon']], a: 'Glasovna poruka: u chatu ili komentaru na zadatku, kad je polje prazno, desno je dugme <b>🎤</b>. Klik počinje snimanje, <b>➤</b> šalje, 🗑 odustaje (najviše 5 minuta). Ako uz snimak ukucaš i tekst sa @ime, ta osoba dobije obaveštenje. Snimak se pušta dugmetom ▶, a 1× menja brzinu na 1,5× i 2×.', b: [['Otvori chat', 'act:Tim chat']] },
   { g: [['koment', 'dopisiv'], ['task', 'zadat']], a: '<b>Komentari na zadatku</b> (kao u ClickUp-u): u Taskovima klikni na zadatak i otvara se prozor sa detaljima levo (status, zaduženi, rok, ko je dodelio) i <b>Aktivnošću</b> desno: komentari i promene na zadatku. Piši, odgovaraj, reaguj, šalji slike i glasovne. Zaduženi i ko je dodelio zadatak dobijaju obaveštenje za svaki komentar, a <b>@ime</b> obaveštava bilo koga. Strelica pored naziva stavke otvara samu stavku.', b: [['Taskovi', 'tab:tasks']] },
@@ -4319,12 +4320,13 @@ function chatLive() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'h_chat_messages' }, p => chatUpdated(p.new))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'h_chat_reads' }, p => chatReadEvt(p.new))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'h_chat_reactions' }, p => chatRxEvt(p))
-      .on('presence', { event: 'sync' }, () => { try { CHAT.online = new Set(Object.keys(CHAT.rt.presenceState())); } catch (e) {} if (CHAT.open) { renderChatSide(); renderChatTop(); } })
+      .on('presence', { event: 'sync' }, () => { try { seenFromPresence(CHAT.rt.presenceState()); } catch (e) {} if (CHAT.open) { renderChatSide(); renderChatTop(); } renderTeamPres(); })
       .on('broadcast', { event: 'typing' }, ({ payload }) => chatTypingEvt(payload))
-      .subscribe(async (s) => { if (s === 'SUBSCRIBED') { try { await CHAT.rt.track({ at: Date.now() }); } catch (e) {} } });
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'h_last_seen' }, p => { const r = p.new; if (r && r.username) { SEEN[r.username] = { at: r.last_seen_at, device: r.device }; renderTeamPres(); } })
+      .subscribe(async (s) => { if (s === 'SUBSCRIBED') { try { await CHAT.rt.track({ at: Date.now(), away: document.hidden }); } catch (e) {} } });
   } catch (e) { console.warn('chat uživo', e); }
 }
-function chatInit() { document.body.classList.add('chat-ready'); chatLoad(); chatLive(); CHAT.poll = setInterval(chatPoll, 20000); document.addEventListener('visibilitychange', () => { if (!document.hidden) { chatPoll(); if (CHAT.open && !(isChatMobile() && CHAT.list)) chatMarkRead(CHAT.ch); } }); }
+function chatInit() { document.body.classList.add('chat-ready'); chatLoad(); chatLive(); seenInit(); CHAT.poll = setInterval(chatPoll, 20000); document.addEventListener('visibilitychange', () => { if (!document.hidden) { chatPoll(); if (CHAT.open && !(isChatMobile() && CHAT.list)) chatMarkRead(CHAT.ch); } }); }
 function chatIncoming(m) {
   if (!m || !m.channel || !chatKnown(m.channel)) return;
   const a = CHAT.msgs[m.channel] = CHAT.msgs[m.channel] || [];
@@ -4411,7 +4413,7 @@ function renderChatSide() {
   const lastAt = (c) => ((CHAT.msgs[c] || []).slice(-1)[0] || {}).created_at || '';
   const order = ['tim', ...chatBase().slice(1).sort((a, b) => lastAt(b).localeCompare(lastAt(a)))];
   $('cpList').innerHTML = order.map(c => { const p = chatPreview(c), u = chatUnread(c), o = chatOther(c), ment = (CHAT.msgs[c] || []).some(m => m.created_at > (CHAT.reads[c] || '') && chatMentionsMe(m));
-    return `<button class="cl-it ${c === CHAT.ch && !(isChatMobile() && CHAT.list) ? 'on' : ''} ${u ? 'unread' : ''}" data-chat="${c}">${c === 'tim' ? '<span class="n-av cl-grp">H</span>' : chatAv(o)}<span class="cl-t"><b>${esc(chatTitle(c))}${hudOthers(c).length || HUD.room === c ? ' <i class="cl-hud">📞</i>' : ''}</b><small>${esc(tcut(p.t, 60))}</small></span><span class="cl-r"><small>${p.at}</small>${u ? `<span class="cl-n ${ment ? 'ment' : ''}">${ment ? '@' : u}</span>` : ''}</span></button>`; }).join('') + chatTaskListHtml();
+    return `<button class="cl-it ${c === CHAT.ch && !(isChatMobile() && CHAT.list) ? 'on' : ''} ${u ? 'unread' : ''}" data-chat="${c}">${c === 'tim' ? '<span class="n-av cl-grp">H</span>' : chatAv(o)}<span class="cl-t"><b>${esc(chatTitle(c))}${hudOthers(c).length || HUD.room === c ? ' <i class="cl-hud">📞</i>' : ''}${o && seenShort(o) ? ` <em class="cl-seen ${seenCls(o)}">${seenShort(o)}</em>` : ''}</b><small>${esc(tcut(p.t, 60))}</small></span><span class="cl-r"><small>${p.at}</small>${u ? `<span class="cl-n ${ment ? 'ment' : ''}">${ment ? '@' : u}</span>` : ''}</span></button>`; }).join('') + chatTaskListHtml();
 }
 /* lista „Zadaci“ u chatu: razgovori na zadacima (prvo oni koje pratiš) */
 function chatTaskListHtml() {
@@ -4426,7 +4428,7 @@ function chatTaskListHtml() {
 function renderChatTop() {
   const c = CHAT.ch, o = chatOther(c);
   if (isTaskCh(c)) { const n = (CHAT.msgs[c] || []).filter(m => !m._tmp && !m.deleted_at).length; $('cpTop').innerHTML = `<button class="cp-tback" data-tdback title="Nazad u chat">‹ Chat</button><span class="cp-tt"><b>Aktivnost</b><small>${n ? `${n} ${bpl(n, 'komentar', 'komentara', 'komentara')}` : 'komentari i promene na zadatku'}</small></span><button class="cp-x" data-chatclose title="Zatvori">✕</button>`; return; }
-  const sub = c === 'tim' ? (() => { const on = Object.keys(PEOPLE).filter(k => k !== who() && CHAT.online.has(k)).map(personName); return on.length ? `na mreži: ${on.join(', ')}` : 'Konstantin, Staša i Marjan'; })() : (CHAT.online.has(o) ? 'na mreži' : 'privatno, vidite samo vas dvoje');
+  const sub = c === 'tim' ? Object.keys(PEOPLE).filter(k => k !== who()).map(k => `${personName(k)} ${seenShort(k) || ''}`.trim()).join(' · ') : seenText(o);
   const live = hudOthers(c), inRoom = HUD.room === c;
   const hb = inRoom ? `<button class="cp-hud in" data-hudstage title="Prikaži huddle">${HUD_IC.phone}<span>U huddle-u</span></button>` : live.length ? `<button class="cp-hud live" data-hudjoin="${c}" title="Pridruži se">${HUD_IC.phone}<span>Pridruži se · ${esc(live.map(personName).join(', '))}</span></button>` : `<button class="cp-hud" data-hudjoin="${c}" title="${c === 'tim' ? 'Pokreni huddle sa timom' : 'Pozovi'}">${HUD_IC.phone}<span>${c === 'tim' ? 'Huddle' : 'Pozovi'}</span></button>`;
   $('cpTop').innerHTML = `<button class="cp-back" data-chatback title="Nazad">‹</button>${c === 'tim' ? '<span class="n-av cl-grp">H</span>' : chatAv(o)}<span class="cp-tt"><b>${esc(chatTitle(c))}</b><small>${esc(sub)}</small></span>${HUD.tx ? hb : ''}<button class="cp-x" data-chatclose title="Zatvori">✕</button>`;
@@ -4506,7 +4508,7 @@ function chatMentionBox() {
   if (!m) { box.innerHTML = ''; box.style.display = 'none'; return; }
   const qn = fold(m[2]), opts = [...chatMembers(CHAT.ch).filter(k => k !== who()).map(k => [k, personName(k)]), ...(CHAT.ch === 'tim' ? [['svi', 'svi (ceo tim)']] : [])].filter(([k, n]) => !qn || fold(n).startsWith(qn) || k.startsWith(qn));
   if (!opts.length) { box.style.display = 'none'; return; }
-  box.innerHTML = opts.map(([k, n], i) => `<button type="button" class="${i ? '' : 'on'}" data-ment="${k}">${k === 'svi' ? '<span class="n-av cl-grp">@</span>' : chatAv(k)}<b>${esc(n)}</b></button>`).join('');
+  box.innerHTML = opts.map(([k, n], i) => `<button type="button" class="${i ? '' : 'on'}" data-ment="${k}">${k === 'svi' ? '<span class="n-av cl-grp">@</span>' : chatAv(k)}<b>${esc(n)}</b>${k !== 'svi' && seenShort(k) ? `<small class="mb-seen">${seenShort(k)}</small>` : ''}</button>`).join('');
   box.style.display = '';
 }
 function chatMentionPick(k) {
@@ -4581,7 +4583,7 @@ function taskDetailsHtml(ch) {
     <h2 class="td-title">${esc(src.k === 'note' ? tcut(x.body, 90) : taskLabel(t))}</h2>
     <div class="td-grid">
       <span class="td-l">◉ Status</span><span><button type="button" class="td-st ${done ? 'done' : ''}" data-tdtoggle title="${done ? 'Vrati u otvorene' : 'Označi kao gotovo'}">${done ? '✓ GOTOVO' : 'OTVOREN'}</button>${done ? '' : ' <button type="button" class="td-mini td-done" data-tdtoggle>✓ Završi zadatak</button>'}${done && x.task_done_by ? ` <small class="td-sm">${df ? 'završila' : 'završio'} ${esc(personName(x.task_done_by))}${x.task_done_at ? ' · ' + fmtDT(x.task_done_at) : ''}</small>` : ''}</span>
-      <span class="td-l">👤 Zaduženi</span><span class="td-as">${as.length ? as.map(a => `<span class="td-p">${chatAv(a)}${esc(personName(a))}</span>`).join('') : '<small class="td-sm">niko</small>'}<button type="button" class="td-mini" data-tdedit>Promeni</button></span>
+      <span class="td-l">👤 Zaduženi</span><span class="td-as">${as.length ? as.map(a => `<span class="td-p" title="${esc(seenText(a))}">${chatAv(a)}${esc(personName(a))}${a !== who() && seenShort(a) ? `<small class="td-seen ${seenCls(a)}">${seenShort(a)}</small>` : ''}</span>`).join('') : '<small class="td-sm">niko</small>'}<button type="button" class="td-mini" data-tdedit>Promeni</button></span>
       <span class="td-l">📅 Rok</span><span>${x.task_due ? `<b class="td-due ${d ? d.level : ''}">${fmtDate(x.task_due)}</b>${d ? ` <small class="td-sm">· ${d.txt}</small>` : ''}` : '<small class="td-sm">bez roka</small>'} <button type="button" class="td-mini" data-tdedit>Promeni</button></span>
       <span class="td-l">↗ Dodelio/la</span><span>${x.task_by ? `${esc(personName(x.task_by))} <small class="td-sm">· ${bf ? 'dodelila' : 'dodelio'} ${x.task_at ? relTime(x.task_at) : ''}</small>` : '<small class="td-sm">—</small>'}</span>
       <span class="td-l">▦ Sekcija</span><span>${esc(sec)}</span>
@@ -4906,6 +4908,60 @@ function renderHud() {
   stage.querySelectorAll('video[data-hudv]').forEach(v => { const u = v.dataset.hudv, tr = hudVideoTrack(u); if (tr) { v.srcObject = new MediaStream([tr]); v.play().catch(() => {}); } });
 }
 function hudVideoTrack(u) { if (u === who()) return HUD.scrT || HUD.camT || null; const p = HUD.peers[u]; return p ? p.stream.getVideoTracks().find(t => t.readyState === 'live') || null : null; }
+/* ---- ko je kad bio aktivan: zelena tačka = CRM otvoren ispred njega; inače „aktivan/na pre X“ ---- */
+const SEEN = {};
+let seenPingAt = 0;
+const seenDev = () => (/Android|iPhone|iPad/.test(navigator.userAgent) ? 'telefon' : 'računar') + (isStandalone() ? ' · aplikacija' : '');
+async function seenPing(force) {
+  if (!state.user || (!force && Date.now() - seenPingAt < 55000)) return; seenPingAt = Date.now();
+  SEEN[who()] = { at: new Date().toISOString(), device: seenDev() };
+  try { await sb.rpc('h_seen_ping', { p_device: seenDev() }); } catch (e) {}
+}
+async function seenLoad() { try { const rows = await q(sb.from('h_last_seen').select('*')); rows.forEach(r => { const cur = SEEN[r.username]; if (!cur || cur.at < r.last_seen_at) SEEN[r.username] = { at: r.last_seen_at, device: r.device }; }); renderTeamPres(); } catch (e) {} }
+function seenFromPresence(st) {
+  const on = new Set();
+  Object.entries(st || {}).forEach(([u, arr]) => { const last = (arr || []).slice(-1)[0] || {}; const away = (arr || []).every(x => x && x.away); if (!away) { on.add(u); SEEN[u] = { at: new Date().toISOString(), device: (SEEN[u] || {}).device }; } });
+  CHAT.online = on;
+}
+function seenInit() {
+  seenLoad(); seenPing(true);
+  setInterval(() => { if (!document.hidden) seenPing(); }, 60000);
+  setInterval(() => { seenLoad(); renderTeamPres(); if (CHAT.open) { renderChatTop(); renderChatSide(); } }, 90000);
+  document.addEventListener('visibilitychange', () => { seenPing(true); try { CHAT.rt && CHAT.rt.track({ at: Date.now(), away: document.hidden }); } catch (e) {} });
+  ['pointerdown', 'keydown'].forEach(ev => addEventListener(ev, () => seenPing(), { passive: true }));
+}
+/* kratko: „na mreži“, „pre 5 min“, „pre 3 h“, „juče“, „6. okt“ */
+function seenShort(u) {
+  if (u === who() || CHAT.online.has(u)) return 'na mreži';
+  const s = SEEN[u]; if (!s) return '';
+  const m = Math.round((Date.now() - new Date(s.at)) / 60000);
+  if (m < 2) return 'upravo'; if (m < 60) return `pre ${m} min`; const h = Math.round(m / 60); if (h < 24) return `pre ${h} h`;
+  const d = new Date(s.at), y = new Date(); y.setDate(y.getDate() - 1);
+  return dayStr(d) === dayStr(y) ? 'juče' : d.toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' });
+}
+/* duže: „aktivna pre 12 min · telefon“ */
+function seenText(u) {
+  if (u === who()) return 'ti';
+  const f = PEOPLE[u]?.f, s = SEEN[u];
+  if (CHAT.online.has(u)) return 'na mreži, CRM je otvoren' + (s && s.device ? ' · ' + s.device.split(' · ')[0] : '');
+  if (!s) return f ? 'još nije bila u CRM-u' : 'još nije bio u CRM-u';
+  const m = Math.round((Date.now() - new Date(s.at)) / 60000), d = new Date(s.at);
+  const when = m < 2 ? 'upravo' : m < 60 ? `pre ${m} min` : m < 24 * 60 ? `pre ${Math.round(m / 60)} h` : relTime(s.at);
+  return `${f ? 'aktivna' : 'aktivan'} ${when}${s.device ? ' · ' + s.device.split(' · ')[0] : ''}`;
+}
+const seenCls = (u) => (CHAT.online.has(u) || u === who() ? 'on' : SEEN[u] && Date.now() - new Date(SEEN[u].at) < 15 * 60000 ? 'recent' : '');
+/* tim: avatari gore (računar) i spisak u meniju (telefon) */
+function teamRowsHtml() {
+  return Object.keys(PEOPLE).filter(k => k !== who()).map(k => `<div class="tmp-row"><span class="tmp-av ${seenCls(k)}">${chatAv(k)}</span><span class="tmp-t"><b>${esc(personName(k))}</b><small>${esc(seenText(k))}</small></span><button type="button" class="tmp-b" data-tpchat="${k}" title="Piši">💬</button><button type="button" class="tmp-b" data-tppoz="${k}" title="Pozovi">📞</button></div>`).join('');
+}
+function renderTeamPres() {
+  const w = $('teamPres'); if (w && state.user) {
+    const others = Object.keys(PEOPLE).filter(k => k !== who());
+    w.querySelector('.tmp-avs').innerHTML = others.map(k => `<span class="tmp-av ${seenCls(k)}" title="${esc(personName(k) + ' · ' + seenText(k))}">${chatAv(k)}</span>`).join('');
+    const pop = w.querySelector('.tmp-pop'); if (pop.classList.contains('open')) pop.innerHTML = '<div class="tmp-h">Tim</div>' + teamRowsHtml();
+  }
+  const nd = $('navTeam'); if (nd && state.user) nd.innerHTML = '<div class="nd-tl">Tim</div>' + teamRowsHtml();
+}
 /* ---- odgovor na poruku (reply) ---- */
 const CHAT_DAT = { konstantin: 'Konstantinu', stasa: 'Staši', marjan: 'Marjanu' };
 function chatFind(id) { for (const a of Object.values(CHAT.msgs)) { const m = a.find(x => x.id === id); if (m) return m; } return CHAT.res[id] || null; }
@@ -5044,11 +5100,14 @@ function chatTouchBind(box) {
   box.addEventListener('touchmove', (e) => {
     if (!t) return; const p = e.touches[0], dx = p.clientX - t.x, dy = p.clientY - t.y;
     if (!t.mode && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) { clearTimeout(t.long); t.mode = dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.4 ? 'swipe' : 'scroll'; }
-    if (t.mode === 'swipe') { t.dx = Math.max(0, Math.min(dx, 90)); t.row.style.transform = `translateX(${t.dx}px)`; t.row.classList.toggle('swipe-ok', t.dx > 56); }
+    if (t.mode === 'swipe') {
+      t.dx = Math.max(0, Math.min(dx * 0.85, 96)); t.row.style.transform = `translateX(${t.dx}px)`; t.row.style.setProperty('--sw', Math.min(1, t.dx / 52).toFixed(2));
+      const ok = t.dx > 52; if (ok && !t.ok) { try { navigator.vibrate && navigator.vibrate(12); } catch (x) {} } t.ok = ok; t.row.classList.toggle('swipe-ok', ok);
+    }
   }, { passive: true });
   box.addEventListener('touchend', (e) => {
     if (!t) return; clearTimeout(t.long); const c = t; t = null;
-    if (c.mode === 'swipe') { c.row.style.transition = 'transform .2s'; c.row.style.transform = ''; setTimeout(() => { c.row.style.transition = ''; c.row.classList.remove('swipe-ok'); }, 220); if (c.dx > 56) chatReplyTo(c.id); return; }
+    if (c.mode === 'swipe') { c.row.style.transition = 'transform .25s cubic-bezier(.2,1.4,.4,1)'; c.row.style.transform = ''; c.row.style.removeProperty('--sw'); setTimeout(() => { c.row.style.transition = ''; c.row.classList.remove('swipe-ok'); }, 260); if (c.dx > 52) chatReplyTo(c.id); return; }
     if (c.mode) { if (c.mode === 'long') e.preventDefault(); return; }
     if (e.target.closest('a,img,button')) return;
     const now = Date.now(), last = CHAT.tap;
@@ -5061,6 +5120,14 @@ function chatTouchBind(box) {
 function chatBind() {
   $('chatTop').addEventListener('click', () => (CHAT.open ? closeChat() : openChat()));
   $('chatOv').addEventListener('click', () => closeChat());
+  document.addEventListener('click', (e) => {
+    const t = e.target; if (!t.closest) return;
+    const pop = document.querySelector('#teamPres .tmp-pop');
+    if (t.closest('#teamPres .tmp-avs')) { const open = !pop.classList.contains('open'); pop.classList.toggle('open', open); if (open) pop.innerHTML = '<div class="tmp-h">Tim</div>' + teamRowsHtml(); return; }
+    const tc = t.closest('[data-tpchat]'); if (tc) { if (pop) pop.classList.remove('open'); closeNav(); return openChat(dmKey(who(), tc.dataset.tpchat)); }
+    const tz = t.closest('[data-tppoz]'); if (tz) { if (pop) pop.classList.remove('open'); closeNav(); const r = dmKey(who(), tz.dataset.tppoz); openChat(r); return hudJoin(r); }
+    if (pop && pop.classList.contains('open') && !t.closest('#teamPres')) pop.classList.remove('open');
+  });
   document.addEventListener('click', (e) => {
     const t = e.target; if (!t.closest) return;
     const hj = t.closest('[data-hudjoin]'); if (hj) { e.stopPropagation(); return hudJoin(hj.dataset.hudjoin); }

@@ -948,3 +948,30 @@ begin
     from regexp_matches(coalesce(new.body, ''), '@(konstantin|stasa|staša|marjan|svi|all)\M', 'gi') as m) t;
   return new;
 end $$;
+
+-- v26: „poslednji put aktivan/na“ za članove tima
+create table if not exists public.h_last_seen (
+  username text primary key,
+  last_seen_at timestamptz not null default now(),
+  device text
+);
+alter table public.h_last_seen enable row level security;
+drop policy if exists "aktivnost citanje" on public.h_last_seen;
+create policy "aktivnost citanje" on public.h_last_seen for select to authenticated using (crm_user() in ('konstantin', 'stasa', 'marjan'));
+create or replace function public.h_seen_ping(p_device text default null) returns timestamptz language sql volatile security definer set search_path = public as $$
+  insert into public.h_last_seen (username, last_seen_at, device)
+  select crm_user(), now(), left(p_device, 80) where crm_user() in ('konstantin', 'stasa', 'marjan')
+  on conflict (username) do update set last_seen_at = excluded.last_seen_at, device = coalesce(excluded.device, h_last_seen.device)
+  returning last_seen_at
+$$;
+revoke all on function public.h_seen_ping(text) from public, anon;
+grant execute on function public.h_seen_ping(text) to authenticated;
+-- početne vrednosti: poslednja promena u CRM-u ili poslednja poruka u chatu
+insert into public.h_last_seen (username, last_seen_at)
+select u, max(t) from (
+  select actor u, max(at) t from public.h_audit where actor in ('konstantin', 'stasa', 'marjan') group by actor
+  union all select author, max(created_at) from public.h_chat_messages group by author
+  union all select username, max(last_read_at) from public.h_chat_reads group by username
+) x group by u
+on conflict (username) do update set last_seen_at = greatest(h_last_seen.last_seen_at, excluded.last_seen_at);
+do $$ begin begin alter publication supabase_realtime add table public.h_last_seen; exception when duplicate_object then null; end; end $$;
