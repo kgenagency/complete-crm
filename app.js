@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610081046';
+const APP_BUILD = '202610081105';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -3202,6 +3202,7 @@ function bindEvents() {
   $('navPush').addEventListener('click', () => { closeNav(); openPushModal(); });
   $('pmMain').addEventListener('click', () => { const st = pushState(); if (st === 'on') return pushDisable(); if (st === 'denied') { renderPushModal(); return toast('I dalje je blokirano. Uradi korake iz uputstva, pa probaj ponovo.', 4500); } pushEnable(); });
   $('pmTest').addEventListener('click', () => pushTest(false));
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-appinst]')) return appInstall(); if (e.target.closest('[data-sndplay]')) return playHarizmaSound(); if (e.target.closest('[data-instno]')) { LS.set('crm_inst_nag', 'later'); renderPushBar(); toast('Instalacija je uvek u: zvonce gore → Obaveštenja na ovom uređaju', 4500); } });
   $('pmPrefs').addEventListener('change', pushSavePrefs);
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-pb]'); if (!b) return; if (b.dataset.pb === 'on') pushEnable(); else { LS.set('crm_push_nag', 'later'); renderPushBar(); toast('Možeš da ih uključiš kad hoćeš: zvonce gore → Obaveštenja na ovom uređaju', 4500); } });
   $('navSound').addEventListener('click', () => { setSound(!soundOn()); toast(soundOn() ? 'Zvuci uključeni 🔔' : 'Zvuci isključeni'); });
@@ -3493,7 +3494,7 @@ const BOT_FAQ = [
   { g: [['ne radi', 'ne mogu', 'ne ucitav', 'zablok', 'zapel', 'zaglav', 'gresk', 'bug', 'ne otvar', 'ne cuva', 'ne sacuv', 'ne pokaz', 'ne vidim']], a: 'Prvo probaj osvežavanje: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> (na telefonu zatvori i ponovo otvori stranicu). Ako i dalje ne radi, pošalji timu kratak opis dugmetom ispod, pa će neko da pogleda.', b: [['Pošalji timu', 'teamlast']] },
   { g: [['backup', 'rezerv', 'sigurn', 'bezbed']], a: 'Podaci se čuvaju zauvek: obrisano ide u arhivu, svaka promena se beleži, a svake noći u 03:30 pravi se rezervna kopija cele baze na GitHub-u.', b: [['Istorija', 'tab:history']] },
   { g: [['istorij', 'prekretnic', 'dogadja', 'vremensk']], a: 'Istorija je vremenska linija svega. Važan događaj (lansiranje, nova kolekcija…) dodaješ dugmetom <b>Zabeleži događaj</b>.', b: [['Zabeleži događaj', 'act:Zabeleži događaj u istoriji'], ['Istorija', 'tab:history']] },
-  { g: [['obavestenj', 'notifikac', 'push', 'na telefon', 'stize poruka', 'stizu poruke']], a: 'CRM može da šalje <b>obaveštenja na telefon i računar</b>, i kad je zatvoren: kad ti neko dodeli zadatak, kad neko završi zadatak koji si dodelio/la, nova porudžbina, nova prijava povrata i jutarnji podsetnik u 8h. Uključuješ ih na svakom uređaju posebno: <b>zvonce gore → Obaveštenja na ovom uređaju → Uključi</b> (na telefonu i u meniju sa tri crtice, dugme 📲). Tu biraš šta da ti stiže i šalješ probu. Na iPhone-u prvo dodaj CRM na početni ekran iz Safari-ja.', b: [] },
+  { g: [['obavestenj', 'notifikac', 'push', 'na telefon', 'stize poruka', 'stizu poruke']], a: 'CRM može da šalje <b>obaveštenja na telefon i računar</b>, i kad je zatvoren: kad ti neko dodeli zadatak, kad neko završi zadatak koji si dodelio/la, nova porudžbina, nova prijava povrata i jutarnji podsetnik u 8h. Uključuješ ih na svakom uređaju posebno: <b>zvonce gore → Obaveštenja na ovom uređaju → Uključi</b> (na telefonu i u meniju sa tri crtice, dugme 📲). Tu biraš šta da ti stiže i šalješ probu. Na iPhone-u prvo dodaj CRM na početni ekran iz Safari-ja. Na Androidu instaliraj CRM kao aplikaciju (u istom prozoru dugme <b>Instaliraj HARIZMA aplikaciju</b>), pa obaveštenja stižu kao od aplikacije HARIZMA, i tu možeš da preuzmeš <b>HARIZMA zvuk</b> i postaviš ga kao zvuk obaveštenja. Na iPhone-u Apple ne dozvoljava poseban zvuk.', b: [] },
   { g: [['chat', 'cet', 'caskanj', 'dopisiv', 'privatn', 'gif', 'tagu', 'taguj', 'oznac', 'pominj', 'reakc', 'lajk', 'odgovor na poruk', 'reply', 'izmeni poruk', 'obrisi poruk', 'edit']], a: '<b>Tim chat</b> je zlatno dugme <b>💬 Chat</b> dole desno (i gore u traci, i prvo u meniju sa tri crtice, taster <kbd>C</kbd>). Ima grupu <b>Tim HARIZMA</b> i privatne poruke sa svakim posebno (vidite ih samo vas dvoje). Obaveštenje na telefon stiže <b>samo kad nekog označiš</b>: napiši <b>@</b> i izaberi ime, ili <b>@svi</b> za ceo tim. Dugme <b>GIF</b> šalje GIF ili sliku (iz galerije, nalepljen link ili pretraga). Na poruku <b>odgovaraš i reaguješ</b> (❤️ 👍 😂…) dugim držanjem poruke na telefonu, a na računaru dugmetom ☺ pored poruke; brz odgovor je prevlačenje poruke udesno, a dva dodira daju ❤️. <b>Svoje poruke</b> možeš da izmeniš ili obrišeš (isti meni, na računaru i strelica gore u praznom polju menja poslednju). Kod drugih piše „izmenjeno“ ili „Poruka je obrisana“, a original ostaje sačuvan u bazi i dnevnoj kopiji. Pretraga gore levo traži kroz celu istoriju.', b: [['Otvori chat', 'act:Tim chat']] },
   { g: [['nov zadatak', 'novi zadatak', 'novi task', 'nov task', 'zadatak za', 'task za', 'dodeli', 'zaduzi']], a: 'Klikni <b>Nov zadatak</b> (u Taskovima ili taster B), upiši šta treba i izaberi <b>Sekciju</b>. Ispod se pojavi <b>Za šta je zadatak?</b>: <b>＋ nova stavka</b> (npr. cela forma za ideju u Objave + reklame, predlog za Sajt, promocija), <b>postojeća</b> stavka iz liste (porudžbina, kupac, model, prijava…) ili <b>Samo zadatak</b> kao beleška. Izaberi ko radi i rok, pa Sačuvaj.', b: [['Nov zadatak', 'act:Nov zadatak'], ['Taskovi', 'tab:tasks']] },
   { g: [['zvuk', 'zvuc', 'ting', 'muzik', 'utisa', 'tisin', 'sound']], a: 'CRM ima zvuke: uvod kad uđeš, „ka-čing“ za novu porudžbinu (tiši kad je unese neko drugi), zvonce za zadatke, šuškanje papira za belešku, zvuk za poslato i isporučeno, brisanje i vraćanje, a za prvu, 10., 25., 50., 100. porudžbinu i za rekordan dan i mala proslava sa konfetama. Sve se gasi i pali u zvoncetu gore (Zvuci) ili u meniju sa tri crtice (Zvuk); tu je i <b>▶ Probaj</b>.', b: [] },
@@ -4151,11 +4152,50 @@ function renderPushModal() {
     nosupport: '<span class="pm-dot no"></span><b>Ovaj pretraživač ne podržava obaveštenja</b><small>Probaj u Chrome-u.</small>',
   }[st];
   $('pmPrefs').innerHTML = PUSH_PREFS.map(([k, t, s]) => '<label class="pm-row ' + (on ? '' : 'dis') + '"><input type="checkbox" data-pp="' + k + '" ' + (prefs[k] !== false ? 'checked' : '') + ' ' + (on ? '' : 'disabled') + '><span><b>' + t + '</b><small>' + s + '</small></span></label>').join('');
+  if ($('pmApp')) $('pmApp').innerHTML = pushAppHtml();
+  if ($('pmSound')) $('pmSound').innerHTML = pushSoundHtml();
   $('pmMain').textContent = on ? 'Isključi na ovom uređaju' : st === 'denied' ? 'Proveri ponovo' : 'Uključi obaveštenja';
   $('pmMain').className = on ? 'btn-ghost' : 'btn-gold';
   $('pmMain').style.display = ['on', 'off', 'denied'].includes(st) ? '' : 'none';
   $('pmTest').style.display = on ? '' : 'none';
 }
+/* ---- instalacija kao aplikacija (Android/računar): obaveštenja onda stižu kao od aplikacije HARIZMA, ne od pretraživača ---- */
+let INSTALL_EVT = null;
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); INSTALL_EVT = e; try { renderPushModal(); renderPushBar(); } catch (x) {} });
+addEventListener('appinstalled', () => { INSTALL_EVT = null; LS.set('crm_inst_nag', 'done'); toast('HARIZMA je instalirana. Od sada otvaraj CRM sa nove ikonice H.', 6000); try { renderPushModal(); renderPushBar(); } catch (x) {} });
+async function appInstall() {
+  if (!INSTALL_EVT) { openPushModal(); return toast('Uputstvo za instalaciju je u prozoru Obaveštenja', 3500); }
+  const ev = INSTALL_EVT; INSTALL_EVT = null;
+  try { ev.prompt(); const r = await ev.userChoice; if (r && r.outcome !== 'accepted') INSTALL_EVT = ev; } catch (e) { console.warn(e); }
+  renderPushModal(); renderPushBar();
+}
+const isAndroid = () => /Android/.test(navigator.userAgent);
+function pushAppHtml() {
+  const u = navigator.userAgent, sams = /SamsungBrowser/.test(u), inst = isStandalone();
+  if (isIOS()) return inst ? '<div class="pm-ok">✓ Otvoreno kao aplikacija HARIZMA, obaveštenja stižu kao od aplikacije.</div>' : '<div class="pm-note">Dodaj CRM na početni ekran (Podeli → Dodaj na početni ekran) i otvaraj ga sa ikonice H. Tada je to aplikacija HARIZMA.</div>';
+  if (isAndroid()) {
+    if (inst) return '<div class="pm-ok">✓ Instalirano kao aplikacija HARIZMA. Obaveštenja stižu pod imenom HARIZMA sa H ikonicom.</div>';
+    return '<div class="pm-note"><b>Sada obaveštenja stižu preko pretraživača</b> (u obaveštenju se vidi ikonica pretraživača). Instaliraj CRM kao aplikaciju i stizaće kao <b>HARIZMA</b>, kao na iPhone-u.</div>'
+      + (INSTALL_EVT ? '<button type="button" class="btn-gold pm-inst" data-appinst>📲 Instaliraj HARIZMA aplikaciju</button>' : '<ol class="pm-steps">' + (sams
+        ? '<li>Dole <b>☰ meni</b> → <b>Dodaj stranicu na</b> → <b>Početni ekran</b> (ili ikonica za instalaciju u traci sa adresom) → <b>Instaliraj</b>.</li>'
+        : '<li>Gore desno <b>⋮</b> → <b>Instaliraj aplikaciju</b> (ili Dodaj na početni ekran → Instaliraj).</li>') + '</ol>')
+      + '<div class="pm-note sm">Staru ikonicu H (prečicu) obriši sa početnog ekrana i CRM otvaraj sa nove. Kad je otvoriš prvi put, proveri ovde da su obaveštenja uključena.</div>';
+  }
+  if (inst) return '<div class="pm-ok">✓ Otvoreno kao aplikacija HARIZMA.</div>';
+  return INSTALL_EVT ? '<div class="pm-note">CRM može da se instalira i na računaru, kao zasebna aplikacija u svom prozoru.</div><button type="button" class="btn-ghost pm-inst" data-appinst>Instaliraj na računaru</button>' : '<div class="pm-note sm">Na računaru CRM može da se instalira kao aplikacija: ikonica za instalaciju desno u traci sa adresom (Chrome ili Edge).</div>';
+}
+function pushSoundHtml() {
+  const play = '<button type="button" class="btn-ghost" data-sndplay>▶ Poslušaj HARIZMA zvuk</button>';
+  if (isAndroid()) return '<div class="pm-snd">' + play + '<a class="btn-gold" href="harizma-obavestenje.mp3" download="harizma-obavestenje.mp3">⬇ Preuzmi zvuk</a></div><ol class="pm-steps">'
+    + '<li>Klikni <b>Preuzmi zvuk</b>.</li>'
+    + '<li><b>Moji fajlovi</b> → <b>Preuzimanja</b> → dugo drži <b>harizma-obavestenje</b> → <b>Premesti</b> → <b>Interna memorija</b> → folder <b>Notifications</b> → <b>Premesti ovde</b>.</li>'
+    + '<li>Podešavanja telefona → <b>Aplikacije</b> → <b>HARIZMA</b> → <b>Obaveštenja</b> → kategorije obaveštenja → otvori kategoriju → <b>Zvuk</b> → izaberi <b>harizma-obavestenje</b>.</li>'
+    + '</ol><div class="pm-note sm">Ako CRM još nije instaliran kao aplikacija, isto se podešava kod pretraživača: Aplikacije → ' + (/SamsungBrowser/.test(navigator.userAgent) ? 'Samsung Internet' : 'Chrome') + ' → Obaveštenja → kategorija sa adresom ' + esc(location.host) + ' → Zvuk.</div>';
+  if (isIOS()) return '<div class="pm-snd">' + play + '</div><div class="pm-note sm">Na iPhone-u Apple ne dozvoljava poseban zvuk za obaveštenja web aplikacija, pa se čuje zvuk iz Podešavanja → Zvuci i dodir. Kad je CRM otvoren, čuje se HARIZMA zvuk.</div>';
+  return '<div class="pm-snd">' + play + '</div><div class="pm-note sm">Na računaru zvuk obaveštenja bira sistem. Kad je CRM otvoren, čuje se HARIZMA zvuk.</div>';
+}
+let SND_EL = null;
+function playHarizmaSound() { try { if (!SND_EL) SND_EL = new Audio('harizma-obavestenje.mp3'); SND_EL.currentTime = 0; SND_EL.volume = 0.9; SND_EL.play(); } catch (e) {} }
 /* uputstvo za odblokiranje, prema pretraživaču i uređaju */
 function pushHelpHtml() {
   const u = navigator.userAgent, site = '<b>' + location.host + '</b>';
@@ -4171,6 +4211,12 @@ function openPushModal() { renderPushModal(); $('pushModal').classList.add('open
 function renderPushBar() {
   let bar = $('pushBar'); const st = pushState(), nag = LS.get('crm_push_nag', '');
   const show = !!state.user && !nag && (st === 'ios' || (st === 'off' && Notification.permission === 'default'));
+  const inst = !show && !!state.user && isAndroid() && !isStandalone() && !!INSTALL_EVT && !LS.get('crm_inst_nag', '');
+  if (inst) {
+    if (!bar) { bar = document.createElement('div'); bar.id = 'pushBar'; bar.className = 'push-bar'; const t = $('tabs'); t.parentNode.insertBefore(bar, t.nextSibling); }
+    bar.innerHTML = '<span class="pb-ic">📲</span><span class="pb-t"><b>Instaliraj HARIZMA kao aplikaciju</b><small>Obaveštenja će stizati kao od aplikacije HARIZMA, sa H ikonicom, kao na iPhone-u.</small></span><button class="btn-gold" data-appinst>Instaliraj</button><button class="pb-x" data-instno title="Ne sada">✕</button>';
+    return;
+  }
   if (!show) { if (bar) bar.remove(); return; }
   if (!bar) { bar = document.createElement('div'); bar.id = 'pushBar'; bar.className = 'push-bar'; const t = $('tabs'); t.parentNode.insertBefore(bar, t.nextSibling); }
   bar.innerHTML = '<span class="pb-ic">🔔</span><span class="pb-t"><b>Uključi obaveštenja na ' + (/Android|iPhone|iPad/.test(navigator.userAgent) ? 'telefonu' : 'računaru') + '</b><small>' + (st === 'ios' ? 'Na iPhone-u: dugme Podeli (kvadrat sa strelicom) → Dodaj na početni ekran, pa otvori CRM sa nove ikonice H.' : 'Zadaci, porudžbine i povrati stižu kao poruke, i kad je CRM zatvoren.') + '</small></span>' + (st === 'ios' ? '' : '<button class="btn-gold" data-pb="on">Uključi</button>') + '<button class="pb-x" data-pb="no" title="Ne sada">✕</button>';

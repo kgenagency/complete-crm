@@ -1,6 +1,11 @@
 /* HARIZMA CRM · servis za obaveštenja (Web Push). Ne kešira ništa: CRM se uvek učitava svež. */
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+/* samo otvaranje stranice ide preko servisa (zbog instalacije kao aplikacija); bez interneta pokaže kratku poruku umesto greške */
+self.addEventListener('fetch', (e) => {
+  if (e.request.mode !== 'navigate') return;
+  e.respondWith(fetch(e.request).catch(() => new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HARIZMA</title><body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#1B2620;color:#E8E4D9;font-family:system-ui,sans-serif;text-align:center;padding:24px"><div><div style="font-size:42px;font-family:Georgia,serif">H</div><p style="font-size:17px">Nema interneta.</p><p style="opacity:.7">CRM će se otvoriti čim se veza vrati.</p><button onclick="location.reload()" style="margin-top:10px;padding:12px 22px;border:0;border-radius:12px;background:#C9A96E;color:#1B2620;font-weight:700;font-size:15px">Pokušaj ponovo</button></div></body>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } })));
+});
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (x) { d = { title: 'HARIZMA', body: e.data ? e.data.text() : '' }; }

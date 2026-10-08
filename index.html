@@ -1531,6 +1531,14 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
 .ca-own{margin-top:6px;padding-top:6px}
 .ca-btns .ca-del{color:#a32c2c}
 .ca-btns .ca-delok{background:#a32c2c;border-color:#a32c2c;color:#fff;animation:pop .2s var(--ease)}
+/* obaveštenja: aplikacija i zvuk */
+.pm-sub2{margin-top:16px}
+.pm-box{background:var(--gold-wash);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.5;color:var(--ink)}
+.pm-ok{color:#2f6b3a;font-weight:650}
+.pm-note{color:var(--ink-2)}.pm-note.sm{font-size:12px;color:var(--muted);margin-top:6px}
+.pm-steps{margin:8px 0 2px;padding-left:18px;font-size:12.8px}.pm-steps li{margin:4px 0}
+.pm-inst{margin-top:10px;width:100%;justify-content:center}
+.pm-snd{display:flex;gap:8px;flex-wrap:wrap}.pm-snd>*{flex:1 1 auto;justify-content:center;text-align:center;text-decoration:none}
 </style>
 </head>
 <body>
@@ -2359,6 +2367,10 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
     <div class="pm-status" id="pmStatus"></div>
     <div class="pm-sub">Šta da ti stiže:</div>
     <div class="pm-prefs" id="pmPrefs"></div>
+    <div class="pm-sub pm-sub2">Kao prava aplikacija</div>
+    <div class="pm-box" id="pmApp"></div>
+    <div class="pm-sub pm-sub2">Zvuk obaveštenja</div>
+    <div class="pm-box" id="pmSound"></div>
     <div class="modal-actions"><button type="button" class="btn-ghost" id="pmTest">Pošalji probu</button><button type="button" class="btn-gold" id="pmMain">Uključi obaveštenja</button></div>
   </div>
 </div>
@@ -2410,8 +2422,8 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610081046"></script>
-<script>window.HTML_BUILD="202610081046";</script>
-<script src="app.js?v=202610081046"></script>
+<script src="config.js?v=202610081105"></script>
+<script>window.HTML_BUILD="202610081105";</script>
+<script src="app.js?v=202610081105"></script>
 </body>
 </html>
