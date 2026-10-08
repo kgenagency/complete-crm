@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610081148';
+const APP_BUILD = '202610081210';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -5186,7 +5186,17 @@ function chatBind() {
     chatGifClose(); chatSend({ body: '', image_url: u });
   });
   $('chatPanel').addEventListener('input', (e) => { if (e.target.id === 'gbQ') { clearTimeout(CHAT.gif.t); const v = e.target.value; CHAT.gif.t = setTimeout(() => chatGifSearch(v), 350); } });
-  $('cpForm').addEventListener('submit', (e) => { e.preventDefault(); chatSend(); if (!isChatMobile()) $('cpInput').focus(); });
+  $('cpForm').addEventListener('submit', (e) => { e.preventDefault(); chatSend(); $('cpInput').focus(); });
+  /* telefon: tastatura ostaje otvorena posle slanja (dugme ne uzima fokus polju za kucanje) */
+  const sendBtn = $('cpForm').querySelector('.cp-send');
+  sendBtn.addEventListener('mousedown', (e) => e.preventDefault());
+  sendBtn.addEventListener('touchend', (e) => {
+    const tch = e.changedTouches && e.changedTouches[0], r = sendBtn.getBoundingClientRect();
+    e.preventDefault();
+    if (tch && (tch.clientX < r.left - 10 || tch.clientX > r.right + 10 || tch.clientY < r.top - 10 || tch.clientY > r.bottom + 10)) return;
+    chatSend(); $('cpInput').focus();
+  }, { passive: false });
+  ['cpMention', 'cpReply'].forEach(id => $(id).addEventListener('mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); }));
   $('cpMsgs').addEventListener('dblclick', (e) => { const row = e.target.closest('.cm[data-mid]'); if (!row || row.classList.contains('tmp') || e.target.closest('a,img,button,.cm-rx')) return; try { getSelection().removeAllRanges(); } catch (x) {} chatReact(row.dataset.mid, '❤️'); });
   $('cpMsgs').addEventListener('contextmenu', (e) => { const row = e.target.closest('.cm[data-mid]'); if (!row || row.classList.contains('tmp') || !matchMedia('(hover: none)').matches) return; e.preventDefault(); });
   $('cpMsgs').addEventListener('scroll', () => { if (CHAT.act && !isChatMobile()) chatActClose(); }, { passive: true });
