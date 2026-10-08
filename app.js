@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610080911';
+const APP_BUILD = '202610080943';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -3200,7 +3200,7 @@ function bindEvents() {
   $('navProj').addEventListener('change', (e) => { $('projSel').value = e.target.value; $('projSel').dispatchEvent(new Event('change')); closeNav(); });
   $('navLogout').addEventListener('click', byeOut);
   $('navPush').addEventListener('click', () => { closeNav(); openPushModal(); });
-  $('pmMain').addEventListener('click', () => (pushState() === 'on' ? pushDisable() : pushEnable()));
+  $('pmMain').addEventListener('click', () => { const st = pushState(); if (st === 'on') return pushDisable(); if (st === 'denied') { renderPushModal(); return toast('I dalje je blokirano. Uradi korake iz uputstva, pa probaj ponovo.', 4500); } pushEnable(); });
   $('pmTest').addEventListener('click', () => pushTest(false));
   $('pmPrefs').addEventListener('change', pushSavePrefs);
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-pb]'); if (!b) return; if (b.dataset.pb === 'on') pushEnable(); else { LS.set('crm_push_nag', 'later'); renderPushBar(); toast('Možeš da ih uključiš kad hoćeš: zvonce gore → Obaveštenja na ovom uređaju', 4500); } });
@@ -4094,8 +4094,10 @@ async function pushInit() {
   try {
     PUSH.reg = await navigator.serviceWorker.register('sw.js');
     if (!PUSH.msgBound) { PUSH.msgBound = true; navigator.serviceWorker.addEventListener('message', (e) => { if (e.data && e.data.crmGo) crmGo(e.data.crmGo); }); }
+    try { if (!PUSH.permBound && navigator.permissions) { PUSH.permBound = true; const ps = await navigator.permissions.query({ name: 'notifications' }); ps.onchange = () => { renderPushModal(); renderPushBar(); if (Notification.permission === 'granted' && !PUSH.row) pushEnable(); }; } } catch (e) {}
     if (pushSupported() && Notification.permission === 'granted') {
       PUSH.sub = await PUSH.reg.pushManager.getSubscription();
+      if (!PUSH.sub && LS.get('crm_push_off', '') !== '1') PUSH.sub = await PUSH.reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToU8(VAPID_PUBLIC) }).catch(() => null); // dozvola već data → uključi sam
       if (PUSH.sub) await pushRegister(); // uvek veži uređaj za onoga ko je sada prijavljen
     }
   } catch (e) { console.warn('push init', e); }
@@ -4113,7 +4115,7 @@ async function pushEnable() {
     if (perm !== 'granted') { renderPushModal(); renderPushBar(); return toast('Obaveštenja nisu dozvoljena. Dozvoli ih u podešavanjima pretraživača za ovaj sajt.', 5000); }
     PUSH.reg = PUSH.reg || await navigator.serviceWorker.register('sw.js'); await navigator.serviceWorker.ready;
     PUSH.sub = await PUSH.reg.pushManager.getSubscription() || await PUSH.reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToU8(VAPID_PUBLIC) });
-    await pushRegister(); LS.set('crm_push_nag', 'done');
+    await pushRegister(); LS.set('crm_push_nag', 'done'); LS.set('crm_push_off', '');
     renderPushModal(); renderPushBar(); sfx('done'); toast('Obaveštenja uključena na ovom uređaju ✓');
     pushTest(true);
   } catch (e) { fail(e); }
@@ -4121,7 +4123,7 @@ async function pushEnable() {
 async function pushDisable() {
   try {
     if (PUSH.sub) { const ep = PUSH.sub.endpoint; await PUSH.sub.unsubscribe().catch(() => {}); await sb.from('h_push_subs').delete().eq('endpoint', ep); }
-    PUSH.sub = null; PUSH.row = null; renderPushModal(); renderPushBar(); toast('Obaveštenja isključena na ovom uređaju');
+    PUSH.sub = null; PUSH.row = null; LS.set('crm_push_off', '1'); renderPushModal(); renderPushBar(); toast('Obaveštenja isključena na ovom uređaju');
   } catch (e) { fail(e); }
 }
 async function pushTest(quiet) {
@@ -4143,15 +4145,26 @@ function renderPushModal() {
   $('pmStatus').innerHTML = {
     on: '<span class="pm-dot on"></span><b>Uključeno na ovom uređaju</b><small>' + esc(deviceName()) + '. Stiže i kad je CRM zatvoren.</small>',
     off: '<span class="pm-dot"></span><b>Isključeno na ovom uređaju</b><small>Uključi da ti zadaci i porudžbine stižu kao poruke, i kad je CRM zatvoren.</small>',
-    denied: '<span class="pm-dot no"></span><b>Blokirano u pretraživaču</b><small>Dozvoli obaveštenja za ovaj sajt: klikni katanac (ili ⋮ → Podešavanja sajta) pored adrese → Obaveštenja → Dozvoli, pa osveži stranicu.</small>',
+    denied: '<span class="pm-dot no"></span><b>Blokirano u pretraživaču</b><small>Pretraživač je zapamtio „Ne dozvoli“ za ovaj sajt. Odblokiraj ovako, pa klikni „Proveri ponovo“:</small><div class="pm-help">' + pushHelpHtml() + '</div>',
     ios: '<span class="pm-dot"></span><b>Na iPhone-u treba jedan korak više</b><small>Otvori CRM u Safari-ju → dugme Podeli → „Dodaj na početni ekran“. Zatim otvori CRM sa ikonice i ovde uključi obaveštenja.</small>',
     nosupport: '<span class="pm-dot no"></span><b>Ovaj pretraživač ne podržava obaveštenja</b><small>Probaj u Chrome-u.</small>',
   }[st];
   $('pmPrefs').innerHTML = PUSH_PREFS.map(([k, t, s]) => '<label class="pm-row ' + (on ? '' : 'dis') + '"><input type="checkbox" data-pp="' + k + '" ' + (prefs[k] !== false ? 'checked' : '') + ' ' + (on ? '' : 'disabled') + '><span><b>' + t + '</b><small>' + s + '</small></span></label>').join('');
-  $('pmMain').textContent = on ? 'Isključi na ovom uređaju' : 'Uključi obaveštenja';
+  $('pmMain').textContent = on ? 'Isključi na ovom uređaju' : st === 'denied' ? 'Proveri ponovo' : 'Uključi obaveštenja';
   $('pmMain').className = on ? 'btn-ghost' : 'btn-gold';
-  $('pmMain').style.display = ['on', 'off'].includes(st) ? '' : 'none';
+  $('pmMain').style.display = ['on', 'off', 'denied'].includes(st) ? '' : 'none';
   $('pmTest').style.display = on ? '' : 'none';
+}
+/* uputstvo za odblokiranje, prema pretraživaču i uređaju */
+function pushHelpHtml() {
+  const u = navigator.userAgent, site = '<b>' + location.host + '</b>';
+  if (/SamsungBrowser/.test(u)) return '<ol><li>Dole ☰ meni → <b>Podešavanja</b> → <b>Sajtovi i preuzimanja</b> → <b>Obaveštenja</b>.</li><li>Nađi ' + site + ' i stavi <b>Dozvoli</b>.</li><li>Ako i dalje ne stiže: Podešavanja telefona → Aplikacije → Samsung Internet → Obaveštenja → uključi.</li></ol>';
+  if (/Android/.test(u)) return '<ol><li>Chrome ⋮ → <b>Podešavanja</b> → <b>Podešavanja sajta</b> → <b>Obaveštenja</b>.</li><li>Nađi ' + site + ' i stavi <b>Dozvoli</b>.</li><li>Ako i dalje ne stiže: Podešavanja telefona → Aplikacije → Chrome → Obaveštenja → uključi.</li></ol>';
+  if (isIOS()) return '<ol><li>Podešavanja iPhone-a → <b>Obaveštenja</b> → <b>HARIZMA</b> → uključi <b>Dozvoli obaveštenja</b>.</li></ol>';
+  if (/Edg\//.test(u)) return '<ol><li>Klikni ikonicu <b>levo od adrese</b> (katanac).</li><li>Kod <b>Obaveštenja</b> izaberi <b>Dozvoli</b>.</li></ol>';
+  if (/Chrome/.test(u)) return '<ol><li>Klikni ikonicu <b>levo od adrese</b> (dva klizača ili katanac).</li><li>Uključi <b>Obaveštenja</b>. Ako ga nema: <b>Podešavanja sajta</b> → <b>Obaveštenja</b> → <b>Dozvoli</b>.</li>' + (/Mac/.test(u) ? '<li>Na Mac-u još: Apple meni → <b>Sistemska podešavanja</b> → <b>Obaveštenja</b> → <b>Google Chrome</b> → uključi <b>Dozvoli obaveštenja</b> (stil „Baneri“ ili „Upozorenja“) i <b>Pusti zvuk</b>.</li>' : '') + '</ol>';
+  if (/Safari/.test(u)) return '<ol><li>Safari meni → <b>Podešavanja</b> → <b>Veb-sajtovi</b> → <b>Obaveštenja</b>.</li><li>Kod ' + site + ' izaberi <b>Dozvoli</b>.</li></ol>';
+  return 'Otvori podešavanja pretraživača za ovaj sajt i dozvoli obaveštenja.';
 }
 function openPushModal() { renderPushModal(); $('pushModal').classList.add('open'); }
 function renderPushBar() {
