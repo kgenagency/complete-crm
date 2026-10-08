@@ -26,7 +26,7 @@ const pl = (n: number, a: string, b: string, c: string) => { const m10 = n % 10,
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } });
 
-type Msg = { title: string; body: string; tag?: string; go?: string };
+type Msg = { title: string; body: string; tag?: string; go?: string; kind?: string };
 async function pushTo(users: string[], kind: string, msg: Msg) {
   users = [...new Set(users)].filter(u => PEOPLE[u]); if (!users.length) return { sent: 0, subs: 0 };
   const { data: subs } = await db.from('h_push_subs').select('*').in('username', users);
@@ -75,6 +75,20 @@ async function onAudit(a: any) {
   return out;
 }
 
+// tim chat: obaveštenje samo onome ko je označen (@ime ili @svi)
+async function onChat(m: any) {
+  const members: string[] = m.channel === 'tim' ? USERS : String(m.channel || '').split(':').slice(1);
+  const ment: string[] = Array.isArray(m.mentions) ? m.mentions : [];
+  const to = (ment.includes('svi') ? members : ment.filter((u) => members.includes(u))).filter((u) => u !== m.author);
+  if (!to.length || !PEOPLE[m.author]) return { sent: 0 };
+  const dm = m.channel !== 'tim';
+  return await pushTo(to, 'chat', {
+    title: dm ? `💬 ${pname(m.author)} ti piše` : `💬 ${pname(m.author)} te ${vb(m.author, 'pominje', 'pominje')} u Tim chatu`,
+    body: m.body ? cut(m.body, 180) : (m.image_url && /\.gif(\?|$)/i.test(m.image_url) ? 'GIF' : '📷 Slika'),
+    tag: `chat-${m.channel}`, go: `chat:${m.channel}`, kind: 'chat',
+  });
+}
+
 // jutarnji podsetnik: šta ističe danas i šta kasni
 const FINAL: Record<string, (r: any) => boolean> = {
   h_posts: r => r.status === 'published', h_site_ideas: r => ['done', 'rejected'].includes(r.status), h_returns: r => ['resolved', 'rejected'].includes(r.status),
@@ -111,6 +125,8 @@ Deno.serve(async (req) => {
   if (HOOK && req.headers.get('x-crm-hook') === HOOK) {
     try {
       if (body.audit) return json({ ok: true, res: await onAudit(body.audit) });
+      if (body.chat) return json({ ok: true, res: await onChat(body.chat) });
+      if (Array.isArray(body.test_users)) return json({ ok: true, res: await pushTo(body.test_users, 'test', { title: body.title || 'Obaveštenja rade ✓', body: body.text || 'Ovako će stizati zadaci, porudžbine, povrati i poruke iz HARIZMA CRM-a.', tag: 'test', go: body.go || 'tab:overview' }) });
       if (body.daily) return json({ ok: true, res: await daily(!!body.force) });
       if (body.selftest) { // provera da li šifrovanje i potpis rade u ovom okruženju (šalje na zadatu adresu)
         if (body.selftest.send) { try { const x = await webpush.sendNotification(body.selftest.sub, '{"title":"x"}', { TTL: 60 }); return json({ ok: true, sent: x.statusCode }); } catch (e: any) { return json({ ok: false, code: e?.statusCode, err: String(e?.message || e) }); } }

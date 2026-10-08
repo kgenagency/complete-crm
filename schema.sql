@@ -677,3 +677,106 @@ end $$;
 -- Obaveštenja na telefon i računar (Web Push): pretplate po uređaju, tajna za okidač, okidač na h_audit, jutarnji cron
 -- (VAPID ključevi i PUSH_HOOK_SECRET su u tajnama Edge funkcija; funkcija crm-push, verify_jwt=false, proverava x-crm-hook)
 -- vidi: h_push_subs, h_private, h_push_hook(), h_push_register(), cron 'crm-push-daily' (06 i 07 UTC, funkcija šalje samo u 8h po Beogradu)
+
+-- ===== TIM CHAT: grupa „tim“ + privatne poruke (dm:ime1:ime2, imena po abecedi) =====
+create or replace function public.h_chat_can(ch text) returns boolean language sql stable as $$
+  select crm_user() in ('konstantin', 'stasa', 'marjan')
+    and (ch = 'tim' or (ch ~ '^dm:[a-z]+:[a-z]+$' and crm_user() = any(string_to_array(substr(ch, 4), ':'))))
+$$;
+create table if not exists public.h_chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  channel text not null check (channel = 'tim' or channel ~ '^dm:[a-z]+:[a-z]+$'),
+  author text not null,
+  body text check (body is null or length(body) <= 4000),
+  image_url text,
+  mentions text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  check (body is not null or image_url is not null)
+);
+create index if not exists h_chat_messages_ch_at on public.h_chat_messages (channel, created_at desc);
+alter table public.h_chat_messages enable row level security;
+drop policy if exists "chat citanje" on public.h_chat_messages;
+drop policy if exists "chat slanje" on public.h_chat_messages;
+create policy "chat citanje" on public.h_chat_messages for select to authenticated using (h_chat_can(channel));
+create policy "chat slanje" on public.h_chat_messages for insert to authenticated with check (h_chat_can(channel) and author = crm_user());
+-- nema politike za izmenu ni brisanje: istorija se ne menja i ne briše
+
+-- pre upisa: autor je uvek prijavljeni korisnik, oznake (@ime) se računaju iz teksta
+create or replace function public.h_chat_before() returns trigger language plpgsql as $$
+begin
+  if crm_user() is not null then new.author := crm_user(); end if;
+  new.created_at := now();
+  select coalesce(array_agg(distinct x), '{}') into new.mentions from (
+    select case translate(lower(m[1]), 'š', 's') when 'all' then 'svi' else translate(lower(m[1]), 'š', 's') end x
+    from regexp_matches(coalesce(new.body, ''), '@(konstantin|stasa|staša|marjan|svi|all)\M', 'gi') as m) t;
+  return new;
+end $$;
+drop trigger if exists h_chat_before_trg on public.h_chat_messages;
+create trigger h_chat_before_trg before insert on public.h_chat_messages for each row execute function public.h_chat_before();
+
+-- zaštita: poruke se ne mogu menjati ni brisati (ni greškom)
+create or replace function public.h_chat_lock() returns trigger language plpgsql as $$
+begin raise exception 'Poruke u chatu se ne menjaju i ne brišu (istorija se čuva zauvek)'; end $$;
+drop trigger if exists h_chat_lock_trg on public.h_chat_messages;
+create trigger h_chat_lock_trg before update or delete on public.h_chat_messages for each row execute function public.h_chat_lock();
+
+-- dokle je ko pročitao (za brojač nepročitanih i „Viđeno“)
+create table if not exists public.h_chat_reads (
+  username text not null, channel text not null, last_read_at timestamptz not null default now(),
+  primary key (username, channel)
+);
+alter table public.h_chat_reads enable row level security;
+drop policy if exists "chat procitano citanje" on public.h_chat_reads;
+drop policy if exists "chat procitano upis" on public.h_chat_reads;
+drop policy if exists "chat procitano izmena" on public.h_chat_reads;
+create policy "chat procitano citanje" on public.h_chat_reads for select to authenticated using (h_chat_can(channel));
+create policy "chat procitano upis" on public.h_chat_reads for insert to authenticated with check (username = crm_user() and h_chat_can(channel));
+create policy "chat procitano izmena" on public.h_chat_reads for update to authenticated using (username = crm_user()) with check (username = crm_user() and h_chat_can(channel));
+
+-- uživo
+do $$ begin
+  begin alter publication supabase_realtime add table public.h_chat_messages; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.h_chat_reads; exception when duplicate_object then null; end;
+end $$;
+
+-- obaveštenje na telefon samo kad je neko označen (@ime ili @svi)
+create or replace function public.h_chat_push() returns trigger language plpgsql security definer set search_path = public, extensions as $$
+declare sec text;
+begin
+  if coalesce(array_length(new.mentions, 1), 0) = 0 then return new; end if;
+  select v into sec from public.h_private where k = 'push_hook';
+  perform net.http_post(url := 'https://treqdonahihterhaxxfw.supabase.co/functions/v1/crm-push',
+    body := jsonb_build_object('chat', to_jsonb(new)),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-crm-hook', sec), timeout_milliseconds := 15000);
+  return new;
+exception when others then return new;
+end $$;
+drop trigger if exists h_chat_push_trg on public.h_chat_messages;
+create trigger h_chat_push_trg after insert on public.h_chat_messages for each row execute function public.h_chat_push();
+
+-- izbor obaveštenja: dodaj „chat“ (podrazumevano uključeno)
+alter table public.h_push_subs alter column prefs set default '{"tasks":true,"done":true,"orders":true,"returns":true,"daily":true,"chat":true}'::jsonb;
+
+-- Dnevna kopija baze (funkcija crm-backup, verify_jwt=false, proverava x-crm-hook): sve h_* i p_* tabele kao JSON
+-- u privatni repo kgenagency/complete-crm-backups (latest/<tabela>.json + _summary.json). Tajne: GITHUB_BACKUP_TOKEN, BACKUP_REPO.
+create or replace function public.h_backup_tables() returns setof text language sql stable security definer set search_path = public as $$
+  select table_name::text from information_schema.tables
+  where table_schema = 'public' and table_type = 'BASE TABLE' and (table_name like 'h\_%' or table_name like 'p\_%')
+    and table_name not in ('h_private', 'h_push_subs') order by 1
+$$;
+create or replace function public.h_backup_dump(t text) returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare r jsonb;
+begin
+  if t not in (select public.h_backup_tables()) then raise exception 'nepoznata tabela'; end if;
+  execute format('select coalesce(jsonb_agg(to_jsonb(x)), ''[]''::jsonb) from public.%I x', t) into r;
+  return r;
+end $$;
+revoke all on function public.h_backup_tables() from public, anon, authenticated;
+revoke all on function public.h_backup_dump(text) from public, anon, authenticated;
+grant execute on function public.h_backup_tables() to service_role;
+grant execute on function public.h_backup_dump(text) to service_role;
+select cron.schedule('crm-backup-daily', '30 1 * * *', $c$
+  select net.http_post(url := 'https://treqdonahihterhaxxfw.supabase.co/functions/v1/crm-backup', body := '{}'::jsonb,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-crm-hook', (select v from public.h_private where k = 'push_hook')), timeout_milliseconds := 120000)
+$c$);
+-- GIF pretraga: funkcija crm-gif (verify_jwt=true) traži preko Giphy-ja kad postoji tajna GIPHY_API_KEY; bez nje vraća configured:false
