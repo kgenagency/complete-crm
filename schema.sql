@@ -1054,3 +1054,204 @@ exception when others then return new;
 end $function$;
 alter table public.h_push_subs alter column prefs set default '{"tasks":true,"done":true,"orders":true,"returns":true,"daily":true,"chat":true,"comments":true,"calls":true,"deadline":true,"mentions":true}'::jsonb;
 select 'ok';
+
+-- ===== v30: Shopify <-> CRM (samo HARIZMA, h_ tabele; potkovice p_ se ne diraju) =====
+alter table public.h_customers add column if not exists shopify_customer_id text;
+
+-- dnevnik veze (CRM prikazuje poslednje događaje)
+create table if not exists public.h_shopify_log (
+  id bigserial primary key, at timestamptz not null default now(), dir text not null default 'in', topic text, ok boolean not null default true,
+  ref text, msg text, webhook_id text unique
+);
+alter table public.h_shopify_log enable row level security;
+drop policy if exists "modul harizma" on public.h_shopify_log;
+create policy "modul harizma" on public.h_shopify_log for select to authenticated using (crm_user() = any (array['konstantin','stasa','marjan']));
+
+-- red za slanje iz CRM-a u Shopify (stanje, cene, status); šalje se kad postoji ključ aplikacije
+create table if not exists public.h_shopify_queue (
+  id bigserial primary key, at timestamptz not null default now(), kind text not null, ref uuid not null,
+  tries int not null default 0, done_at timestamptz, last_error text
+);
+create unique index if not exists h_shopify_queue_open on public.h_shopify_queue(kind, ref) where done_at is null;
+alter table public.h_shopify_queue enable row level security;
+drop policy if exists "modul harizma" on public.h_shopify_queue;
+create policy "modul harizma" on public.h_shopify_queue for select to authenticated using (crm_user() = any (array['konstantin','stasa','marjan']));
+
+-- porudžbina sa Shopify-ja -> CRM (poziva crm-shopify; idempotentno po shopify_order_id)
+create or replace function public.h_shopify_order_in(o jsonb)
+ returns jsonb language plpgsql security definer set search_path to 'public'
+as $function$
+declare ex record; nid uuid; it jsonb; pk record; held boolean; n_items int := 0; out_note text := '';
+begin
+  perform set_config('request.jwt.claims', '{"email":"shopify@harizma.local"}', true);
+  select * into ex from h_orders where shopify_order_id = o->>'shopify_order_id' limit 1;
+  if found and ex.deleted_at is not null then return jsonb_build_object('skip', 'obrisana u CRM-u', 'id', ex.id); end if;
+  if not found then
+    insert into h_orders (created_at, order_no, channel, customer_name, phone, email, address, city, postal_code, status, payment,
+                          shipping_price, discount, discount_code, note, shopify_order_id, source, tracking_no, courier)
+    values (coalesce((o->>'created_at')::timestamptz, now()), o->>'order_no', 'shopify', coalesce(nullif(o->>'customer_name', ''), 'Kupac sa sajta'),
+            nullif(o->>'phone', ''), nullif(o->>'email', ''), nullif(o->>'address', ''), nullif(o->>'city', ''), nullif(o->>'postal_code', ''),
+            case when (o->>'cancelled')::boolean then 'cancelled' else 'new' end, coalesce(nullif(o->>'payment', ''), 'cod'),
+            coalesce((o->>'shipping_price')::numeric, 0), coalesce((o->>'discount')::numeric, 0), nullif(o->>'discount_code', ''),
+            nullif(o->>'note', ''), o->>'shopify_order_id', coalesce(nullif(o->>'source', ''), 'organic'), nullif(o->>'tracking_no', ''), nullif(o->>'courier', ''))
+    returning id into nid;
+    for it in select * from jsonb_array_elements(coalesce(o->'items', '[]'::jsonb)) loop
+      insert into h_order_items (order_id, product_id, variant_id, name, size, qty, unit_price, unit_cost)
+      values (nid, coalesce(nullif(it->>'product_id', '')::uuid, (select product_id from h_variants where id = nullif(it->>'variant_id', '')::uuid)),
+              nullif(it->>'variant_id', '')::uuid, it->>'name', it->>'size',
+              greatest(1, coalesce((it->>'qty')::int, 1)), coalesce((it->>'unit_price')::numeric, 0),
+              coalesce(nullif(it->>'unit_cost', '')::numeric, (select p.buy_price from h_variants v join h_products p on p.id = v.product_id where v.id = nullif(it->>'variant_id', '')::uuid), 0));
+      n_items := n_items + 1;
+      if not (o->>'cancelled')::boolean and nullif(it->>'variant_id', '') is not null then
+        update h_variants set stock = stock - greatest(1, coalesce((it->>'qty')::int, 1)) where id = (it->>'variant_id')::uuid;
+      end if;
+    end loop;
+    if not (o->>'cancelled')::boolean then
+      for pk in select * from h_packaging where deleted_at is null and per_order > 0 loop
+        update h_packaging set stock = greatest(0, stock - pk.per_order) where id = pk.id;
+      end loop;
+    end if;
+    insert into h_activities (order_id, type, author, body)
+    values (nid, 'system', 'Shopify', 'Porudžbina stigla sa sajta ' || coalesce(o->>'order_no', '') || ' (Shopify)' ||
+            case when exists (select 1 from jsonb_array_elements(coalesce(o->'items', '[]'::jsonb)) e where nullif(e->>'variant_id', '') is null)
+                 then ' · neki artikli nisu povezani sa Garderobom, stanje za njih nije skinuto' else '' end);
+    return jsonb_build_object('created', true, 'id', nid, 'items', n_items);
+  end if;
+  -- već postoji: otkazivanje i slanje (praćenje) sa Shopify-ja
+  if (o->>'cancelled')::boolean and ex.status not in ('cancelled', 'returned') then
+    held := ex.status not in ('cancelled', 'returned');
+    update h_orders set status = 'cancelled' where id = ex.id;
+    if held then
+      update h_variants v set stock = v.stock + i.qty from h_order_items i where i.order_id = ex.id and i.deleted_at is null and i.variant_id = v.id;
+      insert into h_shopify_queue (kind, ref) select 'stock', i.variant_id from h_order_items i where i.order_id = ex.id and i.deleted_at is null and i.variant_id is not null
+        on conflict (kind, ref) where done_at is null do nothing;
+    end if;
+    insert into h_activities (order_id, type, author, body) values (ex.id, 'status', 'Shopify', 'Otkazana na Shopify-ju, roba vraćena na stanje');
+    out_note := 'cancelled';
+  end if;
+  if nullif(o->>'tracking_no', '') is not null and ex.tracking_no is distinct from o->>'tracking_no' and ex.status not in ('cancelled', 'returned') then
+    update h_orders set tracking_no = o->>'tracking_no', courier = coalesce(nullif(o->>'courier', ''), courier),
+      status = case when status in ('new', 'confirmed', 'packed') then 'shipped' else status end,
+      shipped_at = case when status in ('new', 'confirmed', 'packed') then now() else shipped_at end
+    where id = ex.id;
+    insert into h_activities (order_id, type, author, body) values (ex.id, 'status', 'Shopify', 'Poslata sa Shopify-ja, broj pošiljke ' || (o->>'tracking_no'));
+    out_note := out_note || ' shipped';
+  end if;
+  return jsonb_build_object('created', false, 'id', ex.id, 'changed', nullif(trim(out_note), ''));
+end $function$;
+revoke all on function public.h_shopify_order_in(jsonb) from public, anon, authenticated;
+
+-- promene u CRM-u koje treba poslati u Shopify (stanje veličine; cena, status ili brisanje modela)
+create or replace function public.h_shopify_enqueue()
+ returns trigger language plpgsql security definer set search_path to 'public', 'extensions'
+as $function$
+declare v_kind text; v_ref uuid; v_sec text;
+begin
+  if coalesce(current_setting('request.jwt.claims', true), '') like '%shopify@harizma.local%' then return new; end if; -- promena je došla sa Shopify-ja
+  if tg_table_name = 'h_variants' then
+    if new.shopify_variant_id is null then return new; end if;
+    if tg_op = 'UPDATE' and new.stock is not distinct from old.stock then return new; end if;
+    v_kind := 'stock'; v_ref := new.id;
+  else
+    if new.shopify_product_id is null then return new; end if;
+    if tg_op = 'UPDATE' and new.sell_price is not distinct from old.sell_price and new.compare_price is not distinct from old.compare_price
+       and new.status is not distinct from old.status and new.deleted_at is not distinct from old.deleted_at then return new; end if;
+    v_kind := 'product'; v_ref := new.id;
+  end if;
+  insert into h_shopify_queue (kind, ref) values (v_kind, v_ref) on conflict (kind, ref) where done_at is null do nothing;
+  if exists (select 1 from h_private where k = 'shopify_cid') then
+    select v into v_sec from h_private where k = 'push_hook';
+    perform net.http_post(url := 'https://treqdonahihterhaxxfw.supabase.co/functions/v1/crm-shopify',
+      body := '{"queue":true}'::jsonb, headers := jsonb_build_object('Content-Type', 'application/json', 'x-crm-hook', v_sec), timeout_milliseconds := 20000);
+  end if;
+  return new;
+exception when others then return new;
+end $function$;
+drop trigger if exists h_shopify_var_trg on public.h_variants;
+create trigger h_shopify_var_trg after update of stock on public.h_variants for each row execute function public.h_shopify_enqueue();
+drop trigger if exists h_shopify_prod_trg on public.h_products;
+create trigger h_shopify_prod_trg after update of sell_price, compare_price, status, deleted_at on public.h_products for each row execute function public.h_shopify_enqueue();
+
+-- svakih 10 min: red i provera stanja (funkcija ne radi ništa dok nema ključa aplikacije)
+select cron.unschedule('crm-shopify-sync') where exists (select 1 from cron.job where jobname = 'crm-shopify-sync');
+select cron.schedule('crm-shopify-sync', '*/10 * * * *', $cron$
+  select net.http_post(url := 'https://treqdonahihterhaxxfw.supabase.co/functions/v1/crm-shopify', body := '{"cron":true}'::jsonb,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-crm-hook', (select v from public.h_private where k = 'push_hook')), timeout_milliseconds := 55000)
+  where exists (select 1 from public.h_private where k = 'shopify_cid')
+$cron$);
+alter table public.h_push_subs alter column prefs set default '{"tasks":true,"done":true,"orders":true,"returns":true,"daily":true,"chat":true,"comments":true,"calls":true,"deadline":true,"mentions":true}'::jsonb;
+select 'ok';
+
+-- izmena modela sa Shopify-ja (cena, „bila“ cena, status) i nove veličine dodate na Shopify-ju
+create or replace function public.h_shopify_product_in(pid uuid, f jsonb, add jsonb default '[]'::jsonb)
+ returns jsonb language plpgsql security definer set search_path to 'public'
+as $function$
+declare e jsonb; n_link int := 0; n_new int := 0; vid uuid;
+begin
+  perform set_config('request.jwt.claims', '{"email":"shopify@harizma.local"}', true);
+  if f is not null and f <> '{}'::jsonb then
+    update h_products set
+      sell_price = case when f ? 'sell_price' then nullif(f->>'sell_price', '')::numeric else sell_price end,
+      compare_price = case when f ? 'compare_price' then nullif(f->>'compare_price', '')::numeric else compare_price end,
+      status = case when f ? 'status' and f->>'status' in ('active', 'draft', 'archived') then f->>'status' else status end
+    where id = pid;
+  end if;
+  for e in select * from jsonb_array_elements(coalesce(add, '[]'::jsonb)) loop
+    if exists (select 1 from h_variants where shopify_variant_id = e->>'shopify_variant_id') then continue; end if;
+    update h_variants set shopify_variant_id = e->>'shopify_variant_id'
+      where product_id = pid and upper(size) = upper(e->>'size') and color is not distinct from nullif(e->>'color', '') and shopify_variant_id is null and deleted_at is null
+      returning id into vid;
+    if vid is not null then n_link := n_link + 1; vid := null; continue; end if;
+    insert into h_variants (product_id, size, color, stock, shopify_variant_id)
+      values (pid, coalesce(nullif(e->>'size', ''), 'UNI'), nullif(e->>'color', ''), coalesce((e->>'stock')::int, 0), e->>'shopify_variant_id')
+      on conflict do nothing;
+    n_new := n_new + 1;
+  end loop;
+  return jsonb_build_object('linked', n_link, 'new', n_new);
+end $function$;
+revoke all on function public.h_shopify_product_in(uuid, jsonb, jsonb) from public, anon, authenticated;
+
+-- novi proizvod napravljen na Shopify-ju: poveže se sa istim modelom u CRM-u ako postoji (po imenu), inače se doda u Garderobu
+create or replace function public.h_shopify_product_new(p jsonb)
+ returns jsonb language plpgsql security definer set search_path to 'public'
+as $function$
+declare pid uuid; base text := upper(split_part(trim(p->>'name'), ' ', 1)); linked boolean := false; r jsonb;
+begin
+  perform set_config('request.jwt.claims', '{"email":"shopify@harizma.local"}', true);
+  select id into pid from h_products where shopify_product_id = p->>'shopify_product_id' limit 1;
+  if pid is not null then return jsonb_build_object('exists', pid); end if;
+  select id into pid from h_products where deleted_at is null and shopify_product_id is null and upper(name) in (upper(p->>'name'), base) limit 1;
+  if pid is not null then
+    update h_products set shopify_product_id = p->>'shopify_product_id' where id = pid; linked := true;
+  else
+    insert into h_products (name, category, sell_price, compare_price, status, image_url, shopify_product_id)
+    values (p->>'name', nullif(p->>'category', ''), coalesce(nullif(p->>'sell_price', '')::numeric, 0), nullif(p->>'compare_price', '')::numeric,
+            coalesce(nullif(p->>'status', ''), 'draft'), nullif(p->>'image_url', ''), p->>'shopify_product_id')
+    returning id into pid;
+  end if;
+  r := public.h_shopify_product_in(pid, '{}'::jsonb, coalesce(p->'variants', '[]'::jsonb));
+  insert into h_activities (product_id, type, author, body)
+  values (pid, 'system', 'Shopify', case when linked then 'Model povezan sa proizvodom na Shopify-ju' else 'Nov model napravljen na Shopify-ju, dodat u Garderobu' end);
+  return jsonb_build_object('id', pid, 'linked', linked, 'variants', r);
+end $function$;
+revoke all on function public.h_shopify_product_new(jsonb) from public, anon, authenticated;
+
+-- kupac sa Shopify-ja: samo se poveže sa postojećim kupcem u CRM-u (prijave na popust ne prave nove kupce)
+create or replace function public.h_shopify_customer_in(c jsonb)
+ returns jsonb language plpgsql security definer set search_path to 'public'
+as $function$
+declare cid uuid; ph text := nullif(h_norm_phone(c->>'phone'), ''); em text := nullif(lower(trim(c->>'email')), '');
+begin
+  perform set_config('request.jwt.claims', '{"email":"shopify@harizma.local"}', true);
+  select id into cid from h_customers where shopify_customer_id = c->>'shopify_customer_id' and deleted_at is null limit 1;
+  if cid is null and em is not null then select id into cid from h_customers where lower(email) = em and deleted_at is null limit 1; end if;
+  if cid is null and ph is not null then select id into cid from h_customers where phone_norm = ph and deleted_at is null limit 1; end if;
+  if cid is null then return jsonb_build_object('skip', 'nije kupac u CRM-u'); end if;
+  update h_customers set shopify_customer_id = c->>'shopify_customer_id',
+    email = coalesce(email, nullif(c->>'email', '')), phone = coalesce(phone, nullif(c->>'phone', '')), phone_norm = coalesce(phone_norm, ph),
+    city = coalesce(city, nullif(c->>'city', '')), address = coalesce(address, nullif(c->>'address', '')), postal_code = coalesce(postal_code, nullif(c->>'postal_code', ''))
+  where id = cid;
+  return jsonb_build_object('linked', cid);
+end $function$;
+revoke all on function public.h_shopify_customer_in(jsonb) from public, anon, authenticated;
+select 'ok';

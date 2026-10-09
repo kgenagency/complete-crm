@@ -1812,6 +1812,30 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 .sup-tag{display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:3px 4px 3px 11px;border-radius:99px;background:#1B2620;color:#E8E4D9;font-size:12px;font-weight:700}
 .sup-tag button{border:0;background:rgba(255,255,255,.16);color:inherit;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px}
 @media (max-width:759px){.sup-row{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}.sup-card{flex:0 0 74%;scroll-snap-align:start}.sup-hint{display:none}.sup-new input{font-size:16px}}
+
+/* ===== v30: Shopify <-> CRM ===== */
+.shp-panel{margin:16px 0 4px}
+.shp{border:1.5px solid var(--line);border-radius:16px;background:var(--surface);overflow:hidden}
+.shp.open{border-color:rgba(149,191,71,.55)}
+.shp-head{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border:0;background:none;cursor:pointer;text-align:left;font:inherit;color:var(--ink)}
+.shp-logo{width:34px;height:34px;border-radius:10px;background:#5e8e3e;color:#fff;font:800 17px var(--font-ui);display:flex;align-items:center;justify-content:center;flex:none}
+.shp-t{flex:1;min-width:0;display:flex;flex-direction:column}.shp-t b{font-size:14.5px}.shp-t small{color:var(--muted);font-size:12.5px;line-height:1.35}
+.shp-dot{width:10px;height:10px;border-radius:50%;flex:none;background:#c9a96e}.shp-dot.ok{background:#3c9a5f;box-shadow:0 0 0 4px rgba(60,154,95,.15)}.shp-dot.bad{background:#c0392b}
+.shp-car{color:var(--muted);font-size:12px}
+.shp-body{padding:2px 16px 16px;font-size:13.5px;line-height:1.5;color:var(--ink-2)}
+.shp-what{background:#f4f7ef;border-radius:12px;padding:11px 13px;margin-bottom:8px}
+.shp-why{font-size:12.5px;color:var(--muted);margin-bottom:6px}
+.shp-steps{margin:8px 0 10px;padding-left:20px}.shp-steps li{margin:4px 0}.shp-steps code{font-size:11.5px;background:#f1efe8;padding:1px 5px;border-radius:5px;word-break:break-word}
+.shp-form{display:flex;gap:8px;flex-wrap:wrap}.shp-form input{flex:1 1 190px;min-width:0;font:14px var(--font-ui);padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:#fff}
+.shp-note{font-size:12px;color:var(--muted);margin-top:6px}
+.shp-err{margin:8px 0;padding:9px 12px;border-radius:10px;background:#fbeaea;color:#8e2a20;font-size:13px}
+.shp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 10px}.shp-grid>div{background:#f6f5f0;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column}
+.shp-grid small{color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}.shp-grid b{font-size:15px;color:var(--ink)}.shp-grid span{font-size:12px;color:var(--muted)}
+.shp-acts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.shp-evs{margin-top:12px;border-top:1px solid var(--line-soft);padding-top:8px}.shp-evs>small{display:block;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.shp-ev{display:grid;grid-template-columns:16px auto 1fr auto;gap:8px;align-items:baseline;padding:4px 0;font-size:12.5px}.shp-ev>span:first-child{color:#3c9a5f;font-weight:800}.shp-ev.bad>span:first-child{color:#c0392b}
+.shp-ev .shp-m{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.shp-ev time{color:var(--muted);font-size:11.5px}
+@media (max-width:759px){.shp-grid{grid-template-columns:1fr}.shp-form input{font-size:16px}}
 </style>
 </head>
 <body>
@@ -2017,6 +2041,7 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
         </div>
         <div class="stats" id="kpiStock"></div>
         <div class="sup-panel" id="supPanel"></div>
+        <div class="shp-panel" id="shpPanel"></div>
         <div class="toolbar"><div class="fu-title">Modeli</div><span class="fu-count" id="prodCount">0</span><span id="prodSupTag"></span>
           <label class="prod-find"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="prodFind" type="search" placeholder="Nađi model ili boju" autocomplete="off"></label></div>
         <div class="table-card"><table>
@@ -2700,8 +2725,8 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610090908"></script>
-<script>window.HTML_BUILD="202610090908";</script>
-<script src="app.js?v=202610090908"></script>
+<script src="config.js?v=202610091130"></script>
+<script>window.HTML_BUILD="202610091130";</script>
+<script src="app.js?v=202610091130"></script>
 </body>
 </html>

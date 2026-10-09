@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610090908';
+const APP_BUILD = '202610091130';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -401,6 +401,7 @@ function renderProducts() {
   $('prodCount').textContent = (qq || ff || SUP.f !== 'all') ? `${list.length} od ${state.products.length}` : state.products.length;
   if ($('prodSupTag')) $('prodSupTag').innerHTML = SUP.f !== 'all' ? `<span class="sup-tag">${esc(SUP.f === '__none' ? 'Bez dobavljača' : SUP.f)}<button type="button" data-supf="all" aria-label="Svi dobavljači">✕</button></span>` : '';
   renderSuppliers();
+  if (state.tab === 'products') { renderShopify(); shpRefresh(); }
 }
 async function bumpStock(vid, d) {
   const v = variant(vid); if (!v) return;
@@ -1229,6 +1230,73 @@ function supBind() {
     const i = e.target.closest && e.target.closest('[data-supnew]'); if (!i) return;
     if (e.key === 'Enter') { e.preventDefault(); supSet(i.dataset.supnew, i.value); }
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); SUP.edit = null; renderProducts(); }
+  });
+}
+/* ---------- SHOPIFY <-> CRM: status veze, povezivanje ključa, sinhronizacija ---------- */
+const SHP = { st: null, at: 0, busy: false, err: '', open: LS.get('crm_shp_open', '') === '1' };
+async function shpCall(body) {
+  const { data } = await sb.auth.getSession(); const tok = data.session?.access_token;
+  const r = await fetch(SUPABASE_URL + '/functions/v1/crm-shopify', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  const d = await r.json().catch(() => ({})); if (!r.ok || !d.ok) throw new Error(d.error || ('greška ' + r.status)); return d;
+}
+async function shpRefresh(force) {
+  if (!state.user || SHP.busy || (!force && Date.now() - SHP.at < 60000)) return;
+  SHP.at = Date.now();
+  try { const d = await shpCall({}); SHP.st = d.res; SHP.err = ''; } catch (e) { SHP.err = String(e.message || e); }
+  renderShopify();
+}
+function shpEvt(e) {
+  let m = e.msg || ''; try { const j = JSON.parse(m); m = j.order ? `porudžbina ${j.order}${j.created ? ' stigla' : ''}` : j.updated ? `${j.updated} izmenjen` : j.created ? 'nov model' : j.archived ? `${j.archived} arhiviran` : j.linked ? 'kupac povezan' : j.skip ? j.skip : m; } catch (x) {}
+  const T = { 'orders/create': 'Porudžbina', 'orders/updated': 'Porudžbina', 'orders/cancelled': 'Otkazivanje', 'orders/pull': 'Porudžbina', 'products/create': 'Proizvod', 'products/update': 'Proizvod', 'products/delete': 'Proizvod', 'customers/update': 'Kupac', stanje: 'Stanje → sajt', model: 'Cena/status → sajt', povezivanje: 'Povezivanje', webhooks: 'Veza' };
+  return `<div class="shp-ev ${e.ok ? '' : 'bad'}"><span>${e.ok ? '✓' : '!'}</span><b>${esc(T[e.topic] || e.topic)}</b><span class="shp-m">${esc(tcut(m, 90))}</span><time>${relTime(e.at)}</time></div>`;
+}
+function renderShopify() {
+  const box = $('shpPanel'); if (!box) return;
+  const s = SHP.st, out = s && s.outbound, inn = s && s.inbound, me = who() === 'konstantin';
+  const conn = !!(out && out.configured && out.ok);
+  const lastIn = inn && inn.last && inn.last[0];
+  const head = `<button type="button" class="shp-head" data-shptoggle><span class="shp-logo">S</span><span class="shp-t"><b>Shopify ↔ CRM</b><small>${!s ? (SHP.err ? 'status nije dostupan' : 'proveravam vezu…') : conn ? `povezano · porudžbine sa sajta stižu same, stanje i cene idu na sajt${out.pending ? ` · na čekanju ${out.pending}` : ''}` : out && out.configured ? 'ključ postoji, ali Shopify ga ne prihvata' : 'nije povezano · jedan korak do pune sinhronizacije'}</small></span><span class="shp-dot ${conn ? 'ok' : out && out.configured ? 'bad' : 'wait'}"></span><span class="shp-car">${SHP.open || !conn ? '▴' : '▾'}</span></button>`;
+  if (!SHP.open && conn) { box.innerHTML = `<div class="shp card-ish">${head}</div>`; return; }
+  const evs = [...((inn && inn.last) || []), ...((out && out.last) || [])].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 6);
+  const steps = `<ol class="shp-steps">
+    <li>Na Shopify-ju otvori <b>Settings → Apps → Develop apps</b> i klikni <b>Build apps in Dev Dashboard</b> (ili idi na <b>dev.shopify.com</b>).</li>
+    <li><b>Create app</b> → <b>Start from Dev Dashboard</b>, ime <b>HARIZMA CRM</b> → <b>Create</b>.</li>
+    <li>Na strani <b>Versions</b>: u <b>Scopes</b> upiši <code>read_orders, read_products, write_products, read_inventory, write_inventory, read_locations, read_customers</code>, pa <b>Release</b>.</li>
+    <li><b>Install app</b> → izaberi prodavnicu <b>wegmk4-wf</b> → <b>Install</b>.</li>
+    <li>U <b>Settings</b> aplikacije kopiraj <b>Client ID</b> i <b>Client secret</b> i nalepi ih ovde ispod.</li></ol>`;
+  const form = me ? `<div class="shp-form"><input id="shpCid" placeholder="Client ID" autocomplete="off" spellcheck="false"><input id="shpSec" type="password" placeholder="Client secret" autocomplete="new-password" spellcheck="false"><button type="button" class="btn-gold" data-shpconnect ${SHP.busy ? 'disabled' : ''}>${SHP.busy ? 'Povezujem…' : 'Poveži'}</button></div><div class="shp-note">Ključ ostaje samo u bazi CRM-a (ne vidi ga niko u timu), a CRM sam obnavlja pristup na 24 h.</div>` : '<div class="shp-note">Povezivanje radi Konstantin (njegov Shopify nalog).</div>';
+  box.innerHTML = `<div class="shp card-ish open">${head}
+    <div class="shp-body">
+      ${conn ? `<div class="shp-grid"><div><small>Sajt → CRM</small><b>${inn && inn.hooks ? 'radi' : 'podešava se'}</b><span>${lastIn ? 'poslednje: ' + relTime(lastIn.at) : 'još nije bilo događaja'}</span></div><div><small>CRM → sajt</small><b>${out.pending ? `${out.pending} na čekanju` : 'sve poslato'}</b><span>${out.reconciled_at ? 'provera stanja: ' + relTime(out.reconciled_at) : ''}</span></div></div>
+        <div class="shp-acts"><button type="button" class="btn-ghost" data-shpsync ${SHP.busy ? 'disabled' : ''}>${SHP.busy ? 'Sinhronizujem…' : '⟳ Sinhronizuj sada'}</button>${me ? '<button type="button" class="btn-ghost" data-shpre>Promeni ključ</button>' : ''}</div>
+        ${SHP.re ? steps + form : ''}`
+      : `<div class="shp-what"><b>Šta radi kad se poveže:</b> porudžbina sa sajta odmah stiže u Porudžbine (kupac, adresa, artikli, izvor reklame) i skida stanje u Garderobi; otkazivanje i broj pošiljke sa Shopify-ja se upisuju sami; svaka promena stanja u CRM-u (i DM porudžbine) ide na sajt, kao i cena i status modela; novi proizvod na Shopify-ju se pojavi u Garderobi. Sve ostalo u CRM-u ostaje isto.</div>
+        <div class="shp-why">Shopify od 2026. dozvoljava vezu sa spoljnim sistemom samo preko aplikacije koju vlasnik prodavnice napravi i odobri, pa ovaj korak traje oko 3 minuta i radi se jednom.</div>
+        ${out && out.configured && out.error ? `<div class="shp-err">${esc(out.error)}</div>` : ''}${SHP.err ? `<div class="shp-err">${esc(SHP.err)}</div>` : ''}
+        ${steps}${form}`}
+      ${evs.length ? `<div class="shp-evs"><small>Poslednji događaji</small>${evs.map(shpEvt).join('')}</div>` : ''}
+    </div></div>`;
+}
+async function shpConnect() {
+  const cid = ($('shpCid')?.value || '').trim(), sec = ($('shpSec')?.value || '').trim();
+  if (!cid || !sec) return toast('Upiši Client ID i Client secret');
+  SHP.busy = true; renderShopify();
+  try { const d = await shpCall({ connect: true, client_id: cid, client_secret: sec }); SHP.re = false; toast('Shopify povezan ✓ ' + (d.res?.diff ? `(${d.res.diff} veličina usklađeno)` : '')); sfx('notif'); }
+  catch (e) { toast('Nije povezano: ' + tcut(e.message, 140), 6000); }
+  SHP.busy = false; SHP.at = 0; await shpRefresh(true);
+}
+async function shpSync() {
+  SHP.busy = true; renderShopify();
+  try { const d = await shpCall({ sync: true }); SHP.st = d.status || SHP.st; const r = d.res || {}; toast(`Sinhronizovano ✓${r.diff ? ` · ${r.diff} veličina poslato na sajt` : ''}${r.orders && r.orders.created ? ` · ${r.orders.created} novih porudžbina` : ''}`); }
+  catch (e) { toast('Sinhronizacija: ' + tcut(e.message, 140), 6000); }
+  SHP.busy = false; SHP.at = Date.now(); renderShopify();
+}
+function shpBind() {
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-shptoggle]')) { SHP.open = !SHP.open; LS.set('crm_shp_open', SHP.open ? '1' : ''); return renderShopify(); }
+    if (e.target.closest('[data-shpconnect]')) return shpConnect();
+    if (e.target.closest('[data-shpsync]')) return shpSync();
+    if (e.target.closest('[data-shpre]')) { SHP.re = !SHP.re; return renderShopify(); }
   });
 }
 /* ---------- GARDEROBA: upozorenja + feed ---------- */
@@ -3509,7 +3577,7 @@ function bindEvents() {
     else { b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); }
     wpAllSync(box);
   });
-  mntInit(); scrollLockInit(); supBind(); closersInit();
+  mntInit(); scrollLockInit(); supBind(); closersInit(); shpBind();
   $('po_purposeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-pp]'); if (b) setPostPurpose(b.dataset.pp); });
   $('newSiteBtn').addEventListener('click', () => openIdeaModal(null, 'site'));
   $('newPackIdeaBtn').addEventListener('click', () => openIdeaModal(null, 'packaging'));
