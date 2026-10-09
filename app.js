@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610090003';
+const APP_BUILD = '202610090908';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -377,7 +377,7 @@ function soldQty(pid) {
 }
 function renderProducts() {
   const qq = state.q.toLowerCase(), ff = fold(($('prodFind')?.value || '').trim());
-  const list = state.products.filter(p => (!qq || [p.name, p.category, p.supplier].join(' ').toLowerCase().includes(qq)) && (!ff || fold([p.name, p.category, p.supplier, ...variantsOf(p.id).map(v => `${v.size} ${v.color || ''}`)].join(' ')).includes(ff)))
+  const list = state.products.filter(p => supMatch(p) && (!qq || [p.name, p.category, p.supplier].join(' ').toLowerCase().includes(qq)) && (!ff || fold([p.name, p.category, p.supplier, ...variantsOf(p.id).map(v => `${v.size} ${v.color || ''}`)].join(' ')).includes(ff)))
     .sort((a, b) => (a.status === 'archived') - (b.status === 'archived'));
   let pcs = 0, cost = 0, models = 0, marg = 0;
   state.products.filter(p => p.status !== 'archived').forEach(p => {
@@ -389,15 +389,18 @@ function renderProducts() {
     const m = n(p.sell_price) - n(p.buy_price);
     const vs = variantsOf(p.id);
     return `<tr data-product="${p.id}">
-      <td><div class="prod-cell">${p.image_url ? `<img class="prod-thumb" src="${esc(p.image_url)}" alt="">` : '<div class="prod-thumb"></div>'}<div><div class="lead-name">${esc(p.name)} ${taskChip(p, 'product')}</div><div class="lead-social">${esc(p.category || '')}${p.supplier ? ' · ' + esc(p.supplier) : ''}</div></div></div></td>
+      <td><div class="prod-cell">${p.image_url ? `<img class="prod-thumb" src="${esc(p.image_url)}" alt="">` : '<div class="prod-thumb"></div>'}<div><div class="lead-name">${esc(p.name)} ${taskChip(p, 'product')}</div><div class="lead-social">${esc(p.category || '')}</div></div></div></td>
+      <td class="sup-cell">${supCellHtml(p)}</td>
       <td><div class="sizes">${vs.map(v => `<span class="size-chip ${v.stock <= lowT() ? 'low' : ''}"><span class="sz">${esc(v.size)}${v.color ? ' ' + esc(v.color) : ''}</span><button data-stock="${v.id}" data-d="-1">−</button><span class="qty">${v.stock}</span><button data-stock="${v.id}" data-d="1">+</button></span>`).join('') || '<span class="page-sub">Dodaj veličine</span>'}</div></td>
       <td class="num">${rsd(p.buy_price)}</td>
       <td class="num">${rsd(p.sell_price)}${p.compare_price ? `<div class="page-sub"><s>${rsd(p.compare_price)}</s></div>` : ''}</td>
       <td class="num">${rsd(m)}<div class="page-sub">${n(p.sell_price) ? pct(m / n(p.sell_price)) : '—'} · ${n(p.buy_price) ? (n(p.sell_price) / n(p.buy_price)).toFixed(1) + 'x' : ''}</div></td>
       <td class="num">${soldQty(p.id)}</td>
       <td><span class="pill ${p.status === 'active' ? 'st-delivered' : p.status === 'draft' ? 'st-confirmed' : 'st-cancelled'}">${{ active: 'Aktivan', draft: 'Priprema', archived: 'Arhiviran' }[p.status]}</span></td></tr>`;
-  }).join('') || `<tr><td colspan="7" class="empty">${state.products.length ? 'Nijedan model ne odgovara pretrazi.' : 'Još nema robe. Klikni „Novi komad“.'}</td></tr>`;
-  $('prodCount').textContent = (qq || ff) ? `${list.length} od ${state.products.length}` : state.products.length;
+  }).join('') || `<tr><td colspan="8" class="empty">${state.products.length ? (SUP.f !== 'all' ? 'Nijedan model od ovog dobavljača.' : 'Nijedan model ne odgovara pretrazi.') : 'Još nema robe. Klikni „Novi komad“.'}</td></tr>`;
+  $('prodCount').textContent = (qq || ff || SUP.f !== 'all') ? `${list.length} od ${state.products.length}` : state.products.length;
+  if ($('prodSupTag')) $('prodSupTag').innerHTML = SUP.f !== 'all' ? `<span class="sup-tag">${esc(SUP.f === '__none' ? 'Bez dobavljača' : SUP.f)}<button type="button" data-supf="all" aria-label="Svi dobavljači">✕</button></span>` : '';
+  renderSuppliers();
 }
 async function bumpStock(vid, d) {
   const v = variant(vid); if (!v) return;
@@ -1175,6 +1178,59 @@ async function addComment(input) {
   } catch (e) { fail(e); }
 }
 
+/* ---------- DOBAVLJAČI u Garderobi: od koga je šta uzeto, filter po dobavljaču ---------- */
+const SUP_BASE = ['EuroAsia (Blok 70)', 'Belmax Center'];
+const SUP = { f: LS.get('crm_supf', 'all'), edit: null };
+const supName = (s) => String(s || '').trim();
+function supList() { const m = new Map(); SUP_BASE.forEach(s => m.set(fold(s), s)); state.products.forEach(p => { const s = supName(p.supplier); if (s && !m.has(fold(s))) m.set(fold(s), s); }); return [...m.values()]; }
+function supKey(p) { const s = supName(p && p.supplier); if (!s) return ''; return supList().find(x => fold(x) === fold(s)) || s; }
+const supMatch = (p) => SUP.f === 'all' || (SUP.f === '__none' ? !supKey(p) : fold(supKey(p)) === fold(SUP.f));
+function supStats() {
+  const m = new Map();
+  state.products.filter(p => p.status !== 'archived').forEach(p => {
+    const k = supKey(p) || '__none', g = m.get(k) || { k, models: [], pcs: 0, cost: 0, sold: 0 };
+    g.models.push(p); variantsOf(p.id).forEach(v => { g.pcs += v.stock; g.cost += v.stock * n(p.buy_price); }); g.sold += soldQty(p.id); m.set(k, g);
+  });
+  return [...m.values()].sort((a, b) => (a.k === '__none') - (b.k === '__none') || b.pcs - a.pcs);
+}
+function supSetFilter(k) { SUP.f = k || 'all'; LS.set('crm_supf', SUP.f); renderProducts(); }
+function renderSuppliers() {
+  const box = $('supPanel'); if (!box) return;
+  const gs = supStats(), none = gs.find(g => g.k === '__none'), named = gs.filter(g => g.k !== '__none');
+  if (SUP.f === '__none' && !none) SUP.f = 'all';
+  if (SUP.f !== 'all' && SUP.f !== '__none' && !supList().some(s => fold(s) === fold(SUP.f))) SUP.f = 'all';
+  const all = { models: gs.flatMap(g => g.models), pcs: gs.reduce((a, g) => a + g.pcs, 0), cost: gs.reduce((a, g) => a + g.cost, 0), sold: gs.reduce((a, g) => a + g.sold, 0) };
+  const card = (k, title, g, cls = '', list = true) => `<button type="button" class="sup-card ${cls} ${fold(SUP.f) === fold(k) ? 'on' : ''}" data-supf="${esc(k)}">
+    <span class="sup-n">${esc(title)}</span>
+    ${g && g.models.length ? `<span class="sup-m">${g.models.length} ${bpl(g.models.length, 'model', 'modela', 'modela')} · <b>${g.pcs}</b> kom na stanju</span><span class="sup-c">nabavno ${rsd(g.cost)}${g.sold ? ` · prodato ${g.sold} kom` : ''}</span>${list ? `<span class="sup-l">${esc(g.models.map(p => p.name).join(', '))}</span>` : ''}` : '<span class="sup-c">još ništa nije upisano</span>'}</button>`;
+  box.innerHTML = `<div class="toolbar"><div class="fu-title">Dobavljači</div><span class="fu-count">${named.length}</span><span class="page-sub sup-hint">od koga je šta uzeto · klik filtrira modele</span></div>
+    <div class="sup-row">${card('all', 'Svi dobavljači', all, 'all', false)}${named.map(g => card(g.k, g.k, g)).join('')}${SUP_BASE.filter(s => !named.some(g => fold(g.k) === fold(s))).map(s => card(s, s, null, 'empty')).join('')}${none ? card('__none', 'Bez dobavljača', none, 'none') : ''}</div>
+    ${none ? `<div class="sup-warn">${none.models.length} ${bpl(none.models.length, 'model još nema', 'modela još nemaju', 'modela još nema')} upisanog dobavljača. Izaberi ga u koloni „Dobavljač“ u tabeli ispod (ili u kartici komada).</div>` : ''}`;
+  if ($('supList')) $('supList').innerHTML = supList().map(s => `<option value="${esc(s)}"></option>`).join('');
+}
+function supCellHtml(p) {
+  if (SUP.edit === p.id) return `<span class="sup-new"><input data-supnew="${p.id}" placeholder="Ime dobavljača" autocomplete="off" enterkeyhint="done"><button type="button" class="ok" data-supok="${p.id}" aria-label="Sačuvaj">✓</button><button type="button" data-supx="1" aria-label="Otkaži">✕</button></span>`;
+  const cur = supKey(p);
+  return `<select class="sup-sel ${cur ? '' : 'empty'}" data-supsel="${p.id}" aria-label="Dobavljač za ${esc(p.name)}"><option value="">— izaberi —</option>${supList().map(s => `<option value="${esc(s)}" ${fold(s) === fold(cur) ? 'selected' : ''}>${esc(s)}</option>`).join('')}<option value="__new">＋ Novi dobavljač…</option></select>`;
+}
+async function supSet(pid, val) {
+  const p = product(pid); if (!p) return; val = supName(val) || null;
+  if ((supName(p.supplier) || null) === val) { SUP.edit = null; return renderProducts(); }
+  try { await q(sb.from('h_products').update({ supplier: val }).eq('id', pid)); p.supplier = val; SUP.edit = null; renderAll(); toast(val ? `${p.name}: dobavljač ${val} ✓` : `${p.name}: dobavljač obrisan`); }
+  catch (e) { fail(e); renderProducts(); }
+}
+function supBind() {
+  document.addEventListener('change', (e) => {
+    const s = e.target.closest && e.target.closest('[data-supsel]'); if (!s) return;
+    if (s.value === '__new') { SUP.edit = s.dataset.supsel; renderProducts(); const i = document.querySelector(`[data-supnew="${SUP.edit}"]`); if (i) i.focus(); return; }
+    supSet(s.dataset.supsel, s.value);
+  });
+  document.addEventListener('keydown', (e) => {
+    const i = e.target.closest && e.target.closest('[data-supnew]'); if (!i) return;
+    if (e.key === 'Enter') { e.preventDefault(); supSet(i.dataset.supnew, i.value); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); SUP.edit = null; renderProducts(); }
+  });
+}
 /* ---------- GARDEROBA: upozorenja + feed ---------- */
 function stockAlerts() {
   const out = [];
@@ -3358,6 +3414,8 @@ function bindEvents() {
     const rr = e.target.closest('[data-ret]'); if (rr && !e.target.closest('#retModal')) { if (e.target.closest('#custModal')) $('custModal').classList.remove('open'); if (e.target.closest('#metricModal')) $('metricModal').classList.remove('open'); return openRetModal(rr.dataset.ret); }
     const ii = e.target.closest('[data-idea]'); if (ii) return openIdeaModal(ii.dataset.idea);
     const pk = e.target.closest('[data-pack]'); if (pk) return openPackModal(pk.dataset.pack);
+    const sf_ = e.target.closest('[data-supf]'); if (sf_) return supSetFilter(sf_.dataset.supf);
+    if (e.target.closest('.sup-cell')) { const ok = e.target.closest('[data-supok]'); if (ok) { const i = document.querySelector(`[data-supnew="${ok.dataset.supok}"]`); supSet(ok.dataset.supok, i ? i.value : ''); } if (e.target.closest('[data-supx]')) { SUP.edit = null; renderProducts(); } return; }
     const sb_ = e.target.closest('[data-stock]');
     if (sb_) { e.stopPropagation(); return bumpStock(sb_.dataset.stock, +sb_.dataset.d); }
     const del = e.target.closest('[data-delad]');
@@ -3451,7 +3509,7 @@ function bindEvents() {
     else { b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); }
     wpAllSync(box);
   });
-  mntInit(); scrollLockInit();
+  mntInit(); scrollLockInit(); supBind(); closersInit();
   $('po_purposeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-pp]'); if (b) setPostPurpose(b.dataset.pp); });
   $('newSiteBtn').addEventListener('click', () => openIdeaModal(null, 'site'));
   $('newPackIdeaBtn').addEventListener('click', () => openIdeaModal(null, 'packaging'));
@@ -3560,9 +3618,10 @@ const BOT_FAQ = [
   { g: [['backup', 'rezerv', 'sigurn', 'bezbed']], a: 'Podaci se čuvaju zauvek: obrisano ide u arhivu, svaka promena se beleži, a svake noći u 03:30 pravi se rezervna kopija cele baze na GitHub-u.', b: [['Istorija', 'tab:history']] },
   { g: [['istorij', 'prekretnic', 'dogadja', 'vremensk']], a: 'Istorija je vremenska linija svega. Važan događaj (lansiranje, nova kolekcija…) dodaješ dugmetom <b>Zabeleži događaj</b>.', b: [['Zabeleži događaj', 'act:Zabeleži događaj u istoriji'], ['Istorija', 'tab:history']] },
   { g: [['obavestenj', 'notifikac', 'push', 'na telefon', 'stize poruka', 'stizu poruke']], a: 'CRM može da šalje <b>obaveštenja na telefon i računar</b>, i kad je zatvoren: kad ti neko dodeli zadatak, kad neko završi zadatak koji si dodelio/la, nova porudžbina, nova prijava povrata i jutarnji podsetnik u 8h. Uključuješ ih na svakom uređaju posebno: <b>zvonce gore → Obaveštenja na ovom uređaju → Uključi</b> (na telefonu i u meniju sa tri crtice, dugme 📲). Tu biraš šta da ti stiže i šalješ probu. Na iPhone-u prvo dodaj CRM na početni ekran iz Safari-ja. Na Androidu instaliraj CRM kao aplikaciju (u istom prozoru dugme <b>Instaliraj HARIZMA aplikaciju</b>), pa obaveštenja stižu kao od aplikacije HARIZMA, i tu možeš da preuzmeš <b>HARIZMA zvuk</b> i postaviš ga kao zvuk obaveštenja. Na iPhone-u Apple ne dozvoljava poseban zvuk.', b: [] },
+  { g: [['dobavlj', 'snabdev', 'supplier', 'od koga']], a: 'Dobavljači su u Garderobi, odmah ispod brojki: kartica za svakog dobavljača (EuroAsia (Blok 70), Belmax Center i svi koje upišete) sa brojem modela, komada na stanju, nabavnom vrednošću, koliko je prodato i spiskom modela. Klik na karticu filtrira tabelu modela samo na tog dobavljača (✕ pored naslova Modeli vraća sve). U tabeli je kolona „Dobavljač“: izaberi iz liste ili „＋ Novi dobavljač…“; može i u kartici komada. „Bez dobavljača“ pokazuje šta još nije upisano.', b: [['Otvori Garderobu', 'tab:products']] },
   { g: [['oznac', 'tagu', 'tagov', 'pomen', 'mention']], a: 'Označavanje (@): u bilo kom polju gde pišeš (ideja za video, hook, skripta, zadatak, beleška, porudžbina, komentar…) kucaj @ i iskoče Staša, Marjan, Konstantin i „svi“; dodirni ime ili pritisni Enter. Kad se sačuva, označena osoba dobija obaveštenje na telefon sa tim tekstom, a klik otvara baš tu stavku; ako je u CRM-u, iskoči kartica. @Ime je svuda istaknuto zlatnom bojom (tvoje jače). Obaveštenje stiže samo za novu oznaku, ne svaki put kad se tekst izmeni. Pri zaduživanju postoji i dugme „Ceo tim“. Izbor u obaveštenjima: „Kad te neko označi (@)“.' },
-  { g: [['izmen', 'promen', 'preimen', 'menja'], ['zadat', 'task', 'naziv', 'opis', 'ime']], a: 'Izmena zadatka: otvori zadatak (Taskovi → klik na zadatak) i klikni na naslov ili na bilo koje polje u Detaljima: Stavka (naziv ideje, komada, kupca…), Zadatak (šta treba da se uradi), a kod objava i Hook i Skripta, kod predloga Opis. Otvori se polje, izmeni, pa Sačuvaj (kod naziva i Enter). Svako može da menja sve, a u Aktivnosti ostaje zapisano ko je šta promenio.', b: [['Otvori Taskove', 'act:Taskovi']] },
-  { g: [['prioritet', 'hitno', 'hitan', 'hitna', 'rok', 'vreme roka', 'alarm', 'podsetnik za rok']], a: 'Prioritet i tačno vreme roka: u svakom formularu zadatka pored datuma je polje za vreme (npr. 14:30) i izbor prioriteta Hitno 🚩, Visok, Normalan ili Nizak. Kad zadatak ima vreme, ceo tim dobija podsetnik sat pre roka. Hitni zadaci su jači: svi dobijaju obaveštenje odmah kad se označe kao hitni, pa 15 min pre roka, u roku i na svakih 30 min dok kasne (samo od 8 do 23h), dok se ne završe. Ta obaveštenja izgledaju drugačije: crvena (hitno) ili zlatna (rok) ikonica, duža vibracija, ostaju na ekranu i imaju dugmad Gotovo i Otvori. U CRM-u iskoči velika kartica sa posebnim zvukom. Uključuje se u zvonce → Obaveštenja → „Rokovi i hitni zadaci“ (uključeno je odmah). Zadaci bez vremena i dalje stižu u jutarnjem podsetniku u 8h.', b: [['Otvori Taskove', 'act:Taskovi']] },
+  { g: [['izmen', 'promen', 'preimen', 'menja'], ['zadat', 'task', 'naziv', 'opis', 'ime']], a: 'Izmena zadatka: otvori zadatak (Taskovi → klik na zadatak) i klikni na naslov ili na bilo koje polje u Detaljima: Stavka (naziv ideje, komada, kupca…), Zadatak (šta treba da se uradi), a kod objava i Hook i Skripta, kod predloga Opis. Otvori se polje, izmeni, pa Sačuvaj (kod naziva i Enter). Svako može da menja sve, a u Aktivnosti ostaje zapisano ko je šta promenio.', b: [['Otvori Taskove', 'tab:tasks']] },
+  { g: [['prioritet', 'hitno', 'hitan', 'hitna', 'rok', 'vreme roka', 'alarm', 'podsetnik za rok']], a: 'Prioritet i tačno vreme roka: u svakom formularu zadatka pored datuma je polje za vreme (npr. 14:30) i izbor prioriteta Hitno 🚩, Visok, Normalan ili Nizak. Kad zadatak ima vreme, ceo tim dobija podsetnik sat pre roka. Hitni zadaci su jači: svi dobijaju obaveštenje odmah kad se označe kao hitni, pa 15 min pre roka, u roku i na svakih 30 min dok kasne (samo od 8 do 23h), dok se ne završe. Ta obaveštenja izgledaju drugačije: crvena (hitno) ili zlatna (rok) ikonica, duža vibracija, ostaju na ekranu i imaju dugmad Gotovo i Otvori. U CRM-u iskoči velika kartica sa posebnim zvukom. Uključuje se u zvonce → Obaveštenja → „Rokovi i hitni zadaci“ (uključeno je odmah). Zadaci bez vremena i dalje stižu u jutarnjem podsetniku u 8h.', b: [['Otvori Taskove', 'tab:tasks']] },
   { g: [['aktivan', 'aktivna', 'na mrezi', 'online', 'poslednji put', 'kad je bio', 'kad je bila', 'ko je tu']], a: 'Ko je kad bio aktivan: na računaru gore pored dugmeta Chat su avatari tima (zelena tačka = CRM je otvoren ispred te osobe, zlatna = aktivna u poslednjih 15 min, siva = ranije). Klik pokazuje „aktivna pre 12 min · telefon“ i dugmad Piši i Pozovi. Na telefonu je isto u meniju sa tri crtice (Tim). Vidi se i u chatu pored imena, u zadatku kod zaduženih i kad pređeš mišem preko avatara u Taskovima.', b: [['Otvori chat', 'act:Tim chat']] },
   { g: [['huddle', 'poziv', 'pozov', 'zovem', 'zvati', 'video', 'kamer', 'ekran']], a: '<b>Huddle</b> je brz poziv u CRM-u (kao na Slack-u): u chatu gore dugme <b>📞 Huddle</b> (u Tim chatu) ili <b>Pozovi</b> (u privatnom razgovoru). Ostali dobiju zvono u CRM-u i obaveštenje na telefon, pa klik na <b>Pridruži se</b>. U traci poziva su mikrofon, kamera, deljenje ekrana (na računaru), veliki prikaz i crveno dugme za izlaz. Glas ide direktno između uređaja, šifrovano.', b: [['Otvori chat', 'act:Tim chat']] },
   { g: [['glasovn', 'glasom', 'snimi', 'snimak', 'voice', 'mikrofon']], a: 'Glasovna poruka: u chatu ili komentaru na zadatku, kad je polje prazno, desno je dugme <b>🎤</b>. Klik počinje snimanje, <b>➤</b> šalje, 🗑 odustaje (najviše 5 minuta). Ako uz snimak ukucaš i tekst sa @ime, ta osoba dobije obaveštenje. Snimak se pušta dugmetom ▶, a 1× menja brzinu na 1,5× i 2×.', b: [['Otvori chat', 'act:Tim chat']] },
@@ -4813,7 +4872,7 @@ function tdRender() {
 function tdStart(f) {
   const tk = taskOfCh(CHAT.ch); if (!tk) return;
   if (tdEditing(CHAT.ch, f)) return;
-  TD.edit = { ch: CHAT.ch, f, v: null }; tdRender();
+  TD.edit = { ch: CHAT.ch, f, v: null, orig: tk.x[f] || '' }; tdRender();
   const ta = document.querySelector('#chatPanel [data-tdinput]'); if (!ta) return;
   tdGrow(ta); ta.focus(); const n = ta.value.length; try { ta.setSelectionRange(n, n); } catch (e) {}
   setTimeout(() => ta.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
@@ -4830,6 +4889,27 @@ async function tdSave() {
     x[e.f] = val; TD.edit = null; TD.pending = false; renderAll(); if (CHAT.open) renderChat(); toast('Sačuvano ✓');
     setTimeout(() => taskAuditLoad(e.ch), 900);
   } catch (er) { fail(er); }
+}
+/* klik pored polja za izmenu zatvara izmenu (bez čuvanja), kao Otkaži; skrolovanje ne zatvara */
+function outsideCloser(isOpen, inside, close) {
+  let pend = false, t = 0;
+  const fire = () => { if (!pend) return; pend = false; clearTimeout(t); if (isOpen()) close(); };
+  document.addEventListener('pointerdown', (e) => { pend = !!(isOpen() && !inside(e.target)); }, true);
+  document.addEventListener('pointercancel', () => { pend = false; }, true);
+  document.addEventListener('pointerup', () => { if (pend) { clearTimeout(t); t = setTimeout(fire, 350); } }, true);
+  document.addEventListener('click', fire, true);
+}
+const inMnt = (t) => !!(t.closest && t.closest('#mntPop'));
+function closersInit() {
+  outsideCloser(() => !!(TD.edit && document.querySelector('#chatPanel [data-tdinput]')), (t) => inMnt(t) || !!t.closest('.td-ed'), () => {
+    const ta = document.querySelector('#chatPanel [data-tdinput]'), ch = ta && String(ta.value).trim() !== String(TD.edit.orig || '').trim();
+    tdCancel(); if (ch) toast('Izmena otkazana, ništa nije promenjeno');
+  });
+  outsideCloser(() => !!(npState.editId && $('npEdit')), (t) => inMnt(t) || !!t.closest('#npEdit, [data-npsave], [data-npcancel]'), () => {
+    const x = state.notes.find(y => y.id === npState.editId), ch = x && $('npEdit') && $('npEdit').value.trim() !== String(x.body || '').trim();
+    npState.editId = null; renderNotesPage(); if (ch) toast('Izmena otkazana, ništa nije promenjeno');
+  });
+  outsideCloser(() => !!(SUP.edit && document.querySelector('[data-supnew]')), (t) => !!t.closest('.sup-new'), () => { SUP.edit = null; renderProducts(); });
 }
 /* ================= ZADATAK: detalji + komentari (kao ClickUp) ================= */
 const fmtTaskTime = (iso) => { const d = new Date(iso), t = d.toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' }); return dayStr(d) === dayStr(new Date()) ? 'danas ' + t : d.toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' }) + ' ' + t; };

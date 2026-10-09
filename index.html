@@ -1788,6 +1788,30 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 .td-desc .td-ed-b small{display:inline;margin:0 auto 0 0;font-size:11.5px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--muted)}
 .td-mini.td-ok{background:#1B2620;color:#E8E4D9;border-color:#1B2620;font-weight:700}
 @media (max-width:759px){.td-f{grid-template-columns:70px 1fr auto}.td-f.ed{grid-template-columns:1fr}.td-ed textarea{font-size:16px}}
+
+/* ===== v29: dobavljači u Garderobi ===== */
+.sup-panel{margin:20px 0 4px}
+.sup-hint{margin-left:4px}
+.sup-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px;margin-top:10px}
+.sup-card{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:13px 14px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface);cursor:pointer;font:inherit;color:var(--ink);transition:border-color .15s,box-shadow .15s,background .15s;min-width:0}
+.sup-card:hover{border-color:var(--sage)}
+.sup-card.on{border-color:#1B2620;box-shadow:0 0 0 2px rgba(27,38,32,.12);background:#f4f2ea}
+.sup-card.none{border-style:dashed;border-color:rgba(201,169,110,.8)}
+.sup-card.empty{opacity:.7}
+.sup-n{font-weight:800;font-size:14.5px}
+.sup-m{font-size:13px;color:var(--ink-2)}
+.sup-c{font-size:12px;color:var(--muted)}
+.sup-l{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;margin-top:2px}
+.sup-warn{margin-top:10px;padding:10px 13px;border-radius:12px;background:#fbf3e3;color:#7a5a1e;font-size:13px;border:1px solid rgba(201,169,110,.45)}
+.sup-sel{font:600 13px var(--font-ui);padding:6px 8px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);max-width:175px;cursor:pointer}
+.sup-sel.empty{color:#9a6b12;border-color:rgba(201,169,110,.75);background:#fffaf0}
+.sup-new{display:inline-flex;gap:4px;align-items:center}
+.sup-new input{width:150px;font:15px var(--font-ui);padding:6px 9px;border:1.5px solid #1B2620;border-radius:9px;outline:none}
+.sup-new button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 9px;cursor:pointer;font-weight:700}
+.sup-new button.ok{background:#1B2620;color:#E8E4D9;border-color:#1B2620}
+.sup-tag{display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:3px 4px 3px 11px;border-radius:99px;background:#1B2620;color:#E8E4D9;font-size:12px;font-weight:700}
+.sup-tag button{border:0;background:rgba(255,255,255,.16);color:inherit;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px}
+@media (max-width:759px){.sup-row{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}.sup-card{flex:0 0 74%;scroll-snap-align:start}.sup-hint{display:none}.sup-new input{font-size:16px}}
 </style>
 </head>
 <body>
@@ -1992,10 +2016,11 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
           <button class="btn-gold" id="newProductBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Novi komad</button>
         </div>
         <div class="stats" id="kpiStock"></div>
-        <div class="toolbar"><div class="fu-title">Modeli</div><span class="fu-count" id="prodCount">0</span>
+        <div class="sup-panel" id="supPanel"></div>
+        <div class="toolbar"><div class="fu-title">Modeli</div><span class="fu-count" id="prodCount">0</span><span id="prodSupTag"></span>
           <label class="prod-find"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="prodFind" type="search" placeholder="Nađi model ili boju" autocomplete="off"></label></div>
         <div class="table-card"><table>
-          <thead><tr><th>Komad</th><th>Veličine / stanje</th><th>Nabavna</th><th>Prodajna</th><th>Marža</th><th>Prodato</th><th>Status</th></tr></thead>
+          <thead><tr><th>Komad</th><th>Dobavljač</th><th>Veličine / stanje</th><th>Nabavna</th><th>Prodajna</th><th>Marža</th><th>Prodato</th><th>Status</th></tr></thead>
           <tbody id="prodTbody"></tbody>
         </table></div>
         <div class="toolbar" style="margin-top:24px"><div class="fu-title">Pri kraju</div><span class="fu-count" id="alertCount">0</span><span class="alert-sum" id="alertSum"></span>
@@ -2256,7 +2281,7 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
       </div>
       <div class="hint" id="p_hint"></div>
       <div class="frow">
-        <div class="field"><label>Dobavljač</label><input id="p_sup" placeholder="EuroAsia, lokal…"></div>
+        <div class="field"><label>Dobavljač</label><input id="p_sup" list="supList" placeholder="EuroAsia (Blok 70), Belmax Center…" autocomplete="off"><datalist id="supList"></datalist></div>
         <div class="field"><label>Materijal</label><input id="p_mat" placeholder="poliester"></div>
       </div>
       <div class="frow">
@@ -2675,8 +2700,8 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610090003"></script>
-<script>window.HTML_BUILD="202610090003";</script>
-<script src="app.js?v=202610090003"></script>
+<script src="config.js?v=202610090908"></script>
+<script>window.HTML_BUILD="202610090908";</script>
+<script src="app.js?v=202610090908"></script>
 </body>
 </html>
