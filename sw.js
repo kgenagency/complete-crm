@@ -10,10 +10,10 @@ self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (x) { d = { title: 'HARIZMA', body: e.data ? e.data.text() : '' }; }
   e.waitUntil((async () => {
-    // chat: ako je CRM upravo otvoren i ispred tebe, poruku već vidiš u aplikaciji, pa obaveštenje stiže tiho i samo se skloni
+    // chat i @oznake: ako je CRM upravo otvoren i ispred tebe, vidiš karticu u aplikaciji, pa obaveštenje stiže tiho i samo se skloni
     let quiet = false;
     const alarm = d.kind === 'deadline' || d.kind === 'urgent';
-    if (d.kind === 'chat' || d.kind === 'call' || alarm) {
+    if (d.kind === 'chat' || d.kind === 'call' || d.kind === 'mention' || alarm) {
       try {
         const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true }), front = wins.find(c => c.visibilityState === 'visible' && c.focused);
         quiet = !!front;

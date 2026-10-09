@@ -1030,3 +1030,27 @@ select cron.unschedule('crm-task-alerts') where exists (select 1 from cron.job w
 select cron.schedule('crm-task-alerts', '* * * * *', 'select public.h_task_alerts_run()');
 alter table public.h_push_subs alter column prefs set default '{"tasks":true,"done":true,"orders":true,"returns":true,"daily":true,"chat":true,"comments":true,"calls":true,"deadline":true}'::jsonb;
 select 'ok';
+
+-- ===== v28: @oznake u svim poljima (obaveštenje označenom), obaveštenje i kad se prioritet promeni na hitno =====
+-- v28: obaveštenje i kad se prioritet promeni na hitno, i kad neko označi @ime u bilo kom polju
+create or replace function public.h_push_hook()
+ returns trigger language plpgsql security definer set search_path to 'public', 'extensions'
+as $function$
+declare sec text; rel boolean := false; ch jsonb := coalesce(new.changed, '{}'::jsonb);
+begin
+  if new.op = 'INSERT' and new.tbl in ('h_orders', 'h_returns') then rel := true; end if;
+  if jsonb_typeof(new.new_row -> 'assignees') = 'array' and jsonb_array_length(new.new_row -> 'assignees') > 0
+     and (new.op = 'INSERT' or ch ? 'assignees' or ch ? 'task_done_at' or ch ? 'task_prio') then rel := true; end if;
+  if new.tbl like 'h\_%' and new.new_row is not null
+     and (case when new.op = 'INSERT' or new.changed is null then new.new_row::text else new.changed::text end) ~* '@(konstantin|sta[sšSŠ]a|marjan|svi|sve|all)' then rel := true; end if;
+  if not rel then return new; end if;
+  select v into sec from public.h_private where k = 'push_hook';
+  perform net.http_post(url := 'https://treqdonahihterhaxxfw.supabase.co/functions/v1/crm-push',
+    body := jsonb_build_object('audit', to_jsonb(new)),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-crm-hook', sec),
+    timeout_milliseconds := 15000);
+  return new;
+exception when others then return new;
+end $function$;
+alter table public.h_push_subs alter column prefs set default '{"tasks":true,"done":true,"orders":true,"returns":true,"daily":true,"chat":true,"comments":true,"calls":true,"deadline":true,"mentions":true}'::jsonb;
+select 'ok';

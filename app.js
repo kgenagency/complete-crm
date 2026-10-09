@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610081638';
+const APP_BUILD = '202610090003';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -756,8 +756,13 @@ function assigneesOf(x) {
 }
 const assigneeNames = (x) => assigneesOf(x).map(personName).join(', ');
 const assigneeBadges = (x) => assigneesOf(x).map(k => `<span class="by ${PEOPLE[k] ? k : 'other'}" style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700">${esc(personName(k))}</span>`).join('');
-function whoPick(id, sel) { $(id).innerHTML = Object.keys(PEOPLE).map(k => `<button type="button" class="wp ${(sel || []).includes(k) ? 'on' : ''}" data-who="${k}" aria-pressed="${(sel || []).includes(k)}"><span class="n-av ${k}">${esc(PEOPLE[k].name.charAt(0))}</span>${esc(PEOPLE[k].name)}</button>`).join(''); }
-const whoPicked = (id) => [...$(id).querySelectorAll('.wp.on')].map(b => b.dataset.who);
+function whoPick(id, sel) {
+  const ks = Object.keys(PEOPLE), all = ks.every(k => (sel || []).includes(k));
+  $(id).innerHTML = ks.map(k => `<button type="button" class="wp ${(sel || []).includes(k) ? 'on' : ''}" data-who="${k}" aria-pressed="${(sel || []).includes(k)}"><span class="n-av ${k}">${esc(PEOPLE[k].name.charAt(0))}</span>${esc(PEOPLE[k].name)}</button>`).join('') +
+    `<button type="button" class="wp wp-all ${all ? 'on' : ''}" data-wall="1" aria-pressed="${all}" title="Zaduži ceo tim odjednom"><span class="n-av wp-allav">@</span>Ceo tim</button>`;
+}
+const whoPicked = (id) => [...$(id).querySelectorAll('.wp.on[data-who]')].map(b => b.dataset.who);
+function wpAllSync(box) { const a = box && box.querySelector('.wp-all'); if (!a) return; const ps = [...box.querySelectorAll('.wp[data-who]')], on = ps.length && ps.every(x => x.classList.contains('on')); a.classList.toggle('on', on); a.setAttribute('aria-pressed', on); }
 const assignFields = (arr) => ({ assignees: arr, assignee: arr.length ? arr.map(personName).join(', ') : null });
 /* ================= TASKOVI =================
    Svaka stavka (beleška, objava, predlog, materijal, povrat, promocija, porudžbina, kupac, komad, poglavlje priče)
@@ -2157,7 +2162,7 @@ function cmdItems(qraw) {
 }
 let cmdSel = 0, cmdCur = [];
 function openCmd() { $('cmdWrap').classList.add('open'); $('cmdInput').value = ''; renderCmd(); setTimeout(() => $('cmdInput').focus(), 30); }
-function closeCmd() { $('cmdWrap').classList.remove('open'); }
+function closeCmd() { $('cmdWrap').classList.remove('open'); try { $('cmdInput').blur(); } catch (e) {} }
 function renderCmd() {
   const qraw = $('cmdInput').value, qn = fold(qraw.trim());
   cmdCur = cmdItems(qraw); cmdSel = Math.min(cmdSel, Math.max(0, cmdCur.length - 1));
@@ -2639,6 +2644,7 @@ function onAuditLive(row) {
     renderTray();
     if (!nfSnoozed()) { const dd = describeAudit(row); if (dd && dd.prio === 30) ting('soft'); else if (row.op === 'INSERT' && row.tbl === 'h_orders') sfx('sale', 0.6); else if (row.op === 'INSERT' && row.tbl === 'h_returns') sfx('notif', 0.8); }
     applyAuditRow(row);
+    try { mentionCheck(row); } catch (e) {}
     chgLive(row);
     clearTimeout(nfReloadT);
     nfReloadT = setTimeout(async () => { if (document.querySelector('.modal-wrap.open:not(#notifModal):not(#noteModal)')) { nfPending = true; return; } try { await loadData(); renderAll(); if (state.openOrderId) renderDrawer(); } catch (e) {} }, 250);
@@ -3196,7 +3202,7 @@ function renderAll() {
 }
 function setTab(t) {
   if (t === 'notes') LS.set(seenKey(), new Date().toISOString());
-  closeNav();
+  closeNav(); scrollLockSync();
   state.tab = t; LS.set('crm_tab', t); renderAll(); window.scrollTo({ top: 0, behavior: 'smooth' });
   chgEnter(t);
   countUp($('v-' + t));
@@ -3220,6 +3226,7 @@ function bindEvents() {
   ['rangeFrom', 'rangeTo'].forEach(id => $(id).addEventListener('change', () => { state.range = { from: $('rangeFrom').value, to: $('rangeTo').value }; LS.set('crm_rfrom', state.range.from); LS.set('crm_rto', state.range.to); renderAll(); }));
   $('cmdBtn').addEventListener('click', openCmd); $('cmdBtnM').addEventListener('click', openCmd);
   $('cmdBg').addEventListener('click', closeCmd);
+  $('cmdX').addEventListener('click', closeCmd);
   $('cmdFilter').addEventListener('click', () => setQuery(''));
   $('cmdInput').addEventListener('input', () => { cmdSel = 0; renderCmd(); });
   $('cmdInput').addEventListener('keydown', (e) => {
@@ -3278,7 +3285,7 @@ function bindEvents() {
   });
   $('npList').addEventListener('keydown', (e) => { if (e.target.id === 'npEdit' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); npSaveEdit(npState.editId); } if (e.target.id === 'npEdit' && e.key === 'Escape') { e.stopPropagation(); npState.editId = null; e.target.blur(); renderNotesPage(); } });
   // brza beleška
-  $('quickNoteBtn').addEventListener('click', () => openNoteModal('auto'));
+  if ($('quickNoteBtn')) $('quickNoteBtn').addEventListener('click', () => openNoteModal('auto'));
   $('qnSave').addEventListener('click', saveQuickNote);
   $('noteModal').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveQuickNote(); } });
   $('qnWriter').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.writer = b.dataset.qw; document.querySelectorAll('#qnWriter button').forEach(x => x.classList.toggle('active', x === b)); });
@@ -3438,7 +3445,13 @@ function bindEvents() {
   $('qnLink').addEventListener('keydown', (e) => { if (e.target.id === 'qlQ' && e.key === 'Enter') { e.preventDefault(); const f = $('qlList') && $('qlList').querySelector('[data-qlsel]'); if (f) f.click(); } });
   taskSet('nt', null, taskSrcOf('note'));
   fillAreaSelects();
-  document.addEventListener('click', (e) => { const b = e.target.closest('.who-pick .wp'); if (!b) return; b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('.who-pick .wp'); if (!b) return; const box = b.closest('.who-pick');
+    if (b.dataset.wall) { const ps = [...box.querySelectorAll('.wp[data-who]')], all = ps.every(x => x.classList.contains('on')); ps.forEach(x => { x.classList.toggle('on', !all); x.setAttribute('aria-pressed', !all); }); }
+    else { b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); }
+    wpAllSync(box);
+  });
+  mntInit(); scrollLockInit();
   $('po_purposeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-pp]'); if (b) setPostPurpose(b.dataset.pp); });
   $('newSiteBtn').addEventListener('click', () => openIdeaModal(null, 'site'));
   $('newPackIdeaBtn').addEventListener('click', () => openIdeaModal(null, 'packaging'));
@@ -3529,7 +3542,7 @@ const BOT_FAQ = [
   { g: [['obris', 'vratim', 'vratis', 'arhiv', 'izgub', 'nestal', 'slucajno']], a: 'Ništa se ne briše zauvek. Idi na <b>Istorija → Arhiva obrisanog</b> i klikni <b>Vrati</b> pored stavke.', b: [['Otvori arhivu', 'archive']] },
   { g: [['notifikac', 'obavesten', 'zvonc', 'utisa']], a: 'Kartice dole desno su promene koje su napravili drugi. <b>X</b> ih sklanja. Na zvoncu gore imaš <b>Istoriju svih promena</b> (sa filterima), „Skloni sve“ i utišavanje na 1 h, 3 h ili do sutra.', b: [['Istorija promena', 'bell:history']] },
   { g: [['crven', 'zut', 'broj', 'bedz', 'badge', 'oznak', 'brojev']], a: '<span class="bt-red">Crveni broj</span> znači koliko je promena neko drugi napravio u toj sekciji od tvog poslednjeg ulaska. Kad uđeš, vidiš karticu „Šta je novo ovde“ i broj nestaje. <span class="bt-amber">Žuti broj</span> je upozorenje: zalihe, pakovanje, povrati koji čekaju, aktivne promocije.', b: [] },
-  { g: [['beles', 'note', 'zabelez']], a: 'Beleške su zajedničke i svi vide sve. Brzo pišeš preko dugmeta <b>Zabeleži</b> na Pregledu, tastera <kbd>B</kbd> ili ovde: napiši <i>zabeleži …</i> i sačuvaću odmah. Na stranici Beleške klik na tekst menja belešku.', b: [['Beleške', 'tab:notes'], ['Nova beleška', 'act:Nova beleška']] },
+  { g: [['beles', 'note', 'zabelez']], a: 'Beleške su zajedničke i svi vide sve. Brzo pišeš tasterom <kbd>B</kbd>, na stranici Beleške ili ovde: napiši <i>zabeleži …</i> i sačuvaću odmah. Na stranici Beleške klik na tekst menja belešku.', b: [['Beleške', 'tab:notes'], ['Nova beleška', 'act:Nova beleška']] },
   { g: [['reklam', 'potros', 'spend', 'meta', 'ads', 'roas']], a: 'Reklame → <b>Unesi potrošnju</b>: datum, iznos u RSD, po želji kampanja, kupovine i prihod iz Meta. Potrošnja odmah ulazi u neto na Pregledu i u grafikon.', b: [['Reklame', 'tab:ads'], ['Grafikon potrošnje', 'metric:ads:30']] },
   { g: [['loyalty', 'klub', 'poen', 'nivo', 'vip']], a: 'Kupci → <b>Loyalty klub</b>. Tu podešavaš nivoe (Nova, Stalna, HARIZMA klub, VIP), koliko poena donosi 100 RSD i nagradu. Poeni se računaju sami iz porudžbina.', b: [['Loyalty klub', 'cview:club']] },
   { g: [['kod', 'kupon', 'popust']], a: 'Kupci → <b>Popusti</b> → <b>+ Kod za popust</b>. Kod može da bude u % ili RSD, a CRM broji koliko puta je iskorišćen i koliki je prihod doneo.', b: [['Novi kod', 'act:Novi kod za popust'], ['Popusti', 'cview:codes']] },
@@ -3547,6 +3560,8 @@ const BOT_FAQ = [
   { g: [['backup', 'rezerv', 'sigurn', 'bezbed']], a: 'Podaci se čuvaju zauvek: obrisano ide u arhivu, svaka promena se beleži, a svake noći u 03:30 pravi se rezervna kopija cele baze na GitHub-u.', b: [['Istorija', 'tab:history']] },
   { g: [['istorij', 'prekretnic', 'dogadja', 'vremensk']], a: 'Istorija je vremenska linija svega. Važan događaj (lansiranje, nova kolekcija…) dodaješ dugmetom <b>Zabeleži događaj</b>.', b: [['Zabeleži događaj', 'act:Zabeleži događaj u istoriji'], ['Istorija', 'tab:history']] },
   { g: [['obavestenj', 'notifikac', 'push', 'na telefon', 'stize poruka', 'stizu poruke']], a: 'CRM može da šalje <b>obaveštenja na telefon i računar</b>, i kad je zatvoren: kad ti neko dodeli zadatak, kad neko završi zadatak koji si dodelio/la, nova porudžbina, nova prijava povrata i jutarnji podsetnik u 8h. Uključuješ ih na svakom uređaju posebno: <b>zvonce gore → Obaveštenja na ovom uređaju → Uključi</b> (na telefonu i u meniju sa tri crtice, dugme 📲). Tu biraš šta da ti stiže i šalješ probu. Na iPhone-u prvo dodaj CRM na početni ekran iz Safari-ja. Na Androidu instaliraj CRM kao aplikaciju (u istom prozoru dugme <b>Instaliraj HARIZMA aplikaciju</b>), pa obaveštenja stižu kao od aplikacije HARIZMA, i tu možeš da preuzmeš <b>HARIZMA zvuk</b> i postaviš ga kao zvuk obaveštenja. Na iPhone-u Apple ne dozvoljava poseban zvuk.', b: [] },
+  { g: [['oznac', 'tagu', 'tagov', 'pomen', 'mention']], a: 'Označavanje (@): u bilo kom polju gde pišeš (ideja za video, hook, skripta, zadatak, beleška, porudžbina, komentar…) kucaj @ i iskoče Staša, Marjan, Konstantin i „svi“; dodirni ime ili pritisni Enter. Kad se sačuva, označena osoba dobija obaveštenje na telefon sa tim tekstom, a klik otvara baš tu stavku; ako je u CRM-u, iskoči kartica. @Ime je svuda istaknuto zlatnom bojom (tvoje jače). Obaveštenje stiže samo za novu oznaku, ne svaki put kad se tekst izmeni. Pri zaduživanju postoji i dugme „Ceo tim“. Izbor u obaveštenjima: „Kad te neko označi (@)“.' },
+  { g: [['izmen', 'promen', 'preimen', 'menja'], ['zadat', 'task', 'naziv', 'opis', 'ime']], a: 'Izmena zadatka: otvori zadatak (Taskovi → klik na zadatak) i klikni na naslov ili na bilo koje polje u Detaljima: Stavka (naziv ideje, komada, kupca…), Zadatak (šta treba da se uradi), a kod objava i Hook i Skripta, kod predloga Opis. Otvori se polje, izmeni, pa Sačuvaj (kod naziva i Enter). Svako može da menja sve, a u Aktivnosti ostaje zapisano ko je šta promenio.', b: [['Otvori Taskove', 'act:Taskovi']] },
   { g: [['prioritet', 'hitno', 'hitan', 'hitna', 'rok', 'vreme roka', 'alarm', 'podsetnik za rok']], a: 'Prioritet i tačno vreme roka: u svakom formularu zadatka pored datuma je polje za vreme (npr. 14:30) i izbor prioriteta Hitno 🚩, Visok, Normalan ili Nizak. Kad zadatak ima vreme, ceo tim dobija podsetnik sat pre roka. Hitni zadaci su jači: svi dobijaju obaveštenje odmah kad se označe kao hitni, pa 15 min pre roka, u roku i na svakih 30 min dok kasne (samo od 8 do 23h), dok se ne završe. Ta obaveštenja izgledaju drugačije: crvena (hitno) ili zlatna (rok) ikonica, duža vibracija, ostaju na ekranu i imaju dugmad Gotovo i Otvori. U CRM-u iskoči velika kartica sa posebnim zvukom. Uključuje se u zvonce → Obaveštenja → „Rokovi i hitni zadaci“ (uključeno je odmah). Zadaci bez vremena i dalje stižu u jutarnjem podsetniku u 8h.', b: [['Otvori Taskove', 'act:Taskovi']] },
   { g: [['aktivan', 'aktivna', 'na mrezi', 'online', 'poslednji put', 'kad je bio', 'kad je bila', 'ko je tu']], a: 'Ko je kad bio aktivan: na računaru gore pored dugmeta Chat su avatari tima (zelena tačka = CRM je otvoren ispred te osobe, zlatna = aktivna u poslednjih 15 min, siva = ranije). Klik pokazuje „aktivna pre 12 min · telefon“ i dugmad Piši i Pozovi. Na telefonu je isto u meniju sa tri crtice (Tim). Vidi se i u chatu pored imena, u zadatku kod zaduženih i kad pređeš mišem preko avatara u Taskovima.', b: [['Otvori chat', 'act:Tim chat']] },
   { g: [['huddle', 'poziv', 'pozov', 'zovem', 'zvati', 'video', 'kamer', 'ekran']], a: '<b>Huddle</b> je brz poziv u CRM-u (kao na Slack-u): u chatu gore dugme <b>📞 Huddle</b> (u Tim chatu) ili <b>Pozovi</b> (u privatnom razgovoru). Ostali dobiju zvono u CRM-u i obaveštenje na telefon, pa klik na <b>Pridruži se</b>. U traci poziva su mikrofon, kamera, deljenje ekrana (na računaru), veliki prikaz i crveno dugme za izlaz. Glas ide direktno između uređaja, šifrovano.', b: [['Otvori chat', 'act:Tim chat']] },
@@ -4137,7 +4152,7 @@ function botLocalFirst(raw) {
    dodeljen zadatak, završen zadatak koji si dodelio/la, nova porudžbina, nova prijava i jutarnji podsetnik u 8h */
 const VAPID_PUBLIC = 'BO9fqbcK6L9yA4bKN-m3gp2RxmbZ6Gt7UOsIjGDzOZDScOuWOtwSWT_nM8GeM__UZr6vE2bBSH2ou37jkf5_MTg';
 const PUSH_URL = () => SUPABASE_URL + '/functions/v1/crm-push';
-const PUSH_PREFS = [['tasks', 'Zadaci za mene', 'kad ti neko dodeli zadatak'], ['done', 'Završeni zadaci', 'kad neko završi zadatak koji si ti dodelio/la'], ['orders', 'Nove porudžbine', 'kad neko drugi unese porudžbinu'], ['returns', 'Povrati i reklamacije', 'nova prijava sa forme ili ručno'], ['daily', 'Jutarnji podsetnik u 8h', 'šta ti ističe danas i šta kasni'], ['chat', 'Tim chat', 'samo kad te neko označi (@tvoje ime ili @svi)'], ['comments', 'Komentari na zadacima', 'kad neko napiše komentar na zadatku koji pratiš'], ['calls', 'Huddle pozivi', 'kad te neko zove ili pokrene huddle sa timom'], ['deadline', 'Rokovi i hitni zadaci', 'sat pre roka; hitni odmah, 15 min pre, u roku i dok kasne']];
+const PUSH_PREFS = [['tasks', 'Zadaci za mene', 'kad ti neko dodeli zadatak'], ['done', 'Završeni zadaci', 'kad neko završi zadatak koji si ti dodelio/la'], ['orders', 'Nove porudžbine', 'kad neko drugi unese porudžbinu'], ['returns', 'Povrati i reklamacije', 'nova prijava sa forme ili ručno'], ['daily', 'Jutarnji podsetnik u 8h', 'šta ti ističe danas i šta kasni'], ['chat', 'Tim chat', 'samo kad te neko označi (@tvoje ime ili @svi)'], ['comments', 'Komentari na zadacima', 'kad neko napiše komentar na zadatku koji pratiš'], ['calls', 'Huddle pozivi', 'kad te neko zove ili pokrene huddle sa timom'], ['deadline', 'Rokovi i hitni zadaci', 'sat pre roka; hitni odmah, 15 min pre, u roku i dok kasne'], ['mentions', 'Kad te neko označi (@)', 'u zadatku, ideji, skripti, belešci ili bilo kom polju u CRM-u']];
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -4455,7 +4470,7 @@ function chatPreview(ch) {
 }
 function renderChat(toBottom) { const tm = isTaskCh(CHAT.ch); $('chatPanel').classList.toggle('task-mode', tm); document.body.classList.toggle('chat-task', tm); if (tm) CHAT.list = false; chatActClose(); renderChatSide(); renderChatTop(); renderChatMsgs(toBottom); renderChatTyping(); renderChatReply(); $('chatPanel').classList.toggle('show-list', isChatMobile() && CHAT.list); $('cpInput').placeholder = tm ? 'Napiši komentar…' : CHAT.ch === 'tim' ? (isChatMobile() ? 'Poruka timu…' : 'Poruka timu… (@ime da nekog označiš)') : `Piši ${({ konstantin: 'Konstantinu', stasa: 'Staši', marjan: 'Marjanu' })[chatOther(CHAT.ch)] || chatTitle(CHAT.ch)}…`; }
 function renderChatSide() {
-  if (isTaskCh(CHAT.ch)) { if ($('cpTask')) $('cpTask').innerHTML = isChatMobile() ? '' : taskDetailsHtml(CHAT.ch); return; }
+  if (isTaskCh(CHAT.ch)) { const b = $('cpTask'); if (b) { const ta = b.querySelector('[data-tdinput]'); if (!TD.force && ta && ta === document.activeElement) { TD.pending = true; return; } b.innerHTML = isChatMobile() ? '' : taskDetailsHtml(CHAT.ch); } return; }
   const qn = fold(CHAT.q.trim());
   if (qn) {
     const seen = new Set(), res = [];
@@ -4597,11 +4612,224 @@ function renderGifBox() {
   box.innerHTML = `<div class="gb-head"><input id="gbQ" placeholder="Traži GIF… (npr. bravo, haha, wow)" value="${esc(g.q)}" autocomplete="off"><button type="button" data-gifclose>✕</button></div><div class="gb-grid">${g.items.map(it => `<button type="button" data-gifpick="${esc(it.url)}" title="${esc(it.title || '')}"><img src="${esc(it.preview)}" loading="lazy" alt=""></button>`).join('') || '<div class="gb-note">Tražim…</div>'}</div>${g.items.length ? '<button type="button" class="gb-more" data-gifmore>Još GIF-ova</button>' : ''}${tools}<div class="gb-by">Powered by GIPHY</div>`;
 }
 /* iskačuća kartica kad te neko označi, a chat nije otvoren na tom razgovoru */
+function cpopEl() {
+  let el = $('cpop'); if (!el) { el = document.createElement('div'); el.id = 'cpop'; el.className = 'cpop'; document.body.appendChild(el); el.addEventListener('click', (e) => { if (e.target.closest('[data-cpx]')) { el.classList.remove('in'); return; } el.classList.remove('in'); if (el.dataset.go) crmGo(el.dataset.go); else openChat(el.dataset.ch); }); }
+  return el;
+}
 function chatPop(m) {
-  let el = $('cpop'); if (!el) { el = document.createElement('div'); el.id = 'cpop'; el.className = 'cpop'; document.body.appendChild(el); el.addEventListener('click', (e) => { if (e.target.closest('[data-cpx]')) { el.classList.remove('in'); return; } el.classList.remove('in'); openChat(el.dataset.ch); }); }
+  const el = cpopEl(); el.dataset.go = '';
   el.dataset.ch = m.channel;
   el.innerHTML = `${chatAv(m.author)}<div class="cpop-b"><b>${esc(personName(m.author))} ${isTaskCh(m.channel) ? `· ${esc(tcut(chatTitle(m.channel), 50))}` : m.channel === 'tim' ? (PEOPLE[m.author]?.f ? 'te je označila' : 'te je označio') : 'ti piše'}</b><span>${m.body ? chatFmt(tcut(m.body, 120)) : 'GIF / slika'}</span></div><button class="cpop-x" data-cpx>✕</button>`;
   void el.offsetWidth; el.classList.add('in'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('in'), 7000);
+}
+/* ================= @OZNAKE u svim poljima (ideja, skripta, zadatak, beleška, porudžbina…) =================
+   Kucaš @ u bilo kom polju za tekst i biraš osobu. Kad se sačuva, označeni dobija obaveštenje (crm-push iz h_audit),
+   a ako je CRM otvoren ispred njega, iskoči kartica. @Ime je svuda u CRM-u istaknuto. */
+const MNT_RE = /(^|[^\p{L}\p{N}_.@])@(konstantin|stasa|staša|marjan|svi|sve|all)(?![\p{L}\p{N}_])/giu;
+const MNT_RE1 = new RegExp(MNT_RE.source, 'iu');
+const mntKey = (nm) => { const k = normMention(nm); return k === 'sve' ? 'svi' : k; };
+function mentionsIn(s) { const out = new Set(); if (typeof s !== 'string' || s.indexOf('@') < 0) return out; for (const m of s.matchAll(MNT_RE)) out.add(mntKey(m[2])); return out; }
+function rowMentions(r) { const out = new Set(); Object.values(r || {}).forEach(v => { if (typeof v === 'string') mentionsIn(v).forEach(k => out.add(k)); }); return out; }
+function auditNewMentions(a) {
+  if (!a || !a.new_row || a.new_row.deleted_at || !String(a.tbl || '').startsWith('h_')) return [];
+  const nw = rowMentions(a.new_row); if (!nw.size) return [];
+  const old = a.op === 'INSERT' ? {} : a.old_row || { ...a.new_row, ...Object.fromEntries(Object.entries(a.changed || {}).map(([k, v]) => [k, v && v.od])) };
+  const od = rowMentions(old); return [...nw].filter(k => !od.has(k));
+}
+function mentionSnip(r, me) {
+  for (const v of Object.values(r || {})) {
+    if (typeof v !== 'string' || v.indexOf('@') < 0) continue;
+    for (const m of v.matchAll(MNT_RE)) { const k = mntKey(m[2]); if (k !== me && k !== 'svi') continue; const i = m.index + m[1].length, a = Math.max(0, i - 80), b = Math.min(v.length, i + 80); return (a ? '…' : '') + v.slice(a, b).replace(/\s+/g, ' ').trim() + (b < v.length ? '…' : ''); }
+  }
+  return '';
+}
+const MNT_SEC = { h_notes: 'Beleške', h_posts: 'Objave + reklame', h_site_ideas: 'Sajt', h_packaging: 'Pakovanje', h_returns: 'Povrati', h_promotions: 'Promocije', h_orders: 'Porudžbine', h_customers: 'Kupci', h_products: 'Garderoba', h_story_sections: 'Brand story', h_activities: 'Komentar', h_milestones: 'Istorija', h_discount_codes: 'Kodovi', h_ad_spend: 'Reklame' };
+function mentionCheck(a) {
+  if (!state.user || !a || a.actor === who()) return;
+  const ks = auditNewMentions(a); if (!ks.includes(who()) && !ks.includes('svi')) return;
+  const r = a.new_row, T = NF_TBL[a.tbl], f = PEOPLE[a.actor]?.f; let label = '';
+  try { label = T && T.name ? T.name(r) : ''; } catch (e) {}
+  if (a.tbl === 'h_site_ideas' && r.area === 'packaging') label = label || r.title;
+  const el = cpopEl(); el.dataset.ch = ''; el.dataset.go = `item:${a.tbl}:${r.id}`;
+  el.innerHTML = `${chatAv(a.actor)}<div class="cpop-b"><b>${esc(personName(a.actor))} te ${f ? 'je označila' : 'je označio'}${MNT_SEC[a.tbl] ? ' · ' + esc(MNT_SEC[a.tbl]) : ''}</b><span>${label && a.tbl !== 'h_notes' ? `<i class="cpop-it">${esc(tcut(label, 60))}</i> ` : ''}${chatFmt(mentionSnip(r, who()))}</span></div><button class="cpop-x" data-cpx>✕</button>`;
+  void el.offsetWidth; el.classList.add('in'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('in'), 9000);
+  if (!nfSnoozed()) sfx('notif');
+}
+/* otvori stavku iz obaveštenja: item:<tabela>:<id> */
+function itemOpen(tbl, id) {
+  if (CHAT.open) closeChat();
+  scrollLockSync();
+  const lists = { h_notes: 'notes', h_orders: 'orders', h_products: 'products', h_variants: 'variants', h_posts: 'posts', h_returns: 'rets', h_promotions: 'promos', h_milestones: 'milestones', h_customers: 'customers', h_site_ideas: 'ideas', h_packaging: 'pack', h_discount_codes: 'codes', h_activities: 'acts', h_order_items: 'items', h_ad_spend: 'ads', h_loyalty_events: 'levents', h_story_sections: 'story' };
+  const row = (state[lists[tbl]] || []).find(x => x.id === id) || (tbl === 'h_notes' ? (state.notesDel || []).find(x => x.id === id) : null);
+  if (!row) { toast('Stavka nije pronađena (možda je obrisana)'); return; }
+  if (tbl === 'h_notes' && row.area !== 'story' && !(row.area || '').startsWith('promo:')) {
+    npState.who = 'all'; npState.area = 'all'; npState.status = row.deleted_at || row.done ? 'all' : 'open'; if ($('npQ')) $('npQ').value = '';
+    document.querySelectorAll('#npStatus button').forEach(b => b.classList.toggle('active', b.dataset.s === npState.status));
+    setTab('notes');
+    setTimeout(() => { const el = document.querySelector(`[data-npid="${id}"]`); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('np-flash'); setTimeout(() => el.classList.remove('np-flash'), 2600); } }, 250);
+    return;
+  }
+  const T = NF_TBL[tbl]; let r = ''; try { r = T && T.open ? T.open(row) : ''; } catch (e) {}
+  if (tbl === 'h_story_sections') r = 'tab:story';
+  if (r) crmGo(r);
+}
+/* istakni @Ime svuda u CRM-u (osim u poljima za kucanje i u chatu, koji ima svoje) */
+const MNT_SKIP = 'textarea,input,script,style,option,select,svg,[contenteditable],.at-m,.cm-at,.cm-t,#mntPop';
+function mntHlNode(tn) {
+  const p = tn.parentElement, s = tn.nodeValue; if (!p || !s || p.closest(MNT_SKIP) || !MNT_RE1.test(s)) return;
+  const me = state.user ? who() : '', frag = document.createDocumentFragment(); let last = 0;
+  for (const m of s.matchAll(MNT_RE)) {
+    const st = m.index + m[1].length, en = m.index + m[0].length, k = mntKey(m[2]);
+    if (st > last) frag.appendChild(document.createTextNode(s.slice(last, st)));
+    const sp = document.createElement('span'); sp.className = 'at-m' + (k === me || k === 'svi' ? ' me' : ''); sp.textContent = s.slice(st, en); frag.appendChild(sp); last = en;
+  }
+  if (last < s.length) frag.appendChild(document.createTextNode(s.slice(last)));
+  tn.replaceWith(frag);
+}
+function mntScan(root) {
+  if (!root) return;
+  if (root.nodeType === 3) { if (root.nodeValue.indexOf('@') >= 0) mntHlNode(root); return; }
+  if (root.nodeType !== 1 || (root.closest && root.closest(MNT_SKIP))) return;
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => (n.nodeValue.indexOf('@') >= 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP) });
+  const arr = []; while (w.nextNode()) arr.push(w.currentNode); arr.forEach(mntHlNode);
+}
+/* predlozi dok kucaš @ */
+const MNT = { el: null, opts: [], i: 0, q: null, blurT: 0 };
+function mntField(el) {
+  if (!el || el.readOnly || el.disabled || !el.closest || el.id === 'cpInput' || el.id === 'botInput' || el.closest('[data-nomention]') || el.closest('#loginPage')) return false;
+  if (el.tagName === 'TEXTAREA') return true;
+  if (el.tagName !== 'INPUT' || !['text', ''].includes((el.getAttribute('type') || '').toLowerCase())) return false;
+  return /tnote|title|hook|goal|note|reason|detail|why|komentar|opis|zadat/i.test(`${el.id} ${el.name || ''} ${el.dataset.f || ''} ${el.placeholder || ''}`);
+}
+function mntCheck(el) {
+  if (!state.user || !mntField(el)) return mntHide();
+  const pos = el.selectionStart; if (pos == null || el.selectionEnd !== pos) return mntHide();
+  const m = el.value.slice(0, pos).match(/(^|[\s(„“"'])@([\p{L}]{0,15})$/u); if (!m) return mntHide();
+  const qn = fold(m[2]);
+  const opts = [...Object.keys(PEOPLE).filter(k => k !== who()).map(k => [k, personName(k)]), ['svi', 'svi (ceo tim)']].filter(([k, n]) => !qn || fold(n).startsWith(qn) || k.startsWith(qn));
+  if (!opts.length) return mntHide();
+  if (MNT.el !== el || MNT.q !== qn) MNT.i = 0;
+  MNT.el = el; MNT.opts = opts; MNT.q = qn; MNT.i = Math.min(MNT.i, opts.length - 1);
+  mntRender(); mntPlace();
+}
+function mntPopEl() {
+  let p = $('mntPop'); if (p) return p;
+  p = document.createElement('div'); p.id = 'mntPop'; p.className = 'mnt-pop'; p.setAttribute('role', 'listbox'); document.body.appendChild(p);
+  p.addEventListener('mousedown', (e) => e.preventDefault()); // da polje ne izgubi fokus
+  p.addEventListener('click', (e) => { const b = e.target.closest('[data-mk]'); if (b) mntPick(b.dataset.mk); });
+  return p;
+}
+function mntRender() {
+  const p = mntPopEl();
+  p.innerHTML = `<span class="mnt-h">Označi</span>` + MNT.opts.map(([k, n], i) => `<button type="button" role="option" class="${i === MNT.i ? 'on' : ''}" data-mk="${k}">${k === 'svi' ? '<span class="n-av mnt-all">@</span>' : `<span class="n-av ${k}">${esc(personName(k).charAt(0))}</span>`}<b>${esc(n)}</b></button>`).join('');
+  p.classList.add('in');
+}
+function mntHide() { MNT.el = null; MNT.q = null; const p = $('mntPop'); if (p) p.classList.remove('in'); }
+/* gde je kursor u polju (kopija polja van ekrana) */
+function caretXY(el) {
+  const cs = getComputedStyle(el), r = el.getBoundingClientRect(), d = document.createElement('div'), ta = el.tagName === 'TEXTAREA';
+  ['boxSizing', 'width', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'fontStyle', 'fontVariant', 'fontWeight', 'fontStretch', 'fontSize', 'lineHeight', 'fontFamily', 'textAlign', 'textTransform', 'textIndent', 'letterSpacing', 'wordSpacing', 'tabSize'].forEach(k => { d.style[k] = cs[k]; });
+  Object.assign(d.style, { position: 'absolute', visibility: 'hidden', top: '0', left: '-9999px', whiteSpace: ta ? 'pre-wrap' : 'pre', overflowWrap: 'break-word', overflow: 'hidden', height: 'auto' });
+  d.textContent = el.value.slice(0, el.selectionStart);
+  const sp = document.createElement('span'); sp.textContent = el.value.slice(el.selectionStart) || '.'; d.appendChild(sp); document.body.appendChild(d);
+  const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.35;
+  const x = r.left + sp.offsetLeft - el.scrollLeft, y = r.top + sp.offsetTop - el.scrollTop;
+  d.remove();
+  return { x: Math.min(Math.max(x, r.left), r.right), y: Math.min(Math.max(y, r.top), r.bottom - lh), lh };
+}
+function mntPlace() {
+  const p = $('mntPop'), el = MNT.el; if (!p || !el || !p.classList.contains('in')) return;
+  const c = caretXY(el), vv = window.visualViewport, top0 = vv ? vv.offsetTop : 0, h0 = vv ? vv.height : innerHeight, w0 = vv ? vv.width : innerWidth, left0 = vv ? vv.offsetLeft : 0;
+  const pw = Math.min(p.offsetWidth || 320, w0 - 16), ph = p.offsetHeight || 46;
+  let top = c.y - ph - 8; if (top < top0 + 6) top = c.y + c.lh + 6;
+  top = Math.min(Math.max(top, top0 + 6), top0 + h0 - ph - 6);
+  const left = Math.min(Math.max(c.x - 24, left0 + 8), left0 + w0 - pw - 8);
+  p.style.top = top + 'px'; p.style.left = left + 'px';
+}
+function mntPick(k) {
+  const el = MNT.el; if (!el) return;
+  const pos = el.selectionStart, v = el.value, before = v.slice(0, pos).replace(/@[\p{L}]*$/u, ''), name = k === 'svi' ? 'svi' : personName(k);
+  el.value = before + '@' + name + ' ' + v.slice(pos);
+  const np = before.length + name.length + 2; el.focus(); try { el.setSelectionRange(np, np); } catch (e) {}
+  mntHide(); el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function mntInit() {
+  document.addEventListener('input', (e) => { if (mntField(e.target)) mntCheck(e.target); else if (MNT.el) mntHide(); }, true);
+  document.addEventListener('click', (e) => { if (MNT.el && e.target === MNT.el) mntCheck(MNT.el); });
+  document.addEventListener('keyup', (e) => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) && mntField(e.target)) mntCheck(e.target); });
+  window.addEventListener('keydown', (e) => {
+    if (!MNT.el || e.target !== MNT.el || !$('mntPop') || !$('mntPop').classList.contains('in')) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); MNT.i = (MNT.i + (e.key === 'ArrowDown' ? 1 : -1) + MNT.opts.length) % MNT.opts.length; mntRender(); return; }
+    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); return mntPick(MNT.opts[MNT.i][0]); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); mntHide(); }
+  }, true);
+  document.addEventListener('focusout', () => { clearTimeout(MNT.blurT); MNT.blurT = setTimeout(() => { if (MNT.el && document.activeElement !== MNT.el) mntHide(); }, 220); });
+  const re = () => { if (MNT.el) mntPlace(); };
+  window.addEventListener('scroll', re, true); window.addEventListener('resize', re);
+  if (window.visualViewport) { visualViewport.addEventListener('resize', re); visualViewport.addEventListener('scroll', re); }
+  const Q = new Set(); let T = 0;
+  new MutationObserver((ms) => {
+    ms.forEach(m => m.addedNodes.forEach(n => Q.add(n)));
+    if (!T) T = requestAnimationFrame(() => { T = 0; const a = [...Q]; Q.clear(); a.forEach(n => { if (n.isConnected) mntScan(n); }); });
+  }).observe(document.body, { childList: true, subtree: true });
+  mntScan(document.body);
+}
+/* dok je otvoren chat, zadatak, prozor ili meni, stranica iza se ne pomera (i na iPhone-u) */
+const SL = { on: false, y: 0 };
+function scrollLockNeed() {
+  const b = document.body.classList, mob = innerWidth < 760;
+  return !!document.querySelector('.modal-wrap.open, .drawer.open, #lightbox.open, #cmdWrap.open') || b.contains('nav-open') || (b.contains('chat-open') && (mob || b.contains('chat-task'))) || (b.contains('bot-open') && mob);
+}
+function scrollLockSync() {
+  const need = scrollLockNeed(); if (need === SL.on) return;
+  SL.on = need; const b = document.body, h = document.documentElement;
+  if (need) { SL.y = window.scrollY || h.scrollTop || 0; const sw = innerWidth - h.clientWidth; b.style.top = `-${SL.y}px`; if (sw > 0) b.style.paddingRight = sw + 'px'; h.classList.add('scroll-lock'); }
+  else { h.classList.remove('scroll-lock'); b.style.top = ''; b.style.paddingRight = ''; window.scrollTo(0, SL.y); }
+}
+function scrollLockInit() {
+  const mo = new MutationObserver(scrollLockSync), opt = { attributes: true, attributeFilter: ['class'] };
+  [document.body, ...document.querySelectorAll('.modal-wrap, .drawer, #lightbox, #cmdWrap')].forEach(el => mo.observe(el, opt));
+  window.addEventListener('resize', () => scrollLockSync());
+}
+/* zadatak: izmena naziva, zadatka i sadržaja direktno u prozoru zadatka (svako može) */
+const TD = { edit: null, force: false, pending: false };
+const TD_TF = { note: 'body', post: 'title', site: 'title', packidea: 'title', pack: 'name', promo: 'name', cust: 'name', product: 'name', story: 'title' };
+const TD_EXTRA = { post: [['hook', 'Hook'], ['concept', 'Skripta']], site: [['description', 'Opis']], packidea: [['description', 'Opis']] };
+const TD_REQ = new Set(['title', 'name', 'body']), TD_ONE = new Set(['title', 'name', 'hook']);
+const tdEditing = (ch, f) => !!(TD.edit && TD.edit.ch === ch && TD.edit.f === f);
+function tdFieldHtml(ch, label, f, val, ph) {
+  if (tdEditing(ch, f)) {
+    const v = TD.edit.v != null ? TD.edit.v : (val || '');
+    return `<div class="td-f ed"><span class="td-fl">${esc(label)}</span><div class="td-ed"><textarea data-tdinput="${f}" rows="${TD_ONE.has(f) ? 1 : 3}" placeholder="${esc(ph || '')}">${esc(v)}</textarea>
+      <div class="td-ed-b"><small>${TD_ONE.has(f) ? 'Enter čuva · ' : ''}@ime označava osobu</small><button type="button" class="td-mini" data-tdcancel>Otkaži</button><button type="button" class="td-mini td-ok" data-tdsave>Sačuvaj</button></div></div></div>`;
+  }
+  return `<div class="td-f" data-tdf="${f}" role="button" tabindex="0" title="Klikni da izmeniš"><span class="td-fl">${esc(label)}</span><span class="td-fv ${val ? '' : 'ph'}">${val ? esc(val) : esc(ph)}</span><span class="td-pen" aria-hidden="true">✎</span></div>`;
+}
+function tdGrow(ta) { if (!ta) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 2, 340) + 'px'; }
+function tdRender() {
+  TD.force = true;
+  try { if (isChatMobile()) renderChatMsgs(false); else renderChatSide(); } finally { TD.force = false; }
+}
+function tdStart(f) {
+  const tk = taskOfCh(CHAT.ch); if (!tk) return;
+  if (tdEditing(CHAT.ch, f)) return;
+  TD.edit = { ch: CHAT.ch, f, v: null }; tdRender();
+  const ta = document.querySelector('#chatPanel [data-tdinput]'); if (!ta) return;
+  tdGrow(ta); ta.focus(); const n = ta.value.length; try { ta.setSelectionRange(n, n); } catch (e) {}
+  setTimeout(() => ta.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
+}
+function tdCancel() { TD.edit = null; TD.pending = false; tdRender(); }
+async function tdSave() {
+  const e = TD.edit; if (!e) return; const tk = taskOfCh(e.ch); if (!tk) return tdCancel();
+  const ta = document.querySelector('#chatPanel [data-tdinput]'), v = String(ta ? ta.value : e.v || '').trim();
+  if (TD_REQ.has(e.f) && !v) { toast('Naziv ne može da bude prazan'); if (ta) ta.focus(); return; }
+  const { src, x } = tk, val = v || null;
+  if ((x[e.f] || null) === val) return tdCancel();
+  try {
+    await q(sb.from(src.tbl).update({ [e.f]: val }).eq('id', x.id));
+    x[e.f] = val; TD.edit = null; TD.pending = false; renderAll(); if (CHAT.open) renderChat(); toast('Sačuvano ✓');
+    setTimeout(() => taskAuditLoad(e.ch), 900);
+  } catch (er) { fail(er); }
 }
 /* ================= ZADATAK: detalji + komentari (kao ClickUp) ================= */
 const fmtTaskTime = (iso) => { const d = new Date(iso), t = d.toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' }); return dayStr(d) === dayStr(new Date()) ? 'danas ' + t : d.toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'short' }) + ' ' + t; };
@@ -4619,7 +4847,12 @@ function taskEvtText(a) {
   if (ch.task_done_at) out.push(ch.task_done_at.na ? `${v('završio', 'završila')} zadatak ✓` : `${v('ponovo otvorio', 'ponovo otvorila')} zadatak`);
   else if (ch.done) out.push(ch.done.na ? `${v('završio', 'završila')} belešku ✓` : `${v('vratio', 'vratila')} belešku`);
   if (ch.status) out.push(`status: ${stLbl(ch.status.od)} → ${stLbl(ch.status.na)}`);
-  if (ch.task_note) out.push(`${v('promenio', 'promenila')} opis zadatka`);
+  if (ch.task_note) out.push(ch.task_note.na ? `${v('promenio', 'promenila')} zadatak: „${tcut(ch.task_note.na, 70)}“` : `${v('obrisao', 'obrisala')} opis zadatka`);
+  const nm = ch.title || ch.name; if (nm && nm.na) out.push(`${v('preimenovao', 'preimenovala')} u „${tcut(nm.na, 70)}“`);
+  if (ch.body && a.op !== 'INSERT') out.push(`${v('izmenio', 'izmenila')} tekst: „${tcut(ch.body.na, 70)}“`);
+  if (ch.hook) out.push(`${v('promenio', 'promenila')} hook`);
+  if (ch.concept) out.push(`${v('izmenio', 'izmenila')} skriptu`);
+  if (ch.description) out.push(`${v('izmenio', 'izmenila')} opis`);
   if (ch.deleted_at) out.push(ch.deleted_at.na ? `${v('obrisao', 'obrisala')} stavku` : `${v('vratio', 'vratila')} stavku iz arhive`);
   return out.join(' · ');
 }
@@ -4631,11 +4864,16 @@ function taskDetailsHtml(ch) {
   const t = taskOfCh(ch);
   if (!t) return '<div class="td"><div class="td-miss">Ova stavka više ne postoji ili je u arhivi. Komentari ostaju sačuvani.</div></div>';
   const { src, x } = t, as = assigneesOf(x), done = taskIsDone(x, src), d = !done && dueInfo(taskDueOf(x)), sec = src.sec ? src.sec(x) : src.label, pr = prioOf(x);
-  const df = PEOPLE[x.task_done_by]?.f, bf = PEOPLE[x.task_by]?.f, hasNote = x.task_note && src.k !== 'note';
-  const desc = src.k === 'note' ? x.body : hasNote ? '' : '';
+  const df = PEOPLE[x.task_done_by]?.f, bf = PEOPLE[x.task_by]?.f, hasNote = x.task_note && src.k !== 'note', tf = TD_TF[src.k];
+  const hf = src.k === 'note' ? 'body' : hasNote ? 'task_note' : (tf || 'task_note'); // klik na naslov menja baš ono što piše u naslovu
+  const det = src.k === 'note' ? tdFieldHtml(ch, 'Beleška', 'body', x.body, 'Tekst beleške') : [
+    tf ? tdFieldHtml(ch, 'Stavka', tf, x[tf], 'Naziv') : `<div class="td-f ro"><span class="td-fl">Stavka</span><span class="td-fv">${esc(src.title(x))}</span></div>`,
+    tdFieldHtml(ch, 'Zadatak', 'task_note', x.task_note, 'Dodaj šta treba da se uradi'),
+    ...(TD_EXTRA[src.k] || []).map(([f, l]) => tdFieldHtml(ch, l, f, x[f], 'Dodaj…')),
+  ].join('');
   return `<div class="td">
     <div class="td-crumb"><span>${src.ic} ${esc(sec)}</span>${src.k !== 'note' ? `<span>›</span><button type="button" data-tdopen>${esc(tcut(src.title(x), 60))} ↗</button>` : ''}</div>
-    ${!done && pr !== 'normal' ? `<div class="td-pr">${prioChip(x, true)}</div>` : ''}<h2 class="td-title">${esc(src.k === 'note' ? tcut(x.body, 90) : taskLabel(t))}</h2>
+    ${!done && pr !== 'normal' ? `<div class="td-pr">${prioChip(x, true)}</div>` : ''}<h2 class="td-title" data-tdf="${hf}" title="Klikni da izmeniš">${esc(src.k === 'note' ? tcut(x.body, 90) : taskLabel(t))}<span class="td-pen" aria-hidden="true">✎</span></h2>
     <div class="td-grid">
       <span class="td-l">◉ Status</span><span><button type="button" class="td-st ${done ? 'done' : ''}" data-tdtoggle title="${done ? 'Vrati u otvorene' : 'Označi kao gotovo'}">${done ? '✓ GOTOVO' : 'OTVOREN'}</button>${done ? '' : ' <button type="button" class="td-mini td-done" data-tdtoggle>✓ Završi zadatak</button>'}${done && x.task_done_by ? ` <small class="td-sm">${df ? 'završila' : 'završio'} ${esc(personName(x.task_done_by))}${x.task_done_at ? ' · ' + fmtDT(x.task_done_at) : ''}</small>` : ''}</span>
       <span class="td-l">👤 Zaduženi</span><span class="td-as">${as.length ? as.map(a => `<span class="td-p" title="${esc(seenText(a))}">${chatAv(a)}${esc(personName(a))}${a !== who() && seenShort(a) ? `<small class="td-seen ${seenCls(a)}">${seenShort(a)}</small>` : ''}</span>`).join('') : '<small class="td-sm">niko</small>'}<button type="button" class="td-mini" data-tdedit>Promeni</button></span>
@@ -4644,12 +4882,13 @@ function taskDetailsHtml(ch) {
       <span class="td-l">↗ Dodelio/la</span><span>${x.task_by ? `${esc(personName(x.task_by))} <small class="td-sm">· ${bf ? 'dodelila' : 'dodelio'} ${x.task_at ? relTime(x.task_at) : ''}</small>` : '<small class="td-sm">—</small>'}</span>
       <span class="td-l">▦ Sekcija</span><span>${esc(sec)}</span>
     </div>
-    ${src.k === 'note' ? `<div class="td-desc"><small>Beleška</small>${esc(x.body || '')}</div>` : `<div class="td-desc"><small>${hasNote ? 'Stavka' : 'Detalji'}</small>${esc(src.title(x))}${src.sub(x) ? `\n<span class="td-sub">${esc(src.sub(x))}</span>` : ''}</div>`}
-    <div class="td-actions">${src.k !== 'note' ? `<button type="button" class="btn-ghost" data-tdopen>Otvori ${esc(src.label.toLowerCase())} ↗</button>` : ''}<button type="button" class="btn-ghost" data-tdedit>Zaduženi, rok i opis</button></div>
+    <div class="td-desc"><small>Detalji <i>· klikni na polje da ga izmeniš, svako može</i></small>${det}${src.k !== 'note' && src.sub(x) ? `<span class="td-sub">${esc(src.sub(x))}</span>` : ''}</div>
+    <div class="td-actions">${src.k !== 'note' ? `<button type="button" class="btn-ghost" data-tdopen>Otvori ${esc(src.label.toLowerCase())} ↗</button>` : ''}<button type="button" class="btn-ghost" data-tdedit>Zaduženi i rok</button></div>
   </div>`;
 }
 function renderTaskThread(box, all, toBottom) {
   const ch = CHAT.ch, me = who(), lim = CHAT.lim[ch] || 300, list = all.slice(-lim);
+  if (!TD.force) { const ta = box.querySelector('[data-tdinput]'); if (ta && ta === document.activeElement) { TD.pending = true; return; } } // ne briši polje dok kucaš
   const evts = (CHAT.audit[ch] || []).map(a => ({ ev: true, at: a.at, a, txt: taskEvtText(a) })).filter(e => e.txt);
   const items = [...list.map(m => ({ at: m.created_at, m })), ...evts].sort((x, y) => String(x.at).localeCompare(String(y.at)));
   let html = isChatMobile() ? `<div class="td-m">${taskDetailsHtml(ch)}</div><div class="ta-h">Aktivnost</div>` : '';
@@ -5247,12 +5486,25 @@ function chatBind() {
   }, true);
   $('chatFab').addEventListener('click', () => (CHAT.open ? closeChat() : openChat()));
   $('navChat').addEventListener('click', () => openChat());
+  $('chatPanel').addEventListener('input', (e) => { const ta = e.target.closest && e.target.closest('[data-tdinput]'); if (!ta || !TD.edit) return; TD.edit.v = ta.value; tdGrow(ta); });
+  $('chatPanel').addEventListener('keydown', (e) => {
+    const ta = e.target.closest && e.target.closest('[data-tdinput]');
+    if (ta) {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return tdCancel(); }
+      if (e.key === 'Enter' && !e.shiftKey && (TD_ONE.has(ta.dataset.tdinput) || e.metaKey || e.ctrlKey)) { e.preventDefault(); return tdSave(); }
+      return;
+    }
+    const fe = e.target.closest && e.target.closest('.td-f[data-tdf], .td-title[data-tdf]'); if (fe && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tdStart(fe.dataset.tdf); }
+  });
   $('chatPanel').addEventListener('click', (e) => {
     const t = e.target;
     if (t.closest('[data-chatclose]')) return closeChat();
     if (t.closest('[data-chatback]')) { CHAT.list = true; chatGifClose(); return renderChat(); }
     if (t.closest('[data-tdback]')) { if (CHAT.edit) chatEditCancel(); CHAT.ch = CHAT.prevCh && !isTaskCh(CHAT.prevCh) ? CHAT.prevCh : 'tim'; CHAT.list = isChatMobile(); renderChat(true); if (!CHAT.list) chatMarkRead(CHAT.ch); return; }
     if (t.closest('[data-tdtoggle]')) { const tk = taskOfCh(CHAT.ch); if (tk) taskToggle(`${tk.src.k}:${tk.x.id}`).then(() => { if (CHAT.open) { renderChat(); setTimeout(() => taskAuditLoad(CHAT.ch), 900); } }); return; }
+    if (t.closest('[data-tdsave]')) return tdSave();
+    if (t.closest('[data-tdcancel]')) return tdCancel();
+    const tf_ = t.closest('[data-tdf]'); if (tf_ && !t.closest('a')) return tdStart(tf_.dataset.tdf);
     if (t.closest('[data-tdedit]')) { const tk = taskOfCh(CHAT.ch); if (tk) openTaskModal(tk.src.k, tk.x.id); return; }
     const tp = t.closest('[data-tdprio]'); if (tp) { const tk = taskOfCh(CHAT.ch); if (tk) taskSetPrio(tk, tp.dataset.tdprio); return; }
     if (t.closest('[data-tdopen]')) { const tk = taskOfCh(CHAT.ch); if (tk) { closeChat(); openTaskItem(tk.src.k, tk.x.id); } return; }
@@ -5349,6 +5601,7 @@ function crmGo(r) {
   if (r.startsWith('taskdone:')) { const tk = taskOfCh('task:' + r.slice(9)); if (tk) { openChat(taskChOf(tk.src, tk.x)); if (!taskIsDone(tk.x, tk.src)) taskToggle(`${tk.src.k}:${tk.x.id}`).then(() => { if (CHAT.open) renderChat(); }); } return; }
   if (r.startsWith('chat:')) return openChat(r.slice(5));
   if (r.startsWith('huddle:')) { const room = r.slice(7); openChat(room); if (HUD.room !== room) { HUD.ring = null; hudRing(room, null, true); } return; }
+  if (r.startsWith('item:')) { const [, tbl, id] = r.split(':'); return itemOpen(tbl, id); }
   if (r.startsWith('ref:')) r = r.slice(4);
   const tabFor = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' };
   const k = r.split(':')[0]; if (tabFor[k] && state.tab !== tabFor[k]) setTab(tabFor[k]);

@@ -49,8 +49,22 @@ async function pushTo(users: string[], kind: string, msg: Msg) {
   return { sent, subs: (subs || []).length, errs };
 }
 
+// @oznaka u bilo kom polju (ideja, skripta, zadatak, beleška, porudžbina…)
+const MENT_RE = /(^|[^\p{L}\p{N}_.@])@(konstantin|stasa|staša|marjan|svi|sve|all)(?![\p{L}\p{N}_])/giu;
+const mkey = (s: string) => { const k = s.toLowerCase().replace(/š/g, 's'); return k === 'sve' || k === 'all' ? 'svi' : k; };
+function mentionsOf(r: any) { const out = new Set<string>(); for (const v of Object.values(r || {})) if (typeof v === 'string' && v.includes('@')) for (const m of v.matchAll(MENT_RE)) out.add(mkey(m[2])); return out; }
+function mentSnip(r: any, keys: string[]) {
+  for (const v of Object.values(r || {})) {
+    if (typeof v !== 'string' || !v.includes('@')) continue;
+    for (const m of v.matchAll(MENT_RE)) { if (!keys.includes(mkey(m[2]))) continue; const i = (m.index || 0) + m[1].length, a = Math.max(0, i - 90), b = Math.min(v.length, i + 90); return (a ? '…' : '') + v.slice(a, b).replace(/\s+/g, ' ').trim() + (b < v.length ? '…' : ''); }
+  }
+  return '';
+}
+const MSEC: Record<string, string> = { ...SEC, h_activities: 'Komentar', h_milestones: 'Istorija', h_discount_codes: 'Kodovi', h_ad_spend: 'Reklame' };
+const LBL: Record<string, (r: any) => string> = { ...NAME, h_milestones: r => r.title, h_discount_codes: r => r.code, h_ad_spend: r => `potrošnja ${r.day || ''}`, h_activities: () => '' };
+
 async function onAudit(a: any) {
-  const r = a.new_row || {}, actor = a.actor || '', tbl = a.tbl, out: unknown[] = [];
+  const r = a.new_row || {}, actor = a.actor || '', tbl = a.tbl, out: unknown[] = [], notified = new Set<string>();
   // 1) zadatak dodeljen ili završen
   if (SEC[tbl] && Array.isArray(r.assignees)) {
     const before: string[] = a.op === 'INSERT' ? [] : (a.changed?.assignees ? (a.changed.assignees.od || []) : r.assignees);
@@ -62,13 +76,33 @@ async function onAudit(a: any) {
     if (urgentNow) {
       const as = r.assignees.filter((u: string) => PEOPLE[u]).map(pname).join(', ');
       const due = r.task_due_at ? `· rok ${dayLbl(r.task_due_at)} u ${hm(r.task_due_at)}` : r.task_due ? `· rok ${fmtDay(r.task_due)}` : '';
+      USERS.forEach(u => notified.add(u));
       out.push(await pushTo(USERS.filter(u => u !== actor), 'deadline', { title: `🚨 HITNO · ${pname(actor)} ${vb(actor, 'označio', 'označila')} zadatak kao hitan`, body: [what, ref && `(${ref})`, due, `· zaduženi: ${as}`].filter(Boolean).join(' '), tag: `dl-${tbl}-${r.id}`, go: `chat:task:${tbl}:${r.id}`, kind: 'urgent', task: `${tbl}:${r.id}`, akey: `${tbl}:${r.id}:new:${a.id || Date.now()}` }));
     }
+    if (added.length && !r.task_done_at && PEOPLE[actor] && !urgentNow) added.forEach((u: string) => notified.add(u));
     if (added.length && !r.task_done_at && PEOPLE[actor] && !urgentNow)
       out.push(await pushTo(added, 'tasks', { title: `${pname(actor)} ti je ${vb(actor, 'dodelio', 'dodelila')} zadatak`, body: [what, ref && `(${ref})`, r.task_due && `· rok ${fmtDay(r.task_due)}`, `· ${SEC[tbl]}`].filter(Boolean).join(' '), tag: `task-${tbl}-${r.id}`, go: 'tab:tasks' }));
     const ch = a.changed?.task_done_at;
     if (a.op === 'UPDATE' && ch && !ch.od && ch.na && r.task_by && r.task_by !== actor && PEOPLE[actor])
       out.push(await pushTo([r.task_by], 'done', { title: `${pname(actor)} je ${vb(actor, 'završio', 'završila')} zadatak ✓`, body: [what, ref && `(${ref})`, `· ${SEC[tbl]}`].filter(Boolean).join(' '), tag: `done-${tbl}-${r.id}`, go: 'tab:tasks' }));
+  }
+  // 1b) neko je označen (@ime ili @svi) u nekom polju: samo novo dodate oznake, ne i one koje su već bile
+  if (String(tbl || '').startsWith('h_') && PEOPLE[actor] && !r.deleted_at) {
+    const nw = mentionsOf(r);
+    if (nw.size) {
+      const old = a.op === 'INSERT' ? {} : (a.old_row || { ...r, ...Object.fromEntries(Object.entries(a.changed || {}).map(([k, v]: [string, any]) => [k, v?.od])) });
+      const od = mentionsOf(old), addM = [...nw].filter(k => !od.has(k));
+      const to = (addM.includes('svi') ? USERS : addM.filter(k => PEOPLE[k])).filter(u => u !== actor && !notified.has(u));
+      if (to.length) {
+        let lbl = ''; try { lbl = cut(LBL[tbl]?.(r) || '', 70); } catch (_) { /* bez naziva */ }
+        const snip = mentSnip(r, [...to, 'svi']);
+        out.push(await pushTo(to, 'mentions', {
+          title: `@ ${pname(actor)} te ${vb(actor, 'označio', 'označila')} · ${MSEC[tbl] || 'CRM'}`,
+          body: [tbl !== 'h_notes' && lbl ? `${lbl}:` : '', snip ? `„${snip}“` : ''].filter(Boolean).join(' ') || 'Otvori da vidiš',
+          tag: `ment-${tbl}-${r.id}`, go: `item:${tbl}:${r.id}`, kind: 'mention',
+        }));
+      }
+    }
   }
   // 2) nova porudžbina
   if (tbl === 'h_orders' && a.op === 'INSERT') {
