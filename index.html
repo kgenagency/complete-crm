@@ -574,6 +574,10 @@ body.tpop-on .ntray{opacity:0;pointer-events:none;transition:opacity .2s}
 .tpop.in .tp-av.n-av{animation:tpAv .35s calc(.42s + var(--i) * 80ms) cubic-bezier(.2,1.6,.4,1) forwards}
 .tp-who{font-size:12px;color:#c9d2c4}
 .tp-side{display:flex;flex-direction:column;gap:6px;flex:none}
+.tp-hint{margin-top:8px;font:600 12.5px var(--font-ui);color:rgba(232,228,217,.72);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tp-undo{border:1px solid rgba(232,228,217,.45);background:transparent;color:#E8E4D9;border-radius:8px;padding:5px 10px;font:700 12.5px var(--font-ui);cursor:pointer}
+.tp-undo:hover{background:rgba(232,228,217,.12)}
+.tpop.has-key:hover{box-shadow:0 22px 50px -14px rgba(10,15,12,.6),0 0 0 1.5px #C9A96E}
 .tp-btn{width:30px;height:30px;border-radius:9px;border:0;background:rgba(232,228,217,.08);color:#E8E4D9;font-size:13px;cursor:pointer}
 .tp-btn:active{transform:scale(.92)}
 .tp-bar{position:absolute;left:0;bottom:0;height:3px;width:100%;background:#c99a3b;transform-origin:left;transform:scaleX(0)}
@@ -2779,8 +2783,8 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610121300"></script>
-<script>window.HTML_BUILD="202610121300";</script>
-<script src="app.js?v=202610121300"></script>
+<script src="config.js?v=202610121332"></script>
+<script>window.HTML_BUILD="202610121332";</script>
+<script src="app.js?v=202610121332"></script>
 </body>
 </html>

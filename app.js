@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610121300';
+const APP_BUILD = '202610121332';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -1032,24 +1032,24 @@ function taskPop(kind, info) {
   const head = done ? (f ? 'Bravo, završila si zadatak' : 'Bravo, završio si zadatak') : kind === 'assign' ? (f ? 'Upravo si dodelila zadatak' : 'Upravo si dodelio zadatak') : (f ? 'Upravo si napravila zadatak' : 'Upravo si napravio zadatak');
   const d = !done && dueInfo(info.due);
   const parts = Array.from({ length: 10 }, (_, i) => { const ang = (i / 10) * Math.PI * 2 + Math.random() * 0.5, r = 34 + Math.random() * 22; return `<i style="--dx:${Math.cos(ang) * r}px;--dy:${Math.sin(ang) * r}px;--d:${Math.random() * 90}ms"></i>`; }).join('');
-  el.className = 'tpop ' + (done ? 'done' : '');
+  el.className = 'tpop ' + (done ? 'done' : '') + (info.key ? ' has-key' : ''); el.dataset.key = info.key || '';
   el.innerHTML = `<div class="tp-ic"><span class="tp-burst">${parts}</span><svg viewBox="0 0 36 36" width="36" height="36" aria-hidden="true"><circle cx="18" cy="18" r="16" class="tp-c"/><path d="M11 18.5l4.6 4.6L25.5 13" class="tp-k"/></svg></div>
-    <div class="tp-body"><div class="tp-h">${head}</div><div class="tp-t">${esc(tcut(info.title, 90))}</div>
+    <div class="tp-body"><div class="tp-h">${head}</div><div class="tp-t">${esc(tcut(info.title, 90))}</div>${done && info.key ? '<div class="tp-hint">Klikni da ga otvoriš <button type="button" class="tp-undo" data-tpundo>↺ Vrati u otvorene</button></div>' : ''}
       <div class="tp-m">${info.sec ? `<span class="tk-sec">${esc(info.sec)}</span>` : ''}${(info.as || []).map((k, i) => `<span class="tp-av n-av ${PEOPLE[k] ? k : 'system'}" style="--i:${i}" title="${esc(personName(k))}">${esc(personName(k).charAt(0))}</span>`).join('')}${(info.as || []).length ? `<span class="tp-who">${esc(info.as.map(personName).join(', '))}</span>` : ''}${d ? `<span class="tk-due ${d.level}">⏱ ${d.txt}</span>` : ''}</div></div>
     <div class="tp-side"><button type="button" class="tp-btn" data-tpsound title="${soundOn() ? 'Isključi zvuk' : 'Uključi zvuk'}">${soundOn() ? '🔔' : '🔕'}</button><button type="button" class="tp-btn" data-tpclose title="Zatvori">✕</button></div>
     <div class="tp-bar"></div>`;
   $('toast').classList.remove('show');
   void el.offsetWidth; el.classList.add('in'); document.body.classList.add('tpop-on');
   ting(done ? 'done' : 'new');
-  clearTimeout(tpopT); tpopT = setTimeout(tpopHide, 5200);
+  clearTimeout(tpopT); tpopT = setTimeout(tpopHide, done && info.key ? 8000 : 5200);
 }
 /* posle čuvanja: da li je ovim čuvanjem nastao, dodeljen ili završen zadatak */
 function taskAfterSave(px, title, sec) {
   const c = TASK_CTX[px], L = c && c.last; if (!L) return; c.last = null;
-  if (L.mode === 'done') return taskPop('done', { title, sec });
+  if (L.mode === 'done') return taskPop('done', { title, sec, key: c.x && c.src ? `${c.src.k}:${c.x.id}` : '' });
   const added = L.after.filter(k => !L.before.includes(k));
   if (!added.length || L.mode === 'reopen') return;
-  taskPop(L.before.length ? 'assign' : 'new', { title: L.note || title, sec: sec || c.src?.label || '', as: L.after, due: L.due });
+  taskPop(L.before.length ? 'assign' : 'new', { title: L.note || title, sec: sec || c.src?.label || '', as: L.after, due: L.due, key: c.x && c.src ? `${c.src.k}:${c.x.id}` : '' });
 }
 
 /* opšti prozor za zadatak (beleške, kupci, priča, izmena iz Taskova) */
@@ -1083,7 +1083,7 @@ async function taskToggle(key) {
   TGL_BUSY.add(key);
   try {
     await q(sb.from(src.tbl).update(patch).eq('id', id)); Object.assign(x, patch);
-    renderAll(); if (done) toast('Vraćeno u otvorene'); else taskPop('done', { title: src.title(x), sec: src.sec ? src.sec(x) : src.label });
+    renderAll(); if (done) toast('Vraćeno u otvorene'); else taskPop('done', { title: src.title(x), sec: src.sec ? src.sec(x) : src.label, key });
   } catch (e) { fail(e); } finally { setTimeout(() => TGL_BUSY.delete(key), 600); }
 }
 /* stranica Taskovi */
@@ -3098,7 +3098,7 @@ async function qlSavePick(body) {
   try {
     const r = await q(sb.from(src.tbl).update(patch).eq('id', id).select().single()); Object.assign(x, r || patch);
     $('noteModal').classList.remove('open'); renderAll();
-    taskPop(before.length ? 'assign' : 'new', { title: body || src.title(x), sec: src.sec ? src.sec(x) : src.label, as, due: patch.task_due });
+    taskPop(before.length ? 'assign' : 'new', { title: body || src.title(x), sec: src.sec ? src.sec(x) : src.label, as, due: patch.task_due, key: `${src.k}:${x.id}` });
   } catch (e) { fail(e); }
   $('qnSave').disabled = false;
 }
@@ -3596,8 +3596,11 @@ function bindEvents() {
   document.addEventListener('click', (e) => {
     const pop = e.target.closest('#tpop'); if (!pop) return;
     if (e.target.closest('[data-tpsound]')) { setSound(!soundOn()); const b = e.target.closest('[data-tpsound]'); b.textContent = soundOn() ? '🔔' : '🔕'; b.title = soundOn() ? 'Isključi zvuk' : 'Uključi zvuk'; return; }
-    tpopHide(); clearTimeout(tpopT);
-    if (!e.target.closest('[data-tpclose]') && state.tab !== 'tasks') setTab('tasks');
+    const key = pop.dataset.key || ''; tpopHide(); clearTimeout(tpopT);
+    if (e.target.closest('[data-tpclose]')) return;
+    if (key && e.target.closest('[data-tpundo]')) return taskToggle(key).then(() => { if (CHAT.open && isTaskCh(CHAT.ch)) { renderChat(); setTimeout(() => taskAuditLoad(CHAT.ch), 900); } });
+    if (key) { const [k, id] = key.split(':'); return openTaskView(k, id); }
+    if (state.tab !== 'tasks') setTab('tasks');
   });
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-sectk]'); if (!b) return; tkState.sec = b.dataset.sectk; tkState.who = 'all'; tkState.st = 'open'; setTab('tasks'); });
   $('newTaskBtn').addEventListener('click', () => openNoteModal('auto', true));
@@ -5064,7 +5067,7 @@ async function tdxSave() {
     TDX.ch = TDX.k = null; renderAll(); if (CHAT.open) renderChat(); setTimeout(() => taskAuditLoad(CHAT.ch), 900);
     if (k === 'as') {
       const after = assigneesOf(x), added = after.filter(a => !before.includes(a));
-      if (added.length) taskPop(before.length ? 'assign' : 'new', { title: taskLabel(tk), sec: src.sec ? src.sec(x) : src.label, as: after, due: taskDueOf(x) });
+      if (added.length) taskPop(before.length ? 'assign' : 'new', { title: taskLabel(tk), sec: src.sec ? src.sec(x) : src.label, as: after, due: taskDueOf(x), key: `${src.k}:${x.id}` });
       else toast(after.length ? 'Zaduženi sačuvani ✓' : 'Niko više nije zadužen');
     } else toast(taskDueOf(x) ? `Rok: ${x.task_due_at ? fmtDT(x.task_due_at) : fmtDate(x.task_due)} ✓` : 'Rok je skinut');
   } catch (e) { fail(e); }
@@ -5781,7 +5784,7 @@ function chatBind() {
     if (t.closest('[data-chatclose]')) return closeChat();
     if (t.closest('[data-chatback]')) { CHAT.list = true; chatGifClose(); return renderChat(); }
     if (t.closest('[data-tdback]')) { if (CHAT.edit) chatEditCancel(); CHAT.ch = CHAT.prevCh && !isTaskCh(CHAT.prevCh) ? CHAT.prevCh : 'tim'; CHAT.list = isChatMobile(); renderChat(true); if (!CHAT.list) chatMarkRead(CHAT.ch); return; }
-    if (t.closest('[data-tdtoggle]')) { const tk = taskOfCh(CHAT.ch); if (tk) taskToggle(`${tk.src.k}:${tk.x.id}`).then(() => { if (CHAT.open) { renderChat(); setTimeout(() => taskAuditLoad(CHAT.ch), 900); } }); return; }
+    if (t.closest('[data-tdtoggle]')) { const tk = taskOfCh(CHAT.ch), ch0 = CHAT.ch; if (tk) taskToggle(`${tk.src.k}:${tk.x.id}`).then(() => { const t2 = taskOfCh(ch0); if (t2 && taskIsDone(t2.x, t2.src)) { if (CHAT.open && CHAT.ch === ch0) closeChat(); return; } if (CHAT.open) { renderChat(); setTimeout(() => taskAuditLoad(CHAT.ch), 900); } }); return; } // završen zadatak se skloni, a kartica dole ga vraća
     if (t.closest('[data-tdsave]')) return tdSave();
     if (t.closest('[data-tdxsave]')) return tdxSave();
     if (t.closest('[data-tdxcancel]')) return tdxClose();
@@ -5885,7 +5888,7 @@ function crmGo(r) {
   if (!r || !state.user) return;
   ['notifModal', 'pushModal'].forEach(id => { const m = $(id); if (m) m.classList.remove('open'); });
   if (r.startsWith('tab:')) return setTab(r.slice(4));
-  if (r.startsWith('taskdone:')) { const tk = taskOfCh('task:' + r.slice(9)); if (tk) { openChat(taskChOf(tk.src, tk.x)); if (!taskIsDone(tk.x, tk.src)) taskToggle(`${tk.src.k}:${tk.x.id}`).then(() => { if (CHAT.open) renderChat(); }); } return; }
+  if (r.startsWith('taskdone:')) { const tk = taskOfCh('task:' + r.slice(9)); if (tk) { if (!taskIsDone(tk.x, tk.src)) taskToggle(`${tk.src.k}:${tk.x.id}`); else openChat(taskChOf(tk.src, tk.x)); } return; } // Gotovo iz obaveštenja: završi i pokaži karticu (klik je otvara)
   if (r.startsWith('chat:')) return openChat(r.slice(5));
   if (r.startsWith('huddle:')) { const room = r.slice(7); openChat(room); if (HUD.room !== room) { HUD.ring = null; hudRing(room, null, true); } return; }
   if (r.startsWith('item:')) { const [, tbl, id] = r.split(':'); return itemOpen(tbl, id); }
