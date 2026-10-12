@@ -639,6 +639,31 @@ body.tpop-on .ntray{opacity:0;pointer-events:none;transition:opacity .2s}
 .p-links{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 .p-links a{font-size:11.5px;font-weight:600;text-decoration:none;padding:3px 8px;border-radius:6px;background:#eef1f4;color:#3f4a56}
 .p-links a.drive{background:#e2f3ee;color:#0d6b4f}
+/* v33: Drive folder za reklame i objave */
+.drive-hub{margin:0 0 18px;display:flex;flex-direction:column;gap:9px}
+.dh-main{display:flex;align-items:center;gap:16px;padding:16px 20px;border-radius:16px;background:linear-gradient(135deg,#1B2620 0%,#2a3a30 100%);color:#E8E4D9;text-decoration:none;box-shadow:0 6px 20px rgba(27,38,32,.22);border:1.5px solid #C9A96E;transition:transform .15s,box-shadow .15s}
+.dh-main:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(27,38,32,.3)}
+.dh-main:focus-visible{outline:3px solid #C9A96E;outline-offset:3px}
+.dh-ic{flex:none;width:50px;height:50px;border-radius:13px;background:#C9A96E;color:#1B2620;display:flex;align-items:center;justify-content:center}
+.dh-t{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.dh-t small{font:700 11.5px var(--font-ui);letter-spacing:.07em;text-transform:uppercase;color:#C9A96E}
+.dh-t b{font:700 20px var(--font-ui);color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dh-go{flex:none;background:#C9A96E;color:#1B2620;font:800 14.5px var(--font-ui);padding:11px 18px;border-radius:11px;white-space:nowrap}
+.dh-main:hover .dh-go{background:#d8bb85}
+.dh-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dh-sub{background:#fff;border:1.5px solid #C9A96E;color:#1B2620;border-radius:99px;padding:6px 13px;font:700 13px var(--font-ui);text-decoration:none}
+.dh-sub:hover{background:#faf3e4}
+.dh-sp{flex:1}
+.dh-by{color:var(--muted);font-size:12px}
+.dh-btn{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 12px;font:600 12.5px var(--font-ui);color:var(--ink-2);cursor:pointer}
+.dh-btn:hover{border-color:#C9A96E}
+.dh-edit{background:#fff;border:1.5px solid #C9A96E;border-radius:14px;padding:14px 16px}
+.dh-edit label{display:block;font:700 13px var(--font-ui);margin-bottom:8px}
+.dh-er{display:flex;gap:8px;flex-wrap:wrap}
+.dh-er input{flex:1 1 260px;min-width:0;border:1.5px solid #1B2620;border-radius:10px;padding:9px 11px;font:15px var(--font-ui)}
+.po-dhint{display:inline-block;margin-top:7px;font:700 13px var(--font-ui);color:#0d6b4f;text-decoration:none}
+.po-dhint:hover{text-decoration:underline}
+@media (max-width:640px){.dh-main{flex-wrap:wrap;gap:12px;padding:14px}.dh-ic{width:44px;height:44px}.dh-t b{font-size:17px;white-space:normal}.dh-go{width:100%;text-align:center;padding:12px}.dh-er input{font-size:16px}.dh-sp{display:none}}
 .st-idea{background:#eef1f4;color:#3f4a56}.st-scripting{background:#fdf1d8;color:#8a6100}.st-filming{background:#ece8fb;color:#4a3aa7}.st-editing{background:#e3edfb;color:#1c5cab}.st-scheduled{background:#e2e6dc;color:#1B2620}.st-published{background:#e2f4e2;color:#067306}
 .st-proposed{background:#eef1f4;color:#3f4a56}.st-approved{background:#fdf1d8;color:#8a6100}.st-in_progress{background:#e3edfb;color:#1c5cab}.st-done{background:#e2f4e2;color:#067306}.st-rejected{background:#f0efec;color:#6b6961}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
@@ -2145,9 +2170,10 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
       <!-- OBJAVE -->
       <div class="view" id="v-posts">
         <div class="page-head">
-          <div><div class="page-title">Objave + reklame</div><div class="page-sub">Ideje za objave i reklame, inspiracija, skripte, datumi i snimci na Drive-u.</div></div>
+          <div><div class="page-title">Objave + reklame</div><div class="page-sub">Ideje za objave i reklame, inspiracija, skripte i datumi. Svi snimci i gotove reklame idu u Drive folder ispod.</div></div>
           <button class="btn-gold" id="newPostBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Nova ideja</button>
         </div>
+        <div class="drive-hub" id="postDrive"></div>
         <div class="week-strip" id="weekStrip"></div>
         <div class="toolbar">
           <div class="seg" id="postViewSeg"><button data-view="board" class="active">Tabla</button><button data-view="calendar">Kalendar</button><button data-view="list">Lista</button></div>
@@ -2753,8 +2779,8 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610121246"></script>
-<script>window.HTML_BUILD="202610121246";</script>
-<script src="app.js?v=202610121246"></script>
+<script src="config.js?v=202610121300"></script>
+<script>window.HTML_BUILD="202610121300";</script>
+<script src="app.js?v=202610121300"></script>
 </body>
 </html>

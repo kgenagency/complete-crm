@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610121246';
+const APP_BUILD = '202610121300';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -1375,8 +1375,46 @@ function postCard(p) {
     ${(p.drive_link || p.post_url || ins) ? `<div class="p-links">${ins}${p.drive_link ? `<a class="drive" href="${esc(p.drive_link)}" target="_blank" rel="noopener">▲ Drive snimak</a>` : ''}${p.post_url ? `<a href="${esc(p.post_url)}" target="_blank" rel="noopener">↗ Objava</a>` : ''}</div>` : ''}
   </div>`;
 }
+/* Drive folder za sve reklame i objave: velika kartica na vrhu stranice Objave + reklame (link se menja u CRM-u) */
+const DRIVE_POSTS = { url: 'https://drive.google.com/drive/folders/1Sj80QQHhEU_WuJearqxyAf5NIV3BvnPP', name: 'HARIZMA REKLAME I OBJAVE',
+  subs: [['01 Reklame', 'https://drive.google.com/drive/folders/1f6Grmp7iDGSbFhRIVzpLiVvtOCbT3jlL'], ['02 Objave', 'https://drive.google.com/drive/folders/1mrnR-L-eOeP6PtxRozgRpJFHzfQjMxpp'], ['03 Sirovi snimci i slike', 'https://drive.google.com/drive/folders/1MmaPdY-dqImMIhU-zpIMB6XHH5Hfagdd']] };
+const DRV = { edit: false };
+const drivePostsUrl = () => setting('drive_posts', '') || DRIVE_POSTS.url;
+const DRV_IC = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.2l2 2.2h8.8A1.5 1.5 0 0 1 21 9.7v8.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/><path d="M3 10.5h18"/></svg>';
+function renderPostDrive() {
+  const el = $('postDrive'); if (!el) return;
+  const url = drivePostsUrl(), def = url === DRIVE_POSTS.url, st = state.settings.find(x => x.key === 'drive_posts');
+  if (DRV.edit) {
+    el.innerHTML = `<div class="dh-edit"><label for="dhUrl">Link Drive foldera za reklame i objave</label><div class="dh-er"><input id="dhUrl" type="url" value="${esc(url)}" placeholder="https://drive.google.com/drive/folders/…" data-nomention><button type="button" class="btn-ghost" data-dhcancel>Otkaži</button><button type="button" class="btn-gold" data-dhsave>Sačuvaj</button></div></div>`;
+    return;
+  }
+  el.innerHTML = `<a class="dh-main" href="${esc(url)}" target="_blank" rel="noopener"><span class="dh-ic">${DRV_IC}</span><span class="dh-t"><small>Google Drive · sve reklame, objave i snimci</small><b>${esc(def ? DRIVE_POSTS.name : 'Drive folder za reklame i objave')}</b></span><span class="dh-go">Otvori folder ↗</span></a>
+    <div class="dh-row">${def ? DRIVE_POSTS.subs.map(([n, u]) => `<a class="dh-sub" href="${esc(u)}" target="_blank" rel="noopener">${esc(n)} ↗</a>`).join('') : ''}<span class="dh-sp"></span>${st && st.updated_by ? `<small class="dh-by">link ${esc(st.updated_by)}</small>` : ''}<button type="button" class="dh-btn" data-dhcopy>Kopiraj link</button><button type="button" class="dh-btn" data-dhedit>Promeni link</button></div>`;
+}
+async function drivePostsSave() {
+  const v = ($('dhUrl') ? $('dhUrl').value : '').trim();
+  if (v && !/^https:\/\/(drive|docs)\.google\.com\//.test(v)) return toast('Link mora da bude Google Drive link (https://drive.google.com/…)');
+  try {
+    await q(sb.from('h_settings').upsert({ key: 'drive_posts', value: v === DRIVE_POSTS.url ? '' : v, updated_at: new Date().toISOString(), updated_by: state.user.display }));
+    state.settings = await q(sb.from('h_settings').select('*')); DRV.edit = false; renderPostDrive(); toast('Drive link sačuvan ✓');
+  } catch (e) { fail(e); }
+}
+function drivePostsBind() {
+  const el = $('postDrive'); if (!el) return;
+  el.addEventListener('click', async (e) => {
+    const t = e.target;
+    if (t.closest('[data-dhcopy]')) { try { await navigator.clipboard.writeText(drivePostsUrl()); toast('Drive link kopiran ✓'); } catch (x) { prompt('Kopiraj link:', drivePostsUrl()); } return; }
+    if (t.closest('[data-dhedit]')) { DRV.edit = true; renderPostDrive(); const i = $('dhUrl'); if (i) { i.focus(); i.select(); } return; }
+    if (t.closest('[data-dhcancel]')) { DRV.edit = false; return renderPostDrive(); }
+    if (t.closest('[data-dhsave]')) return drivePostsSave();
+  });
+  el.addEventListener('keydown', (e) => { if (e.target.id !== 'dhUrl') return; if (e.key === 'Enter') { e.preventDefault(); drivePostsSave(); } if (e.key === 'Escape') { DRV.edit = false; renderPostDrive(); } });
+  outsideCloser(() => !!(DRV.edit && $('dhUrl')), (t) => !!t.closest('.dh-edit'), () => { DRV.edit = false; renderPostDrive(); });
+  const f = $('po_drive'); if (f && !$('poDriveHint')) { const h = document.createElement('a'); h.id = 'poDriveHint'; h.className = 'po-dhint'; h.target = '_blank'; h.rel = 'noopener'; h.textContent = '▲ Otvori naš Drive folder za reklame i objave ↗'; h.addEventListener('click', () => { h.href = drivePostsUrl(); }); h.href = drivePostsUrl(); f.after(h); }
+}
 function renderPosts() {
   const list = filteredPosts();
+  renderPostDrive();
   $('postCount').textContent = `${list.length} ${bpl(list.length, 'ideja', 'ideje', 'ideja')}`;
   document.querySelectorAll('#postViewSeg button').forEach(b => b.classList.toggle('active', b.dataset.view === state.postView));
   document.querySelectorAll('#postPurposeSeg button').forEach(b => b.classList.toggle('active', b.dataset.pp === state.postPurpose));
@@ -2579,7 +2617,7 @@ const NF_TBL = {
   h_discount_codes: { cat: 'code', label: 'kod', name: r => r.code, open: r => `code:${r.id}`, ins: r => r.kind === 'loyalty' ? 'nagrada iz kluba, kod' : 'nov kod za popust', prio: 6 },
   h_loyalty_events: { cat: 'code', label: 'poene', name: r => `${r.points > 0 ? '+' : ''}${r.points} za ${custName(r.customer_id)}${r.reason ? ' (' + r.reason + ')' : ''}`, open: r => `cust:${r.customer_id}`, ins: () => 'poeni', prio: 6 },
   h_milestones: { cat: 'history', label: 'događaj', name: r => r.title, open: r => `ms:${r.id}`, ins: () => 'zabeležen događaj', prio: 8 },
-  h_settings: { cat: 'settings', label: 'podešavanje', name: r => ({ site_url: 'link sajta', site_pass: 'lozinka sajta', loyalty: 'pravila kluba' }[r.key] || r.key), open: r => r.key === 'loyalty' ? 'tab:customers' : 'tab:site', prio: 6 },
+  h_settings: { cat: 'settings', label: 'podešavanje', name: r => ({ site_url: 'link sajta', site_pass: 'lozinka sajta', loyalty: 'pravila kluba', drive_posts: 'Drive folder za reklame i objave' }[r.key] || r.key), open: r => r.key === 'loyalty' ? 'tab:customers' : r.key === 'drive_posts' ? 'tab:posts' : 'tab:site', prio: 6 },
   h_activities: { cat: 'comment', only: r => ['comment', 'screenshot'].includes(r.type), label: 'komentar', prio: 8,
     name: r => { const o = r.order_id && order(r.order_id), p = r.post_id && state.posts.find(x => x.id === r.post_id), rt = r.return_id && state.rets.find(x => x.id === r.return_id), c = r.customer_id && state.customers.find(x => x.id === r.customer_id), i = r.site_id && state.ideas.find(x => x.id === r.site_id); return o ? `uz porudžbinu ${o.order_no || ''} ${o.customer_name}` : p ? `uz objavu ${p.title}` : rt ? `uz prijavu ${rt.case_no}` : c ? `uz kupca ${c.name}` : i ? `uz predlog ${i.title}` : ''; },
     open: r => r.order_id ? `order:${r.order_id}` : r.post_id ? `post:${r.post_id}` : r.return_id ? `ret:${r.return_id}` : r.customer_id ? `cust:${r.customer_id}` : r.site_id ? `idea:${r.site_id}` : '',
@@ -3235,7 +3273,7 @@ function auditTabs(a) {
     case 'h_notes': return (r.area || '') === 'story' ? ['notes', 'story'] : (r.area || '').startsWith('promo:') ? ['notes', 'promos'] : ['notes'];
     case 'h_ad_spend': return ['ads'];
     case 'h_milestones': return ['history'];
-    case 'h_settings': return [r.key === 'loyalty' ? 'customers' : 'site'];
+    case 'h_settings': return [r.key === 'loyalty' ? 'customers' : r.key === 'drive_posts' ? 'posts' : 'site'];
     case 'h_activities': return [r.order_id ? 'orders' : r.post_id ? 'posts' : r.return_id ? 'returns' : r.customer_id ? 'customers' : r.site_id ? 'site' : r.promo_id ? 'promos' : r.packaging_id ? 'packaging' : r.product_id ? 'products' : null].filter(Boolean);
   }
   return [];
@@ -3580,7 +3618,7 @@ function bindEvents() {
     else { b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); }
     wpAllSync(box);
   });
-  mntInit(); scrollLockInit(); supBind(); closersInit(); shpBind();
+  mntInit(); scrollLockInit(); supBind(); closersInit(); shpBind(); drivePostsBind();
   $('po_purposeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-pp]'); if (b) setPostPurpose(b.dataset.pp); });
   $('newSiteBtn').addEventListener('click', () => openIdeaModal(null, 'site'));
   $('newPackIdeaBtn').addEventListener('click', () => openIdeaModal(null, 'packaging'));
@@ -3655,7 +3693,7 @@ const BOT_TIPS = {
   products: 'Na vrhu su upozorenja za zalihe, ispod tabela sa veličinama. Dugmići <b>−</b> i <b>+</b> odmah menjaju stanje. Granicu za upozorenje („upozori kad ostane ≤ X“) menjaš desno gore.',
   returns: 'Ovde stižu prijave sa forme za kupce. Svaka kartica ima rok: 8 dana za odgovor na reklamaciju, 14 dana za povrat novca ili zamenu. Pogled <b>Šta da popravimo</b> skuplja razloge i utiske.',
   promos: 'Svaka akcija ima trajanje od-do, kod i budžet. CRM sam računa porudžbine i prihod u tom periodu i koliko je to iznad proseka. Svako može da doda beleške uz promociju.',
-  posts: 'Ideje za objave i reklame sa skriptom (hook posebno), inspiracijom, datumom i Drive linkom za video. Gore filtriraš Objava + reklama, Samo reklama, Samo objava. Pogledi: <b>Tabla</b> (faze), <b>Kalendar</b> i <b>Lista</b>. Karticu prevučeš u sledeću fazu.',
+  posts: 'Ideje za objave i reklame sa skriptom (hook posebno), inspiracijom, datumom i Drive linkom za video. Gore filtriraš Objava + reklama, Samo reklama, Samo objava. Pogledi: <b>Tabla</b> (faze), <b>Kalendar</b> i <b>Lista</b>. Karticu prevučeš u sledeću fazu. Na vrhu je <b>Drive folder</b> za sve reklame, objave i snimke (Otvori folder, Kopiraj link, Promeni link).',
   packaging: 'Stanje ambalaže (dugme <b>+50</b> kad stigne nova tura, upozorenje kad padne ispod minimuma) i predlozi za dizajn i promenu pakovanja.',
   site: 'Link sajta stoji gore. Ispod su predlozi za sajt po kategorijama (dizajn, tekst, funkcija…), sa statusom i komentarima.',
   story: 'Priča brenda po poglavljima, a desno je papir sa beleškama gde biraš čije beleške gledaš (Staša, Konstantin, Marjan).',
