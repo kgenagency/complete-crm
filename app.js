@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610091130';
+const APP_BUILD = '202610121236';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -3688,7 +3688,7 @@ const BOT_FAQ = [
   { g: [['obavestenj', 'notifikac', 'push', 'na telefon', 'stize poruka', 'stizu poruke']], a: 'CRM može da šalje <b>obaveštenja na telefon i računar</b>, i kad je zatvoren: kad ti neko dodeli zadatak, kad neko završi zadatak koji si dodelio/la, nova porudžbina, nova prijava povrata i jutarnji podsetnik u 8h. Uključuješ ih na svakom uređaju posebno: <b>zvonce gore → Obaveštenja na ovom uređaju → Uključi</b> (na telefonu i u meniju sa tri crtice, dugme 📲). Tu biraš šta da ti stiže i šalješ probu. Na iPhone-u prvo dodaj CRM na početni ekran iz Safari-ja. Na Androidu instaliraj CRM kao aplikaciju (u istom prozoru dugme <b>Instaliraj HARIZMA aplikaciju</b>), pa obaveštenja stižu kao od aplikacije HARIZMA, i tu možeš da preuzmeš <b>HARIZMA zvuk</b> i postaviš ga kao zvuk obaveštenja. Na iPhone-u Apple ne dozvoljava poseban zvuk.', b: [] },
   { g: [['dobavlj', 'snabdev', 'supplier', 'od koga']], a: 'Dobavljači su u Garderobi, odmah ispod brojki: kartica za svakog dobavljača (EuroAsia (Blok 70), Belmax Center i svi koje upišete) sa brojem modela, komada na stanju, nabavnom vrednošću, koliko je prodato i spiskom modela. Klik na karticu filtrira tabelu modela samo na tog dobavljača (✕ pored naslova Modeli vraća sve). U tabeli je kolona „Dobavljač“: izaberi iz liste ili „＋ Novi dobavljač…“; može i u kartici komada. „Bez dobavljača“ pokazuje šta još nije upisano.', b: [['Otvori Garderobu', 'tab:products']] },
   { g: [['oznac', 'tagu', 'tagov', 'pomen', 'mention']], a: 'Označavanje (@): u bilo kom polju gde pišeš (ideja za video, hook, skripta, zadatak, beleška, porudžbina, komentar…) kucaj @ i iskoče Staša, Marjan, Konstantin i „svi“; dodirni ime ili pritisni Enter. Kad se sačuva, označena osoba dobija obaveštenje na telefon sa tim tekstom, a klik otvara baš tu stavku; ako je u CRM-u, iskoči kartica. @Ime je svuda istaknuto zlatnom bojom (tvoje jače). Obaveštenje stiže samo za novu oznaku, ne svaki put kad se tekst izmeni. Pri zaduživanju postoji i dugme „Ceo tim“. Izbor u obaveštenjima: „Kad te neko označi (@)“.' },
-  { g: [['izmen', 'promen', 'preimen', 'menja'], ['zadat', 'task', 'naziv', 'opis', 'ime']], a: 'Izmena zadatka: otvori zadatak (Taskovi → klik na zadatak) i klikni na naslov ili na bilo koje polje u Detaljima: Stavka (naziv ideje, komada, kupca…), Zadatak (šta treba da se uradi), a kod objava i Hook i Skripta, kod predloga Opis. Otvori se polje, izmeni, pa Sačuvaj (kod naziva i Enter). Svako može da menja sve, a u Aktivnosti ostaje zapisano ko je šta promenio.', b: [['Otvori Taskove', 'tab:tasks']] },
+  { g: [['izmen', 'promen', 'preimen', 'menja'], ['zadat', 'task', 'naziv', 'opis', 'ime']], a: 'Izmena zadatka: otvori zadatak (Taskovi → klik na zadatak) i klikni na naslov ili na bilo koje polje u Detaljima: Stavka (naziv ideje, komada, kupca…), Zadatak (šta treba da se uradi), a kod objava i Hook i Skripta, kod predloga Opis. Otvori se polje, izmeni, pa Sačuvaj (kod naziva i Enter). Gore u zadatku se isto tako menjaju Zaduženi (klikni imena ili Ceo tim), Rok (datum, tačno vreme, Danas, Sutra, Bez roka), Prioritet i Sekcija (beleška može u bilo koju sekciju ili uz promociju, predlog između Sajta i Pakovanja). Svako može da menja sve, a u Aktivnosti ostaje zapisano ko je šta promenio.', b: [['Otvori Taskove', 'tab:tasks']] },
   { g: [['prioritet', 'hitno', 'hitan', 'hitna', 'rok', 'vreme roka', 'alarm', 'podsetnik za rok']], a: 'Prioritet i tačno vreme roka: u svakom formularu zadatka pored datuma je polje za vreme (npr. 14:30) i izbor prioriteta Hitno 🚩, Visok, Normalan ili Nizak. Kad zadatak ima vreme, ceo tim dobija podsetnik sat pre roka. Hitni zadaci su jači: svi dobijaju obaveštenje odmah kad se označe kao hitni, pa 15 min pre roka, u roku i na svakih 30 min dok kasne (samo od 8 do 23h), dok se ne završe. Ta obaveštenja izgledaju drugačije: crvena (hitno) ili zlatna (rok) ikonica, duža vibracija, ostaju na ekranu i imaju dugmad Gotovo i Otvori. U CRM-u iskoči velika kartica sa posebnim zvukom. Uključuje se u zvonce → Obaveštenja → „Rokovi i hitni zadaci“ (uključeno je odmah). Zadaci bez vremena i dalje stižu u jutarnjem podsetniku u 8h.', b: [['Otvori Taskove', 'tab:tasks']] },
   { g: [['aktivan', 'aktivna', 'na mrezi', 'online', 'poslednji put', 'kad je bio', 'kad je bila', 'ko je tu']], a: 'Ko je kad bio aktivan: na računaru gore pored dugmeta Chat su avatari tima (zelena tačka = CRM je otvoren ispred te osobe, zlatna = aktivna u poslednjih 15 min, siva = ranije). Klik pokazuje „aktivna pre 12 min · telefon“ i dugmad Piši i Pozovi. Na telefonu je isto u meniju sa tri crtice (Tim). Vidi se i u chatu pored imena, u zadatku kod zaduženih i kad pređeš mišem preko avatara u Taskovima.', b: [['Otvori chat', 'act:Tim chat']] },
   { g: [['huddle', 'poziv', 'pozov', 'zovem', 'zvati', 'video', 'kamer', 'ekran']], a: '<b>Huddle</b> je brz poziv u CRM-u (kao na Slack-u): u chatu gore dugme <b>📞 Huddle</b> (u Tim chatu) ili <b>Pozovi</b> (u privatnom razgovoru). Ostali dobiju zvono u CRM-u i obaveštenje na telefon, pa klik na <b>Pridruži se</b>. U traci poziva su mikrofon, kamera, deljenje ekrana (na računaru), veliki prikaz i crveno dugme za izlaz. Glas ide direktno između uređaja, šifrovano.', b: [['Otvori chat', 'act:Tim chat']] },
@@ -4597,7 +4597,7 @@ function chatPreview(ch) {
 }
 function renderChat(toBottom) { const tm = isTaskCh(CHAT.ch); $('chatPanel').classList.toggle('task-mode', tm); document.body.classList.toggle('chat-task', tm); if (tm) CHAT.list = false; chatActClose(); renderChatSide(); renderChatTop(); renderChatMsgs(toBottom); renderChatTyping(); renderChatReply(); $('chatPanel').classList.toggle('show-list', isChatMobile() && CHAT.list); $('cpInput').placeholder = tm ? 'Napiši komentar…' : CHAT.ch === 'tim' ? (isChatMobile() ? 'Poruka timu…' : 'Poruka timu… (@ime da nekog označiš)') : `Piši ${({ konstantin: 'Konstantinu', stasa: 'Staši', marjan: 'Marjanu' })[chatOther(CHAT.ch)] || chatTitle(CHAT.ch)}…`; }
 function renderChatSide() {
-  if (isTaskCh(CHAT.ch)) { const b = $('cpTask'); if (b) { const ta = b.querySelector('[data-tdinput]'); if (!TD.force && ta && ta === document.activeElement) { TD.pending = true; return; } b.innerHTML = isChatMobile() ? '' : taskDetailsHtml(CHAT.ch); } return; }
+  if (isTaskCh(CHAT.ch)) { const b = $('cpTask'); if (b) { if (!TD.force && tdBusy(b)) { TD.pending = true; return; } b.innerHTML = isChatMobile() ? '' : taskDetailsHtml(CHAT.ch); } return; }
   const qn = fold(CHAT.q.trim());
   if (qn) {
     const seen = new Set(), res = [];
@@ -4940,7 +4940,7 @@ function tdRender() {
 function tdStart(f) {
   const tk = taskOfCh(CHAT.ch); if (!tk) return;
   if (tdEditing(CHAT.ch, f)) return;
-  TD.edit = { ch: CHAT.ch, f, v: null, orig: tk.x[f] || '' }; tdRender();
+  TDX.ch = TDX.k = null; TD.edit = { ch: CHAT.ch, f, v: null, orig: tk.x[f] || '' }; tdRender();
   const ta = document.querySelector('#chatPanel [data-tdinput]'); if (!ta) return;
   tdGrow(ta); ta.focus(); const n = ta.value.length; try { ta.setSelectionRange(n, n); } catch (e) {}
   setTimeout(() => ta.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
@@ -4958,6 +4958,90 @@ async function tdSave() {
     setTimeout(() => taskAuditLoad(e.ch), 900);
   } catch (er) { fail(er); }
 }
+/* zadatak: zaduženi, rok i sekcija se menjaju direktno u prozoru zadatka (svako može) */
+const TDX = { ch: null, k: null, as: [], d: '', t: '', o: '' };
+const tdxOn = (ch, k) => TDX.ch === ch && TDX.k === k;
+const tdxSig = () => TDX.k === 'as' ? TDX.as.slice().sort().join(',') : `${TDX.d}|${TDX.t}`;
+const tdBusy = (box) => { const a = document.activeElement; return !!(a && box && box.contains(a) && a.matches('[data-tdinput], .tdx input, [data-tdxsec]')); };
+function tdxOpen(k) {
+  const tk = taskOfCh(CHAT.ch); if (!tk) return;
+  const x = tk.x, dAt = x.task_due_at ? new Date(x.task_due_at) : null;
+  TD.edit = null;
+  Object.assign(TDX, { ch: CHAT.ch, k, as: assigneesOf(x).slice(), d: dAt ? dayStr(dAt) : x.task_due ? String(x.task_due).slice(0, 10) : '', t: dAt ? hhmm(dAt) : '' });
+  TDX.o = tdxSig(); tdRender();
+  setTimeout(() => { const el = document.querySelector('#chatPanel .tdx'); if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, 60);
+}
+function tdxClose() { TDX.ch = TDX.k = null; tdRender(); }
+const tdxChanged = () => !!(TDX.k && tdxSig() !== TDX.o);
+function tdxAsHtml() {
+  const ks = Object.keys(PEOPLE), all = ks.every(k => TDX.as.includes(k));
+  return `<div class="tdx" data-tdx="as"><div class="tdx-ch who-pick">${ks.map(k => `<button type="button" class="wp ${TDX.as.includes(k) ? 'on' : ''}" data-tdxwho="${k}" aria-pressed="${TDX.as.includes(k)}"><span class="n-av ${k}">${esc(PEOPLE[k].name.charAt(0))}</span>${esc(PEOPLE[k].name)}</button>`).join('')}<button type="button" class="wp wp-all ${all ? 'on' : ''}" data-tdxall aria-pressed="${all}"><span class="n-av wp-allav">@</span>Ceo tim</button></div>
+    <div class="td-ed-b"><small>Klikni ime da dodaš ili skineš</small><button type="button" class="td-mini" data-tdxcancel>Otkaži</button><button type="button" class="td-mini td-ok" data-tdxsave>Sačuvaj</button></div></div>`;
+}
+function tdxDueHtml() {
+  return `<div class="tdx" data-tdx="due"><div class="tdx-row"><input type="date" data-tdxd value="${esc(TDX.d)}" aria-label="Datum roka"><input type="time" data-tdxt value="${esc(TDX.t)}" aria-label="Tačno vreme (nije obavezno)"></div>
+    <div class="tdx-q"><button type="button" data-tdxq="0">Danas</button><button type="button" data-tdxq="1">Sutra</button><button type="button" data-tdxq="7">Za 7 dana</button><button type="button" data-tdxq="x">Bez roka</button></div>
+    <div class="td-ed-b"><small>Vreme nije obavezno</small><button type="button" class="td-mini" data-tdxcancel>Otkaži</button><button type="button" class="td-mini td-ok" data-tdxsave>Sačuvaj</button></div></div>`;
+}
+/* sekcija: beleška može u bilo koju sekciju (i uz promociju), predlog između Sajta i Pakovanja; ostale stavke pripadaju svojoj sekciji */
+function tdSecHtml(src, x, sec) {
+  if (src.tbl === 'h_notes') {
+    const cur = x.area || 'general', opts = NOTE_AREAS.map(([v, l]) => [v, v === 'general' ? 'Ostalo (bez sekcije)' : l]);
+    if (!opts.some(o => o[0] === cur) && !cur.startsWith('promo:')) opts.push([cur, areaSec(cur)]);
+    const pr = (state.promos || []).map(p => [`promo:${p.id}`, `Promocija: ${p.name}`]);
+    if (cur.startsWith('promo:') && !pr.some(o => o[0] === cur)) pr.push([cur, notePlace(x)]);
+    return `<label class="tdx-sec"><select data-tdxsec aria-label="Sekcija">${opts.map(([v, l]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`).join('')}${pr.length ? `<optgroup label="Uz promociju">${pr.map(([v, l]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`).join('')}</optgroup>` : ''}</select></label>`;
+  }
+  if (src.tbl === 'h_site_ideas') {
+    const cur = x.area === 'packaging' ? 'packaging' : 'site';
+    return `<label class="tdx-sec"><select data-tdxsec aria-label="Sekcija"><option value="site" ${cur === 'site' ? 'selected' : ''}>Sajt</option><option value="packaging" ${cur === 'packaging' ? 'selected' : ''}>Pakovanje</option></select></label>`;
+  }
+  return `${esc(sec)} <small class="td-sm" title="Objava, porudžbina, kupac, komad i slično uvek stoje u svojoj sekciji. Premeštaju se beleške i predlozi.">· ova vrsta stavke uvek stoji ovde</small>`;
+}
+const secLabelOf = (tbl, a) => tbl === 'h_site_ideas' ? (a === 'packaging' ? 'Pakovanje' : 'Sajt') : String(a || '').startsWith('promo:') ? ('Promocija: ' + (state.promos.find(p => p.id === a.split(':')[1])?.name || '')) : areaSec(a);
+async function tdxSecSave(v) {
+  const tk = taskOfCh(CHAT.ch); if (!tk) return; const { src, x } = tk, cur = src.tbl === 'h_notes' ? (x.area || 'general') : (x.area === 'packaging' ? 'packaging' : 'site');
+  if (!v || v === cur) return;
+  try {
+    await q(sb.from(src.tbl).update({ area: v }).eq('id', x.id)); x.area = v;
+    renderAll(); if (CHAT.open) renderChat(); toast(`Premešteno: ${secLabelOf(src.tbl, v)} ✓`); setTimeout(() => taskAuditLoad(CHAT.ch), 900);
+  } catch (e) { fail(e); tdRender(); }
+}
+async function tdxSave() {
+  const tk = taskOfCh(TDX.ch); if (!tk) return tdxClose(); const { src, x } = tk, k = TDX.k;
+  if (!tdxChanged()) return tdxClose();
+  let patch;
+  if (k === 'as') { const arr = TDX.as.slice(); patch = ['post', 'ret'].includes(src.k) ? assignFields(arr) : { assignees: arr }; }
+  else {
+    let d = TDX.d || null; if (!d && TDX.t) d = dayStr(new Date());
+    const at = d && TDX.t ? new Date(`${d}T${TDX.t}:00`) : null;
+    patch = { task_due: d, task_due_at: at ? at.toISOString() : null };
+  }
+  const before = assigneesOf(x);
+  try {
+    const r = await q(sb.from(src.tbl).update(patch).eq('id', x.id).select().single()); Object.assign(x, r || patch);
+    TDX.ch = TDX.k = null; renderAll(); if (CHAT.open) renderChat(); setTimeout(() => taskAuditLoad(CHAT.ch), 900);
+    if (k === 'as') {
+      const after = assigneesOf(x), added = after.filter(a => !before.includes(a));
+      if (added.length) taskPop(before.length ? 'assign' : 'new', { title: taskLabel(tk), sec: src.sec ? src.sec(x) : src.label, as: after, due: taskDueOf(x) });
+      else toast(after.length ? 'Zaduženi sačuvani ✓' : 'Niko više nije zadužen');
+    } else toast(taskDueOf(x) ? `Rok: ${x.task_due_at ? fmtDT(x.task_due_at) : fmtDate(x.task_due)} ✓` : 'Rok je skinut');
+  } catch (e) { fail(e); }
+}
+function tdxQuick(v) {
+  if (v === 'x') { TDX.d = ''; TDX.t = ''; }
+  else { const dt = new Date(); dt.setDate(dt.getDate() + Number(v)); TDX.d = dayStr(dt); }
+  const box = document.querySelector('#chatPanel .tdx[data-tdx="due"]'); if (!box) return;
+  box.querySelector('[data-tdxd]').value = TDX.d; box.querySelector('[data-tdxt]').value = TDX.t;
+}
+function tdxWho(k, all) {
+  const ks = Object.keys(PEOPLE);
+  if (all) { const on = ks.every(p => TDX.as.includes(p)); TDX.as = on ? TDX.as.filter(p => !PEOPLE[p]) : [...TDX.as.filter(p => !PEOPLE[p]), ...ks]; }
+  else TDX.as = TDX.as.includes(k) ? TDX.as.filter(p => p !== k) : [...TDX.as, k];
+  const box = document.querySelector('#chatPanel .tdx[data-tdx="as"]'); if (!box) return;
+  box.querySelectorAll('[data-tdxwho]').forEach(b => { const on = TDX.as.includes(b.dataset.tdxwho); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  const a = box.querySelector('[data-tdxall]'), on = ks.every(p => TDX.as.includes(p)); a.classList.toggle('on', on); a.setAttribute('aria-pressed', on);
+}
 /* klik pored polja za izmenu zatvara izmenu (bez čuvanja), kao Otkaži; skrolovanje ne zatvara */
 function outsideCloser(isOpen, inside, close) {
   let pend = false, t = 0;
@@ -4973,6 +5057,7 @@ function closersInit() {
     const ta = document.querySelector('#chatPanel [data-tdinput]'), ch = ta && String(ta.value).trim() !== String(TD.edit.orig || '').trim();
     tdCancel(); if (ch) toast('Izmena otkazana, ništa nije promenjeno');
   });
+  outsideCloser(() => !!(TDX.k && document.querySelector('#chatPanel .tdx')), (t) => !!t.closest('.tdx'), () => { const ch = tdxChanged(); tdxClose(); if (ch) toast('Izmena otkazana, ništa nije promenjeno'); });
   outsideCloser(() => !!(npState.editId && $('npEdit')), (t) => inMnt(t) || !!t.closest('#npEdit, [data-npsave], [data-npcancel]'), () => {
     const x = state.notes.find(y => y.id === npState.editId), ch = x && $('npEdit') && $('npEdit').value.trim() !== String(x.body || '').trim();
     npState.editId = null; renderNotesPage(); if (ch) toast('Izmena otkazana, ništa nije promenjeno');
@@ -5001,6 +5086,7 @@ function taskEvtText(a) {
   if (ch.hook) out.push(`${v('promenio', 'promenila')} hook`);
   if (ch.concept) out.push(`${v('izmenio', 'izmenila')} skriptu`);
   if (ch.description) out.push(`${v('izmenio', 'izmenila')} opis`);
+  if (ch.area && a.op !== 'INSERT') out.push(`${v('premestio', 'premestila')} u sekciju ${secLabelOf(a.tbl || String(CHAT.ch).split(':')[1], ch.area.na)}`);
   if (ch.deleted_at) out.push(ch.deleted_at.na ? `${v('obrisao', 'obrisala')} stavku` : `${v('vratio', 'vratila')} stavku iz arhive`);
   return out.join(' · ');
 }
@@ -5024,19 +5110,19 @@ function taskDetailsHtml(ch) {
     ${!done && pr !== 'normal' ? `<div class="td-pr">${prioChip(x, true)}</div>` : ''}<h2 class="td-title" data-tdf="${hf}" title="Klikni da izmeniš">${esc(src.k === 'note' ? tcut(x.body, 90) : taskLabel(t))}<span class="td-pen" aria-hidden="true">✎</span></h2>
     <div class="td-grid">
       <span class="td-l">◉ Status</span><span><button type="button" class="td-st ${done ? 'done' : ''}" data-tdtoggle title="${done ? 'Vrati u otvorene' : 'Označi kao gotovo'}">${done ? '✓ GOTOVO' : 'OTVOREN'}</button>${done ? '' : ' <button type="button" class="td-mini td-done" data-tdtoggle>✓ Završi zadatak</button>'}${done && x.task_done_by ? ` <small class="td-sm">${df ? 'završila' : 'završio'} ${esc(personName(x.task_done_by))}${x.task_done_at ? ' · ' + fmtDT(x.task_done_at) : ''}</small>` : ''}</span>
-      <span class="td-l">👤 Zaduženi</span><span class="td-as">${as.length ? as.map(a => `<span class="td-p" title="${esc(seenText(a))}">${chatAv(a)}${esc(personName(a))}${a !== who() && seenShort(a) ? `<small class="td-seen ${seenCls(a)}">${seenShort(a)}</small>` : ''}</span>`).join('') : '<small class="td-sm">niko</small>'}<button type="button" class="td-mini" data-tdedit>Promeni</button></span>
-      <span class="td-l">📅 Rok</span><span>${taskDueOf(x) ? `<b class="td-due ${d ? d.level : ''}">${x.task_due_at ? fmtDT(x.task_due_at) : fmtDate(x.task_due)}</b>${d ? ` <small class="td-sm">· ${d.txt}</small>` : ''}` : '<small class="td-sm">bez roka</small>'} <button type="button" class="td-mini" data-tdedit>Promeni</button></span>
+      <span class="td-l">👤 Zaduženi</span>${tdxOn(ch, 'as') ? tdxAsHtml() : `<span class="td-as" data-tdxopen="as" title="Klikni da promeniš zadužene">${as.length ? as.map(a => `<span class="td-p" title="${esc(seenText(a))}">${chatAv(a)}${esc(personName(a))}${a !== who() && seenShort(a) ? `<small class="td-seen ${seenCls(a)}">${seenShort(a)}</small>` : ''}</span>`).join('') : '<small class="td-sm">niko</small>'}<button type="button" class="td-mini" data-tdxopen="as">Promeni</button></span>`}
+      <span class="td-l">📅 Rok</span>${tdxOn(ch, 'due') ? tdxDueHtml() : `<span class="td-dueln" data-tdxopen="due" title="Klikni da promeniš rok">${taskDueOf(x) ? `<b class="td-due ${d ? d.level : ''}">${x.task_due_at ? fmtDT(x.task_due_at) : fmtDate(x.task_due)}</b>${d ? ` <small class="td-sm">· ${d.txt}</small>` : ''}` : '<small class="td-sm">bez roka</small>'} <button type="button" class="td-mini" data-tdxopen="due">Promeni</button></span>`}
       <span class="td-l">🚩 Prioritet</span><span class="td-prio">${['urgent', 'high', 'normal', 'low'].map(k => `<button type="button" class="prio-b ${k} ${pr === k ? 'on' : ''}" data-tdprio="${k}">${TPRIO[k].ic} ${TPRIO[k].l}</button>`).join('')}</span>
       <span class="td-l">↗ Dodelio/la</span><span>${x.task_by ? `${esc(personName(x.task_by))} <small class="td-sm">· ${bf ? 'dodelila' : 'dodelio'} ${x.task_at ? relTime(x.task_at) : ''}</small>` : '<small class="td-sm">—</small>'}</span>
-      <span class="td-l">▦ Sekcija</span><span>${esc(sec)}</span>
+      <span class="td-l">▦ Sekcija</span><span>${tdSecHtml(src, x, sec)}</span>
     </div>
-    <div class="td-desc"><small>Detalji <i>· klikni na polje da ga izmeniš, svako može</i></small>${det}${src.k !== 'note' && src.sub(x) ? `<span class="td-sub">${esc(src.sub(x))}</span>` : ''}</div>
-    <div class="td-actions">${src.k !== 'note' ? `<button type="button" class="btn-ghost" data-tdopen>Otvori ${esc(src.label.toLowerCase())} ↗</button>` : ''}<button type="button" class="btn-ghost" data-tdedit>Zaduženi i rok</button></div>
+    <div class="td-desc"><small>Detalji <i>· klikni na polje da ga izmeniš, svako može (i zadužene, rok, prioritet i sekciju gore)</i></small>${det}${src.k !== 'note' && src.sub(x) ? `<span class="td-sub">${esc(src.sub(x))}</span>` : ''}</div>
+    <div class="td-actions">${src.k !== 'note' ? `<button type="button" class="btn-ghost" data-tdopen>Otvori ${esc(src.label.toLowerCase())} ↗</button>` : ''}</div>
   </div>`;
 }
 function renderTaskThread(box, all, toBottom) {
   const ch = CHAT.ch, me = who(), lim = CHAT.lim[ch] || 300, list = all.slice(-lim);
-  if (!TD.force) { const ta = box.querySelector('[data-tdinput]'); if (ta && ta === document.activeElement) { TD.pending = true; return; } } // ne briši polje dok kucaš
+  if (!TD.force && tdBusy(box)) { TD.pending = true; return; } // ne briši polje dok kucaš ili biraš
   const evts = (CHAT.audit[ch] || []).map(a => ({ ev: true, at: a.at, a, txt: taskEvtText(a) })).filter(e => e.txt);
   const items = [...list.map(m => ({ at: m.created_at, m })), ...evts].sort((x, y) => String(x.at).localeCompare(String(y.at)));
   let html = isChatMobile() ? `<div class="td-m">${taskDetailsHtml(ch)}</div><div class="ta-h">Aktivnost</div>` : '';
@@ -5635,6 +5721,8 @@ function chatBind() {
   $('chatFab').addEventListener('click', () => (CHAT.open ? closeChat() : openChat()));
   $('navChat').addEventListener('click', () => openChat());
   $('chatPanel').addEventListener('input', (e) => { const ta = e.target.closest && e.target.closest('[data-tdinput]'); if (!ta || !TD.edit) return; TD.edit.v = ta.value; tdGrow(ta); });
+  $('chatPanel').addEventListener('input', (e) => { const el = e.target; if (!TDX.k || !el.matches) return; if (el.matches('[data-tdxd]')) TDX.d = el.value; else if (el.matches('[data-tdxt]')) { TDX.t = el.value; if (TDX.t && !TDX.d) { TDX.d = dayStr(new Date()); const d = el.closest('.tdx').querySelector('[data-tdxd]'); if (d) d.value = TDX.d; } } });
+  $('chatPanel').addEventListener('change', (e) => { const el = e.target; if (el.matches && el.matches('[data-tdxsec]')) { el.blur(); tdxSecSave(el.value); } else if (el.matches && el.matches('[data-tdxd]')) TDX.d = el.value; else if (el.matches && el.matches('[data-tdxt]')) TDX.t = el.value; });
   $('chatPanel').addEventListener('keydown', (e) => {
     const ta = e.target.closest && e.target.closest('[data-tdinput]');
     if (ta) {
@@ -5642,6 +5730,7 @@ function chatBind() {
       if (e.key === 'Enter' && !e.shiftKey && (TD_ONE.has(ta.dataset.tdinput) || e.metaKey || e.ctrlKey)) { e.preventDefault(); return tdSave(); }
       return;
     }
+    if (TDX.k && e.target.closest && e.target.closest('.tdx')) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return tdxClose(); } if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); return tdxSave(); } return; }
     const fe = e.target.closest && e.target.closest('.td-f[data-tdf], .td-title[data-tdf]'); if (fe && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tdStart(fe.dataset.tdf); }
   });
   $('chatPanel').addEventListener('click', (e) => {
@@ -5651,6 +5740,13 @@ function chatBind() {
     if (t.closest('[data-tdback]')) { if (CHAT.edit) chatEditCancel(); CHAT.ch = CHAT.prevCh && !isTaskCh(CHAT.prevCh) ? CHAT.prevCh : 'tim'; CHAT.list = isChatMobile(); renderChat(true); if (!CHAT.list) chatMarkRead(CHAT.ch); return; }
     if (t.closest('[data-tdtoggle]')) { const tk = taskOfCh(CHAT.ch); if (tk) taskToggle(`${tk.src.k}:${tk.x.id}`).then(() => { if (CHAT.open) { renderChat(); setTimeout(() => taskAuditLoad(CHAT.ch), 900); } }); return; }
     if (t.closest('[data-tdsave]')) return tdSave();
+    if (t.closest('[data-tdxsave]')) return tdxSave();
+    if (t.closest('[data-tdxcancel]')) return tdxClose();
+    const xw = t.closest('[data-tdxwho]'); if (xw) return tdxWho(xw.dataset.tdxwho);
+    if (t.closest('[data-tdxall]')) return tdxWho(null, true);
+    const xq = t.closest('[data-tdxq]'); if (xq) return tdxQuick(xq.dataset.tdxq);
+    if (t.closest('.tdx, .tdx-sec')) return;
+    const xo = t.closest('[data-tdxopen]'); if (xo) return tdxOpen(xo.dataset.tdxopen);
     if (t.closest('[data-tdcancel]')) return tdCancel();
     const tf_ = t.closest('[data-tdf]'); if (tf_ && !t.closest('a')) return tdStart(tf_.dataset.tdf);
     if (t.closest('[data-tdedit]')) { const tk = taskOfCh(CHAT.ch); if (tk) openTaskModal(tk.src.k, tk.x.id); return; }
