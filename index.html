@@ -1559,6 +1559,19 @@ body.nav-open .chat-fab,body:has(.drawer.open) .chat-fab{display:none}
 .td-sm{color:var(--muted);font-size:12.5px}
 .td-st{border:0;border-radius:7px;padding:7px 13px;font-weight:800;font-size:12px;letter-spacing:.06em;cursor:pointer;background:#e6e9e4;color:#4a554d;transition:filter .15s}
 .td-st.done{background:#2f6b3a;color:#fff}.td-st:hover{filter:brightness(.94)}
+/* v32: jasan status i veliko dugme Završi zadatak */
+.td-stat{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.td-badge{display:inline-flex;align-items:center;gap:7px;border-radius:99px;padding:7px 14px;font:800 13px var(--font-ui);letter-spacing:.02em}
+.td-badge.open{background:#fff3d6;color:#7a4f00;border:1.5px solid #e9c46a}
+.td-badge.open i{width:9px;height:9px;border-radius:50%;background:#e09b1a;box-shadow:0 0 0 3px rgba(224,155,26,.22)}
+.td-badge.done{background:#2f6b3a;color:#fff;border:1.5px solid #2f6b3a}
+.td-donebtn{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:12px;padding:11px 20px;min-height:44px;background:#2f6b3a;color:#fff;font:800 15px var(--font-ui);cursor:pointer;box-shadow:0 3px 10px rgba(47,107,58,.32);transition:transform .12s,background .15s,box-shadow .15s}
+.td-donebtn:hover{background:#265a30;box-shadow:0 5px 14px rgba(47,107,58,.4)}
+.td-donebtn:active{transform:scale(.96)}
+.td-donebtn:focus-visible,.td-reopen:focus-visible{outline:3px solid #C9A96E;outline-offset:2px}
+.td-reopen{border:1.5px solid #1B2620;background:#fff;color:#1B2620;border-radius:12px;padding:9px 16px;min-height:42px;font:700 14px var(--font-ui);cursor:pointer}
+.td-reopen:hover{background:#f1f3ec}
+@media (max-width:759px){.td-donebtn{padding:12px 18px;font-size:15.5px}}
 .td-as{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .td-p{display:inline-flex;align-items:center;gap:6px;font-weight:600}
 .td-p .n-av,.cp-task .n-av{width:26px;height:26px;font-size:13px;border-radius:50%;margin:0;transform:none;position:relative}
@@ -2740,8 +2753,8 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610121236"></script>
-<script>window.HTML_BUILD="202610121236";</script>
-<script src="app.js?v=202610121236"></script>
+<script src="config.js?v=202610121246"></script>
+<script>window.HTML_BUILD="202610121246";</script>
+<script src="app.js?v=202610121246"></script>
 </body>
 </html>

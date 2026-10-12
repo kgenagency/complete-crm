@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610121236';
+const APP_BUILD = '202610121246';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -1072,16 +1072,19 @@ async function saveTaskModal() {
   } catch (e) { fail(e); }
 }
 /* klik na kružić u Taskovima: gotovo / vrati */
+const TGL_BUSY = new Set();
 async function taskToggle(key) {
   const [k, id] = key.split(':'), src = taskSrcOf(k), x = src && src.list().find(y => y.id === id); if (!x) return;
+  if (TGL_BUSY.has(key)) return; // dupli klik ne šalje dva puta
   const done = taskIsDone(x, src);
-  if (done && src.final(x)) return toast('Stavka je završena (npr. objavljeno ili rešeno), zato zadatak ostaje u istoriji.');
+  if (done && k !== 'note' && src.final(x)) return toast('Stavka je završena (npr. objavljeno ili rešeno), zato zadatak ostaje u istoriji.');
   const patch = done ? { task_done_at: null, task_done_by: null } : { task_done_at: new Date().toISOString(), task_done_by: who() };
   if (k === 'note') Object.assign(patch, done ? { done: false } : { done: true, done_by: who() });
+  TGL_BUSY.add(key);
   try {
     await q(sb.from(src.tbl).update(patch).eq('id', id)); Object.assign(x, patch);
     renderAll(); if (done) toast('Vraćeno u otvorene'); else taskPop('done', { title: src.title(x), sec: src.sec ? src.sec(x) : src.label });
-  } catch (e) { fail(e); }
+  } catch (e) { fail(e); } finally { setTimeout(() => TGL_BUSY.delete(key), 600); }
 }
 /* stranica Taskovi */
 const tkState = { who: 'me', st: 'open', sec: 'all' };
@@ -5109,7 +5112,9 @@ function taskDetailsHtml(ch) {
     <div class="td-crumb"><span>${src.ic} ${esc(sec)}</span>${src.k !== 'note' ? `<span>›</span><button type="button" data-tdopen>${esc(tcut(src.title(x), 60))} ↗</button>` : ''}</div>
     ${!done && pr !== 'normal' ? `<div class="td-pr">${prioChip(x, true)}</div>` : ''}<h2 class="td-title" data-tdf="${hf}" title="Klikni da izmeniš">${esc(src.k === 'note' ? tcut(x.body, 90) : taskLabel(t))}<span class="td-pen" aria-hidden="true">✎</span></h2>
     <div class="td-grid">
-      <span class="td-l">◉ Status</span><span><button type="button" class="td-st ${done ? 'done' : ''}" data-tdtoggle title="${done ? 'Vrati u otvorene' : 'Označi kao gotovo'}">${done ? '✓ GOTOVO' : 'OTVOREN'}</button>${done ? '' : ' <button type="button" class="td-mini td-done" data-tdtoggle>✓ Završi zadatak</button>'}${done && x.task_done_by ? ` <small class="td-sm">${df ? 'završila' : 'završio'} ${esc(personName(x.task_done_by))}${x.task_done_at ? ' · ' + fmtDT(x.task_done_at) : ''}</small>` : ''}</span>
+      <span class="td-l">◉ Status</span><span class="td-stat">${done
+        ? `<span class="td-badge done">✓ Gotovo</span>${x.task_done_by ? `<small class="td-sm">${df ? 'završila' : 'završio'} ${esc(personName(x.task_done_by))}${x.task_done_at ? ' · ' + fmtDT(x.task_done_at) : ''}</small>` : ''}${src.k !== 'note' && src.final(x) ? '' : '<button type="button" class="td-reopen" data-tdtoggle>↺ Vrati u otvorene</button>'}`
+        : `<span class="td-badge open"><i></i>Otvoren</span><button type="button" class="td-donebtn" data-tdtoggle>✓ Završi zadatak</button>`}</span>
       <span class="td-l">👤 Zaduženi</span>${tdxOn(ch, 'as') ? tdxAsHtml() : `<span class="td-as" data-tdxopen="as" title="Klikni da promeniš zadužene">${as.length ? as.map(a => `<span class="td-p" title="${esc(seenText(a))}">${chatAv(a)}${esc(personName(a))}${a !== who() && seenShort(a) ? `<small class="td-seen ${seenCls(a)}">${seenShort(a)}</small>` : ''}</span>`).join('') : '<small class="td-sm">niko</small>'}<button type="button" class="td-mini" data-tdxopen="as">Promeni</button></span>`}
       <span class="td-l">📅 Rok</span>${tdxOn(ch, 'due') ? tdxDueHtml() : `<span class="td-dueln" data-tdxopen="due" title="Klikni da promeniš rok">${taskDueOf(x) ? `<b class="td-due ${d ? d.level : ''}">${x.task_due_at ? fmtDT(x.task_due_at) : fmtDate(x.task_due)}</b>${d ? ` <small class="td-sm">· ${d.txt}</small>` : ''}` : '<small class="td-sm">bez roka</small>'} <button type="button" class="td-mini" data-tdxopen="due">Promeni</button></span>`}
       <span class="td-l">🚩 Prioritet</span><span class="td-prio">${['urgent', 'high', 'normal', 'low'].map(k => `<button type="button" class="prio-b ${k} ${pr === k ? 'on' : ''}" data-tdprio="${k}">${TPRIO[k].ic} ${TPRIO[k].l}</button>`).join('')}</span>
