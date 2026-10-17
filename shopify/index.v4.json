@@ -1,0 +1,745 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "harizma_hero": {
+      "type": "harizma-hero",
+      "settings": {
+        "image": "shopify://shop_images/harizma-hero-desktop-lola.png",
+        "image_mobile": "shopify://shop_images/harizma-lola-zelena-3.jpg",
+        "focal": "center center",
+        "height": 90,
+        "height_mobile": 86,
+        "eyebrow": "Pleteni kompleti u ograničenim serijama",
+        "heading": "Ono nešto.",
+        "button_label": "Pogledaj kolekciju",
+        "button_link": "shopify://collections/novo",
+        "show_romb": true,
+        "romb_size": 46,
+        "romb_right": 12
+      }
+    },
+    "harizma_civiluk": {
+      "type": "harizma-civiluk",
+      "blocks": {
+        "komad_1": {
+          "type": "komad",
+          "settings": {
+            "product": "lola-trenerka",
+            "image": "shopify://shop_images/harizma-civiluk-lola-bordo.png",
+            "tag": ""
+          }
+        },
+        "komad_2": {
+          "type": "komad",
+          "settings": {
+            "product": "aspen-dzemper-zuta",
+            "image": "shopify://shop_images/harizma-civiluk-aspen-zuta.png",
+            "tag": ""
+          }
+        },
+        "komad_3": {
+          "type": "komad",
+          "settings": {
+            "product": "lana-komplet",
+            "image": "shopify://shop_images/harizma-civiluk-lana-krem.png",
+            "tag": "Popularno"
+          }
+        },
+        "komad_4": {
+          "type": "komad",
+          "settings": {
+            "product": "cleo-rolka-crna",
+            "image": "shopify://shop_images/harizma-civiluk-cleo-crna.png",
+            "tag": ""
+          }
+        },
+        "komad_5": {
+          "type": "komad",
+          "settings": {
+            "product": "elise-komplet-zelena",
+            "image": "shopify://shop_images/harizma-civiluk-elise-zelena.png",
+            "tag": ""
+          }
+        },
+        "komad_6": {
+          "type": "komad",
+          "settings": {
+            "product": "audrey-dzemper-bordo",
+            "image": "shopify://shop_images/harizma-civiluk-audrey-bordo.png",
+            "tag": ""
+          }
+        },
+        "komad_7": {
+          "type": "komad",
+          "settings": {
+            "product": "margot-komplet",
+            "image": "shopify://shop_images/harizma-civiluk-margot-siva.png",
+            "tag": ""
+          }
+        },
+        "komad_8": {
+          "type": "komad",
+          "settings": {
+            "product": "iris-duks-zelena",
+            "image": "shopify://shop_images/harizma-civiluk-iris-zelena.png",
+            "tag": ""
+          }
+        },
+        "komad_9": {
+          "type": "komad",
+          "settings": {
+            "product": "valentina-trenerka",
+            "image": "shopify://shop_images/harizma-civiluk-valentina-braon.png",
+            "tag": "Popularno"
+          }
+        },
+        "komad_10": {
+          "type": "komad",
+          "settings": {
+            "product": "cleo-rolka-bez",
+            "image": "shopify://shop_images/harizma-civiluk-cleo-bez.png",
+            "tag": ""
+          }
+        },
+        "komad_11": {
+          "type": "komad",
+          "settings": {
+            "product": "noa-pantalone-krem",
+            "image": "shopify://shop_images/harizma-civiluk-noa-krem.png",
+            "tag": ""
+          }
+        },
+        "komad_12": {
+          "type": "komad",
+          "settings": {
+            "product": "aspen-dzemper-zelena",
+            "image": "shopify://shop_images/harizma-civiluk-aspen-zelena.png",
+            "tag": ""
+          }
+        }
+      },
+      "block_order": [
+        "komad_1",
+        "komad_2",
+        "komad_3",
+        "komad_4",
+        "komad_5",
+        "komad_6",
+        "komad_7",
+        "komad_8",
+        "komad_9",
+        "komad_10",
+        "komad_11",
+        "komad_12"
+      ],
+      "settings": {
+        "eyebrow": "Nova kolekcija",
+        "eyebrow2": "Jesen / zima",
+        "heading": "Izaberi svoj komad.",
+        "hint": "Klikni na komad da ga skineš sa šipke",
+        "hint_mobile": "Prevuci i dodirni komad",
+        "button_label": "Pogledaj kolekciju",
+        "button_link": "shopify://collections/all",
+        "stock_tags": false,
+        "tag_last": "Poslednji komad",
+        "hide_sold": true,
+        "modal_eyebrow": "HARIZMA"
+      }
+    },
+    "product_list_popularno": {
+      "type": "product-list",
+      "blocks": {
+        "static-header": {
+          "type": "_product-list-content",
+          "static": true,
+          "settings": {
+            "content_direction": "row",
+            "vertical_on_mobile": false,
+            "horizontal_alignment": "space-between",
+            "vertical_alignment": "flex-end",
+            "align_baseline": true,
+            "horizontal_alignment_flex_direction_column": "flex-start",
+            "vertical_alignment_flex_direction_column": "center",
+            "gap": 12,
+            "width": "fill",
+            "custom_width": 100,
+            "width_mobile": "fill",
+            "custom_width_mobile": 100,
+            "height": "fit",
+            "custom_height": 100,
+            "background_media": "none",
+            "video_position": "cover",
+            "background_image_position": "cover",
+            "border": "none",
+            "border_width": 1,
+            "border_opacity": 100,
+            "border_radius": 0,
+            "padding-block-start": 0,
+            "padding-block-end": 0,
+            "padding-inline-start": 0,
+            "padding-inline-end": 0
+          },
+          "blocks": {
+            "plp_title": {
+              "type": "_product-list-text",
+              "settings": {
+                "text": "<h3>{{ closest.collection.title }}</h3>",
+                "width": "fit-content",
+                "max_width": "normal",
+                "alignment": "left",
+                "type_preset": "h4",
+                "font": "var(--font-body--family)",
+                "line_height": "normal",
+                "letter_spacing": "normal",
+                "case": "none",
+                "wrap": "pretty",
+                "background": false,
+                "background_color": "#00000026",
+                "corner_radius": 0,
+                "padding-block-start": 0,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              },
+              "blocks": {}
+            },
+            "plp_button": {
+              "type": "_product-list-button",
+              "settings": {
+                "label": "Pogledaj sve",
+                "open_in_new_tab": false,
+                "style_class": "link",
+                "width": "fit-content",
+                "custom_width": 100,
+                "width_mobile": "fit-content",
+                "custom_width_mobile": 100
+              },
+              "blocks": {}
+            }
+          },
+          "block_order": [
+            "plp_title",
+            "plp_button"
+          ]
+        },
+        "static-product-card": {
+          "type": "_product-card",
+          "static": true,
+          "settings": {
+            "product_card_gap": 4,
+            "border": "none",
+            "border_width": 1,
+            "border_opacity": 100,
+            "border_radius": 0,
+            "padding-block-start": 0,
+            "padding-block-end": 0,
+            "padding-inline-start": 0,
+            "padding-inline-end": 0
+          },
+          "blocks": {
+            "plp_gallery": {
+              "type": "_product-card-gallery",
+              "settings": {
+                "image_ratio": "portrait",
+                "border": "none",
+                "border_width": 1,
+                "border_opacity": 100,
+                "border_radius": 0,
+                "padding-block-start": 0,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              },
+              "blocks": {}
+            },
+            "plp_ptitle": {
+              "type": "product-title",
+              "settings": {
+                "width": "100%",
+                "max_width": "normal",
+                "alignment": "left",
+                "type_preset": "rte",
+                "font": "var(--font-body--family)",
+                "font_size": "1rem",
+                "line_height": "normal",
+                "letter_spacing": "normal",
+                "case": "none",
+                "wrap": "pretty",
+                "background": false,
+                "background_color": "#00000026",
+                "corner_radius": 0,
+                "padding-block-start": 4,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              },
+              "blocks": {}
+            },
+            "plp_price": {
+              "type": "price",
+              "settings": {
+                "show_sale_price_first": true,
+                "show_installments": false,
+                "show_tax_info": false,
+                "type_preset": "h6",
+                "width": "100%",
+                "alignment": "left",
+                "font": "var(--font-body--family)",
+                "font_size": "1rem",
+                "line_height": "normal",
+                "letter_spacing": "normal",
+                "case": "none",
+                "padding-block-start": 0,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              },
+              "blocks": {}
+            }
+          },
+          "block_order": [
+            "plp_gallery",
+            "plp_ptitle",
+            "plp_price"
+          ]
+        }
+      },
+      "settings": {
+        "collection": "popularno",
+        "layout_type": "carousel",
+        "carousel_on_mobile": true,
+        "max_products": 8,
+        "columns": 4,
+        "mobile_columns": "2",
+        "mobile_card_size": "60cqw",
+        "columns_gap": 8,
+        "rows_gap": 24,
+        "icons_style": "arrow",
+        "icons_shape": "circle",
+        "section_width": "page-width",
+        "horizontal_alignment": "flex-start",
+        "gap": 28,
+        "background_color": "{{ settings.color_palette.background }}",
+        "padding-block-start": 48,
+        "padding-block-end": 24
+      }
+    },
+    "collection_list_ed": {
+      "type": "collection-list",
+      "blocks": {
+        "group_head": {
+          "type": "group",
+          "settings": {
+            "content_direction": "column",
+            "vertical_on_mobile": true,
+            "horizontal_alignment": "flex-start",
+            "vertical_alignment": "center",
+            "horizontal_alignment_flex_direction_column": "flex-start",
+            "vertical_alignment_flex_direction_column": "center",
+            "gap": 12,
+            "width": "fill",
+            "custom_width": 100,
+            "width_mobile": "fill",
+            "custom_width_mobile": 100,
+            "height": "fit",
+            "custom_height": 100,
+            "background_media": "none",
+            "video_position": "cover",
+            "background_image_position": "cover",
+            "border": "none",
+            "border_width": 1,
+            "border_opacity": 100,
+            "border_radius": 0,
+            "padding-block-start": 0,
+            "padding-block-end": 0,
+            "padding-inline-start": 0,
+            "padding-inline-end": 0
+          },
+          "blocks": {
+            "text_cl": {
+              "type": "text",
+              "settings": {
+                "text": "<h3>KATEGORIJE</h3>",
+                "type_preset": "h4",
+                "font": "var(--font-body--family)",
+                "font_size": "",
+                "line_height": "normal",
+                "letter_spacing": "normal",
+                "case": "none",
+                "wrap": "pretty",
+                "width": "fit-content",
+                "max_width": "normal",
+                "alignment": "left",
+                "padding-block-start": 0,
+                "padding-block-end": 16,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              }
+            }
+          },
+          "block_order": [
+            "text_cl"
+          ]
+        },
+        "static-collection-card": {
+          "type": "_collection-card",
+          "static": true,
+          "settings": {
+            "horizontal_alignment": "flex-start",
+            "vertical_alignment": "flex-end",
+            "placement": "on_image",
+            "border": "none",
+            "border_width": 1,
+            "border_opacity": 100,
+            "border_radius": 0
+          },
+          "blocks": {
+            "collection-card-image": {
+              "type": "_collection-card-image",
+              "static": true,
+              "settings": {
+                "image_ratio": "portrait"
+              }
+            },
+            "collection-title": {
+              "type": "collection-title",
+              "settings": {
+                "type_preset": "rte",
+                "font": "var(--font-body--family)",
+                "font_size": "",
+                "line_height": "normal",
+                "letter_spacing": "normal",
+                "case": "none",
+                "wrap": "pretty",
+                "width": "fit-content",
+                "max_width": "normal",
+                "alignment": "left",
+                "background": true,
+                "background_color": "#F3F0E8",
+                "padding-block-start": 4,
+                "padding-block-end": 4,
+                "padding-inline-start": 8,
+                "padding-inline-end": 8
+              }
+            }
+          },
+          "block_order": [
+            "collection-title"
+          ]
+        }
+      },
+      "block_order": [
+        "group_head"
+      ],
+      "settings": {
+        "collection_list": [
+          "kompleti",
+          "trenerke",
+          "gornji-delovi"
+        ],
+        "layout_type": "grid",
+        "carousel_on_mobile": false,
+        "columns": 3,
+        "mobile_columns": "2",
+        "columns_gap": 8,
+        "rows_gap": 8,
+        "icons_style": "arrow",
+        "icons_shape": "none",
+        "section_width": "page-width",
+        "gap": 12,
+        "padding-block-start": 32,
+        "padding-block-end": 32
+      }
+    },
+    "banner_kompleti": {
+      "type": "hero",
+      "blocks": {
+        "text_b1": {
+          "type": "text",
+          "settings": {
+            "text": "<p>KOMPLETI</p>",
+            "text_color": "{{ settings.color_palette.background }}",
+            "width": "fit-content",
+            "max_width": "normal",
+            "alignment": "center",
+            "type_preset": "h2",
+            "font": "var(--font-primary--family)",
+            "font_size": "",
+            "line_height": "tight",
+            "letter_spacing": "normal",
+            "case": "none",
+            "wrap": "pretty",
+            "background": false,
+            "background_color": "#00000026",
+            "corner_radius": 0,
+            "padding-block-start": 0,
+            "padding-block-end": 0,
+            "padding-inline-start": 0,
+            "padding-inline-end": 0
+          },
+          "blocks": {}
+        },
+        "button_b1": {
+          "type": "button",
+          "settings": {
+            "label": "KUPI SADA",
+            "link": "shopify://collections/kompleti",
+            "open_in_new_tab": false,
+            "style_class": "button-custom",
+            "custom_button_background": "rgba(0,0,0,0)",
+            "custom_button_text": "{{ settings.color_palette.background }}",
+            "custom_button_border": "{{ settings.color_palette.background }}",
+            "width": "fit-content",
+            "custom_width": 100,
+            "width_mobile": "fit-content",
+            "custom_width_mobile": 100
+          },
+          "blocks": {}
+        }
+      },
+      "block_order": [
+        "text_b1",
+        "button_b1"
+      ],
+      "settings": {
+        "media_type_1": "image",
+        "image_1": "shopify://shop_images/harizma-lana-krem-1_f8d283a4-2410-4dc7-9d52-6214fe25270d.jpg",
+        "media_type_2": "image",
+        "image_2": "shopify://shop_images/harizma-braon-komplet-1_8d82d715-f59c-480d-bda8-50859a1a1463.jpg",
+        "stack_media_on_mobile": true,
+        "custom_mobile_media": false,
+        "media_type_1_mobile": "image",
+        "media_type_2_mobile": "image",
+        "open_in_new_tab": false,
+        "content_direction": "column",
+        "vertical_on_mobile": true,
+        "horizontal_alignment": "center",
+        "vertical_alignment": "center",
+        "align_baseline": false,
+        "horizontal_alignment_flex_direction_column": "center",
+        "vertical_alignment_flex_direction_column": "center",
+        "gap": 16,
+        "section_width": "full-width",
+        "section_height": "medium",
+        "section_height_custom": 50,
+        "background_color": "rgba(0,0,0,0)",
+        "toggle_overlay": true,
+        "overlay_color": "#12121233",
+        "overlay_style": "solid",
+        "gradient_direction": "to bottom",
+        "blurred_reflection": false,
+        "reflection_opacity": 75,
+        "padding-block-start": 40,
+        "padding-block-end": 40
+      }
+    },
+    "product_list_kompleti": {
+      "type": "product-list",
+      "blocks": {
+        "static-header": {
+          "type": "_product-list-content",
+          "static": true,
+          "settings": {
+            "content_direction": "row",
+            "vertical_on_mobile": false,
+            "horizontal_alignment": "space-between",
+            "vertical_alignment": "flex-end",
+            "align_baseline": true,
+            "horizontal_alignment_flex_direction_column": "flex-start",
+            "vertical_alignment_flex_direction_column": "center",
+            "gap": 12,
+            "width": "fill",
+            "custom_width": 100,
+            "width_mobile": "fill",
+            "custom_width_mobile": 100,
+            "height": "fit",
+            "custom_height": 100,
+            "background_media": "none",
+            "video_position": "cover",
+            "background_image_position": "cover",
+            "border": "none",
+            "border_width": 1,
+            "border_opacity": 100,
+            "border_radius": 0,
+            "padding-block-start": 0,
+            "padding-block-end": 0,
+            "padding-inline-start": 0,
+            "padding-inline-end": 0
+          },
+          "blocks": {
+            "plk_title": {
+              "type": "_product-list-text",
+              "settings": {
+                "text": "<h3>{{ closest.collection.title }}</h3>",
+                "width": "fit-content",
+                "max_width": "normal",
+                "alignment": "left",
+                "type_preset": "h4",
+                "font": "var(--font-body--family)",
+                "line_height": "normal",
+                "letter_spacing": "normal",
+                "case": "none",
+                "wrap": "pretty",
+                "background": false,
+                "background_color": "#00000026",
+                "corner_radius": 0,
+                "padding-block-start": 0,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              },
+              "blocks": {}
+            },
+            "plk_button": {
+              "type": "_product-list-button",
+              "settings": {
+                "label": "Pogledaj sve",
+                "open_in_new_tab": false,
+                "style_class": "link",
+                "width": "fit-content",
+                "custom_width": 100,
+                "width_mobile": "fit-content",
+                "custom_width_mobile": 100
+              },
+              "blocks": {}
+            }
+          },
+          "block_order": [
+            "plk_title",
+            "plk_button"
+          ]
+        },
+        "static-product-card": {
+          "type": "_product-card",
+          "static": true,
+          "settings": {
+            "product_card_gap": 4,
+            "border": "none",
+            "border_width": 1,
+            "border_opacity": 100,
+            "border_radius": 0,
+            "padding-block-start": 0,
+            "padding-block-end": 0,
+            "padding-inline-start": 0,
+            "padding-inline-end": 0
+          },
+          "blocks": {
+            "plk_gallery": {
+              "type": "_product-card-gallery",
+              "settings": {
+                "image_ratio": "portrait",
+                "border": "none",
+                "border_width": 1,
+                "border_opacity": 100,
+                "border_radius": 0,
+                "padding-block-start": 0,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              },
+              "blocks": {}
+            },
+            "plk_ptitle": {
+              "type": "product-title",
+              "settings": {
+                "width": "100%",
+                "max_width": "normal",
+                "alignment": "left",
+                "type_preset": "rte",
+                "font": "var(--font-body--family)",
+                "font_size": "1rem",
+                "line_height": "normal",
+                "letter_spacing": "normal",
+                "case": "none",
+                "wrap": "pretty",
+                "background": false,
+                "background_color": "#00000026",
+                "corner_radius": 0,
+                "padding-block-start": 4,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              },
+              "blocks": {}
+            },
+            "plk_price": {
+              "type": "price",
+              "settings": {
+                "show_sale_price_first": true,
+                "show_installments": false,
+                "show_tax_info": false,
+                "type_preset": "h6",
+                "width": "100%",
+                "alignment": "left",
+                "font": "var(--font-body--family)",
+                "font_size": "1rem",
+                "line_height": "normal",
+                "letter_spacing": "normal",
+                "case": "none",
+                "padding-block-start": 0,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              },
+              "blocks": {}
+            }
+          },
+          "block_order": [
+            "plk_gallery",
+            "plk_ptitle",
+            "plk_price"
+          ]
+        }
+      },
+      "settings": {
+        "collection": "kompleti",
+        "layout_type": "grid",
+        "carousel_on_mobile": true,
+        "max_products": 8,
+        "columns": 4,
+        "mobile_columns": "2",
+        "mobile_card_size": "60cqw",
+        "columns_gap": 8,
+        "rows_gap": 24,
+        "icons_style": "arrow",
+        "icons_shape": "circle",
+        "section_width": "page-width",
+        "horizontal_alignment": "flex-start",
+        "gap": 28,
+        "background_color": "{{ settings.color_palette.background }}",
+        "padding-block-start": 48,
+        "padding-block-end": 48
+      }
+    },
+    "harizma_popup": {
+      "type": "harizma-popup",
+      "settings": {
+        "heading": "10% na prvu porudžbinu",
+        "text": "Ostavi email, kod dobijaš odmah.",
+        "placeholder": "tvoj@email.com",
+        "button": "Uzmi kod",
+        "delay": 9,
+        "success_heading": "Hvala.",
+        "success_text": "Tvoj kod za 10% popusta:",
+        "code": "HARIZMA10"
+      }
+    }
+  },
+  "order": [
+    "harizma_hero",
+    "harizma_civiluk",
+    "product_list_popularno",
+    "collection_list_ed",
+    "banner_kompleti",
+    "product_list_kompleti",
+    "harizma_popup"
+  ]
+}
