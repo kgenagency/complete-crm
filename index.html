@@ -1846,6 +1846,23 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 .tdx-sec select:hover,.tdx-sec select:focus{border-color:#C9A96E;outline:none}
 @media (max-width:759px){.tdx-row input,.tdx-sec select{font-size:16px}}
 
+/* v32: WhatsApp potvrda porudžbine */
+.wa-cta{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1.5px solid #25D366;background:rgba(37,211,102,.08);border-radius:14px;padding:11px 14px;margin:2px 0 14px;cursor:pointer;font:inherit;color:var(--ink)}
+.wa-cta:hover{background:rgba(37,211,102,.15)}
+.wa-cta .wa-ic{flex:0 0 34px;height:34px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px}
+.wa-cta b{display:block;font-size:14.5px}.wa-cta small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.wa-cta.sent{border-color:var(--line);background:#fff}.wa-cta.sent .wa-ic{background:#1B2620;color:#E8E4D9}
+.wa-modal{max-width:520px}
+.wa-sub{color:var(--muted);font-size:13px;margin:-6px 0 12px}
+.wa-modal textarea{width:100%;min-height:230px;line-height:1.45;font:15px var(--font-ui);resize:vertical}
+.wa-hint{font-style:normal;font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0;font-size:11.5px;margin-left:4px}
+.wa-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.wa-btns .wa-send{flex:1 1 200px;text-align:center;text-decoration:none;background:#25D366;border-color:#25D366;color:#fff}
+.wa-btns a.btn-ghost{text-decoration:none;display:inline-flex;align-items:center}
+.wa-sent{font-size:12.5px;color:var(--ink-2);margin:6px 0 2px}.wa-sent:empty{display:none}
+.wa-foot{flex-wrap:wrap}
+@media (max-width:759px){.wa-modal textarea,.wa-modal input{font-size:16px}}
+
 /* ===== v29: dobavljači u Garderobi ===== */
 .sup-panel{margin:20px 0 4px}
 .sup-hint{margin-left:4px}
@@ -2783,8 +2800,8 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610121332"></script>
-<script>window.HTML_BUILD="202610121332";</script>
-<script src="app.js?v=202610121332"></script>
+<script src="config.js?v=202610242043"></script>
+<script>window.HTML_BUILD="202610242043";</script>
+<script src="app.js?v=202610242043"></script>
 </body>
 </html>

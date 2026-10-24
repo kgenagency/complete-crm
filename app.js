@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610121332';
+const APP_BUILD = '202610242043';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -447,6 +447,7 @@ function renderDrawer() {
     const row = (k, v) => v ? `<div class="info-row"><div class="k">${k}</div><div class="v">${v}</div></div>` : '';
     $('dBody').innerHTML = `
       <div class="status-select-row"><label>Status</label><div class="select-wrap"><select id="dStatus">${STATUSES.map(s => `<option value="${s.key}" ${s.key === o.status ? 'selected' : ''}>${s.label}</option>`).join('')}</select></div></div>
+      ${o.phone ? waCtaHtml(o) : ''}
       <div class="sec-title">Kupac</div>
       ${(() => { const c = o.customer_id && state.customers.find(x => x.id === o.customer_id); if (!c) return ''; const s = custStats(c); return `<div class="list-row" data-cust="${c.id}" style="border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:8px"><span><b>${esc(c.name)}</b> · ${s.count} porudžbina · ${rsd(s.spend)}</span>${tierBadge(s.tier)}</div>`; })()}
       <div class="info-grid">
@@ -488,6 +489,77 @@ function renderDrawer() {
     $('dBody').scrollTop = 1e6;
   }
 }
+/* ---------- WhatsApp potvrda porudžbine (v32): obaveštenje → pregled poruke → izmeni, kopiraj, pošalji ---------- */
+const WA = { id: null };
+const waSentAct = (oid) => state.acts.filter(a => a.order_id === oid && /^WhatsApp potvrda poslata/.test(a.body || '')).pop();
+function waMsg(o) {
+  const t = totals(o), its = itemsOf(o.id), ime = String(o.customer_name || '').trim().split(/\s+/)[0];
+  const adr = [o.address, [o.postal_code, o.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const L = [`Zdravo${ime ? ' ' + ime : ''}, ovde HARIZMA.`, '', `Hvala ti na porudžbini${o.order_no ? ' ' + o.order_no : ''}:`];
+  its.forEach(i => L.push(`• ${i.name}${i.size && !/^uni/i.test(i.size) ? ` (${i.size})` : ''}${n(i.qty) > 1 ? ` x${i.qty}` : ''}`));
+  L.push('', `Za plaćanje pouzećem: ${rsd(t.revenue)}${n(o.shipping_price) ? ' (sa dostavom)' : ' (dostava je besplatna)'}`);
+  if (adr) L.push(`Adresa: ${adr}`);
+  L.push('', 'Da li potvrđuješ porudžbinu? Samo odgovori DA i šaljemo paket, stiže za 1 do 2 radna dana.');
+  return L.join('\n');
+}
+function waCtaHtml(o) {
+  const a = waSentAct(o.id);
+  return `<button type="button" class="wa-cta ${a ? 'sent' : ''}" data-waopen="${o.id}"><span class="wa-ic" aria-hidden="true">✆</span><span><b>${a ? 'WhatsApp potvrda poslata ✓' : 'Pošalji potvrdu na WhatsApp'}</b><small>${a ? `${esc(a.author)} · ${fmtDT(a.created_at)} · klikni da pošalješ ponovo` : 'pregled poruke, izmeni, kopiraj ili pošalji'}</small></span></button>`;
+}
+function waEl() {
+  let el = $('waModal'); if (el) return el;
+  el = document.createElement('div'); el.className = 'modal-wrap'; el.id = 'waModal';
+  el.innerHTML = `<div class="modal-bg" data-close></div><div class="modal wa-modal">
+    <h3 id="waTitle">Potvrda porudžbine</h3><div class="wa-sub" id="waSub"></div>
+    <div class="field"><label>Telefon kupca</label><input id="waPhone" inputmode="tel" autocomplete="off"></div>
+    <div class="field"><label>Poruka <i class="wa-hint">možeš da je izmeniš pre slanja</i></label><textarea id="waText" rows="11"></textarea></div>
+    <div class="wa-sent" id="waSent"></div>
+    <div class="wa-btns">
+      <a class="btn-gold wa-send" id="waSend" href="#" target="_blank" rel="noopener">✆ Pošalji na WhatsApp</a>
+      <button type="button" class="btn-ghost" id="waCopy">Kopiraj</button>
+      <a class="btn-ghost" id="waViber" href="#">Viber</a>
+    </div>
+    <div class="modal-actions wa-foot"><button type="button" class="btn-ghost" id="waReset">Vrati početni tekst</button><button type="button" class="btn-ghost" id="waOk" style="display:none">Kupac je potvrdio ✓</button><button type="button" class="btn-ghost" data-close>Zatvori</button></div>
+  </div>`;
+  document.body.appendChild(el);
+  const upd = () => { const ph = intlNum($('waPhone').value), tx = $('waText').value; $('waSend').href = ph ? `https://wa.me/${ph}?text=${encodeURIComponent(tx)}` : '#'; $('waViber').href = ph ? `viber://chat?number=%2B${ph}` : '#'; };
+  el.addEventListener('input', (e) => { if (e.target.id === 'waText' || e.target.id === 'waPhone') upd(); });
+  $('waCopy').addEventListener('click', () => waCopy().then(ok => toast(ok ? 'Poruka kopirana ✓' : 'Kopiranje nije uspelo, označi tekst i kopiraj ručno')));
+  $('waViber').addEventListener('click', (e) => { if (!intlNum($('waPhone').value)) { e.preventDefault(); return toast('Upiši broj telefona'); } waCopy().then(() => toast('Tekst je kopiran, nalepi ga u Viber')); waLogSent('Viber'); });
+  $('waSend').addEventListener('click', (e) => { if (!intlNum($('waPhone').value)) { e.preventDefault(); return toast('Upiši broj telefona'); } waLogSent('WhatsApp'); });
+  $('waReset').addEventListener('click', () => { const o = order(WA.id); if (o) { $('waText').value = waMsg(o); upd(); } });
+  $('waOk').addEventListener('click', async () => { const o = order(WA.id); if (!o) return; await setOrderStatus(o, 'confirmed'); el.classList.remove('open'); if (state.openOrderId === o.id) renderDrawer(); toast('Porudžbina je potvrđena ✓'); });
+  el._upd = upd;
+  return el;
+}
+async function waCopy() { const tx = $('waText').value; try { await navigator.clipboard.writeText(tx); return true; } catch (e) { try { const ta = $('waText'); ta.focus(); ta.select(); return document.execCommand('copy'); } catch (x) { return false; } } }
+async function waLogSent(via) {
+  const o = order(WA.id); if (!o) return;
+  try {
+    const ph = $('waPhone').value.trim();
+    if (ph && ph !== (o.phone || '')) { await q(sb.from('h_orders').update({ phone: ph }).eq('id', o.id)); o.phone = ph; }
+    await log({ order_id: o.id, type: 'system', body: `WhatsApp potvrda poslata${via === 'Viber' ? ' (preko Vibera)' : ''}` });
+    waFill(o); if (state.openOrderId === o.id) renderDrawer();
+  } catch (e) { fail(e); }
+}
+function waFill(o) {
+  const a = waSentAct(o.id);
+  $('waSent').innerHTML = a ? `Poslato: <b>${esc(a.author)}</b> · ${fmtDT(a.created_at)}. Kad kupac odgovori DA, klikni „Kupac je potvrdio“.` : '';
+  $('waOk').style.display = o.status === 'new' ? '' : 'none';
+}
+async function openWaModal(id) {
+  let o = order(id);
+  if (!o) { try { await loadData(); renderAll(); } catch (e) {} o = order(id); }
+  if (!o) return toast('Porudžbina nije pronađena');
+  if (!itemsOf(o.id).length) { try { await loadData(); renderAll(); o = order(id) || o; } catch (e) {} }
+  WA.id = o.id; const el = waEl();
+  $('waTitle').textContent = `Potvrda porudžbine · ${o.customer_name || ''}`;
+  $('waSub').textContent = [o.order_no, rsd(totals(o).revenue), o.city].filter(Boolean).join(' · ');
+  $('waPhone').value = o.phone || ''; $('waText').value = waMsg(o);
+  waFill(o); el._upd(); el.classList.add('open');
+  if (!o.phone) toast('Porudžbina nema broj telefona, upiši ga');
+}
+document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-waopen]'); if (b) { e.preventDefault(); openWaModal(b.dataset.waopen); } });
 async function saveShipping() {
   const o = order(state.openOrderId); if (!o) return;
   const patch = { courier: $('dCourier').value.trim() || null, tracking_no: $('dTrack').value.trim() || null };
@@ -3704,6 +3776,7 @@ const BOT_TIPS = {
   history: 'Vremenska linija svega što se desilo, sa filterima po vrsti i mesecu. <b>Arhiva obrisanog</b> vraća bilo šta što je obrisano.',
 };
 const BOT_FAQ = [
+  { g: [['whatsapp', 'viber', 'potvrdu poslat', 'potvrda kupcu', 'poruka kupcu', 'poruku kupcu']], a: '<b>WhatsApp potvrda porudžbine</b>: kad stigne porudžbina sa sajta, svima stiže obaveštenje „📲 Potvrdi porudžbinu · ime kupca“. Klik otvara pregled poruke (pozdrav, komadi, iznos za pouzeće, adresa, „odgovori DA“). Poruku možeš da izmeniš, pa <b>Pošalji na WhatsApp</b> (otvara WhatsApp sa tim tekstom, samo pritisneš pošalji), <b>Kopiraj</b> ili <b>Viber</b> (tekst se kopira, nalepiš ga). U porudžbini se beleži ko je poslao i kad, a kad kupac odgovori DA klikneš <b>Kupac je potvrdio</b> i status ide na Potvrđena. Isto dugme stoji i u svakoj porudžbini sa telefonom, i za porudžbine iz DM-a.', b: [['Otvori Porudžbine', 'tab:orders']] },
   { g: [['status', 'faz', 'pomer', 'prevuc', 'poslat', 'isporuc', 'spakov', 'potvrd']], a: 'Otvori porudžbinu i promeni status (Nova → Potvrđena → Spakovana → Poslata → Isporučena). U pogledu <b>Pipeline</b> samo prevučeš karticu u sledeću kolonu.', b: [['Porudžbine', 'tab:orders'], ['Pipeline pogled', 'oview:pipeline']] },
   { g: [['porudzbin', 'narudzbin', 'order'], ['dodam', 'dodaj', 'unes', 'napravi', 'nov', 'kreir', 'ubac', 'upis']], a: 'Klikni <b>+ Nova porudžbina</b> (ili taster <kbd>N</kbd>). Upišeš kupca, dodaš komade i veličine, a cena, profit i zalihe se računaju sami. Kupac se sam pravi ili povezuje sa postojećim.', b: [['Nova porudžbina', 'act:Nova porudžbina'], ['Porudžbine', 'tab:orders']] },
   { g: [['otkaz', 'storn', 'ponist']], a: 'Otvori porudžbinu i stavi status <b>Otkazana</b>. Roba se sama vraća na stanje, a porudžbina se više ne računa u prihod.', b: [['Porudžbine', 'tab:orders']] },
@@ -5892,6 +5965,7 @@ function crmGo(r) {
   if (r.startsWith('chat:')) return openChat(r.slice(5));
   if (r.startsWith('huddle:')) { const room = r.slice(7); openChat(room); if (HUD.room !== room) { HUD.ring = null; hudRing(room, null, true); } return; }
   if (r.startsWith('item:')) { const [, tbl, id] = r.split(':'); return itemOpen(tbl, id); }
+  if (r.startsWith('wa:order:')) { if (state.tab !== 'orders') setTab('orders'); return openWaModal(r.slice(9)); } // obaveštenje „Potvrdi porudžbinu“ → pregled WhatsApp poruke
   if (r.startsWith('ref:')) r = r.slice(4);
   const tabFor = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' };
   const k = r.split(':')[0]; if (tabFor[k] && state.tab !== tabFor[k]) setTab(tabFor[k]);
