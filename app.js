@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610242110';
+const APP_BUILD = '202610242135';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -492,11 +492,18 @@ function renderDrawer() {
 /* ---------- WhatsApp potvrda porudžbine (v32): obaveštenje → pregled poruke → izmeni, kopiraj, pošalji ---------- */
 const WA = { id: null };
 const WA_ANDROID = /Android/i.test(navigator.userAgent);
-/* Android: uvek WhatsApp Business (paket com.whatsapp.w4b), i kad je na telefonu i običan WhatsApp; ako Business nije instaliran, otvara se wa.me */
+const WA_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const WA_PHONE = WA_ANDROID || WA_IOS;
+/* način otvaranja (pamti se na ovom uređaju): 'business' = WhatsApp Business, 'web' = običan wa.me link */
+let WA_MODE = (() => { try { return localStorage.getItem('crm_wa_mode') || 'business'; } catch (e) { return 'business'; } })();
+/* Android: paket com.whatsapp.w4b (Business), ako ga nema otvara wa.me. iPhone: whatsapp:// šema, koju iOS kad su obe aplikacije na telefonu obično otvara u WhatsApp Business-u. */
 function waLink(ph, tx) {
-  const web = `https://wa.me/${ph}?text=${encodeURIComponent(tx)}`;
-  return WA_ANDROID ? `intent://send?phone=${ph}&text=${encodeURIComponent(tx)}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(web)};end` : web;
+  const enc = encodeURIComponent(tx), web = `https://wa.me/${ph}?text=${enc}`;
+  if (WA_MODE === 'web' || !WA_PHONE) return web;
+  if (WA_ANDROID) return `intent://send?phone=${ph}&text=${enc}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(web)};end`;
+  return `whatsapp://send?phone=${ph}&text=${enc}`;
 }
+const waModeTxt = () => WA_MODE === 'web' ? 'Otvara se običnim linkom (wa.me)' : 'Otvara se u WhatsApp Business-u';
 const waSentAct = (oid) => state.acts.filter(a => a.order_id === oid && /^WhatsApp potvrda poslata/.test(a.body || '')).pop();
 function waMsg(o) {
   const t = totals(o), its = itemsOf(o.id), ime = String(o.customer_name || '').trim().split(/\s+/)[0];
@@ -520,8 +527,9 @@ function waEl() {
     <div class="field"><label>Telefon kupca</label><input id="waPhone" inputmode="tel" autocomplete="off"></div>
     <div class="field"><label>Poruka <i class="wa-hint">možeš da je izmeniš pre slanja</i></label><textarea id="waText" rows="11"></textarea></div>
     <div class="wa-sent" id="waSent"></div>
+    ${WA_PHONE ? `<div class="wa-mode"><span id="waModeTxt">${waModeTxt()}</span> · <button type="button" id="waMode">Otvara pogrešan WhatsApp? Promeni</button></div>` : ''}
     <div class="wa-btns">
-      <a class="btn-gold wa-send" id="waSend" href="#" ${WA_ANDROID ? '' : 'target="_blank" '}rel="noopener">✆ Pošalji na WhatsApp Business</a>
+      <a class="btn-gold wa-send" id="waSend" href="#" ${WA_PHONE ? '' : 'target="_blank" '}rel="noopener">✆ Pošalji na WhatsApp Business</a>
       <button type="button" class="btn-ghost" id="waCopy">Kopiraj</button>
       <a class="btn-ghost" id="waViber" href="#">Viber</a>
     </div>
@@ -530,6 +538,7 @@ function waEl() {
   document.body.appendChild(el);
   const upd = () => { const ph = intlNum($('waPhone').value), tx = $('waText').value; $('waSend').href = ph ? waLink(ph, tx) : '#'; $('waViber').href = ph ? `viber://chat?number=%2B${ph}` : '#'; };
   el.addEventListener('input', (e) => { if (e.target.id === 'waText' || e.target.id === 'waPhone') upd(); });
+  if ($('waMode')) $('waMode').addEventListener('click', () => { WA_MODE = WA_MODE === 'web' ? 'business' : 'web'; try { localStorage.setItem('crm_wa_mode', WA_MODE); } catch (e) {} $('waModeTxt').textContent = waModeTxt(); upd(); toast(WA_MODE === 'web' ? 'Sada otvara običnim linkom. Na iPhone-u u WhatsApp-u dodirni „Otvori u WhatsApp Business“.' : 'Sada otvara WhatsApp Business'); });
   $('waCopy').addEventListener('click', () => waCopy().then(ok => toast(ok ? 'Poruka kopirana ✓' : 'Kopiranje nije uspelo, označi tekst i kopiraj ručno')));
   $('waViber').addEventListener('click', (e) => { if (!intlNum($('waPhone').value)) { e.preventDefault(); return toast('Upiši broj telefona'); } waCopy().then(() => toast('Tekst je kopiran, nalepi ga u Viber')); waLogSent('Viber'); });
   $('waSend').addEventListener('click', (e) => { if (!intlNum($('waPhone').value)) { e.preventDefault(); return toast('Upiši broj telefona'); } waLogSent('WhatsApp'); });
