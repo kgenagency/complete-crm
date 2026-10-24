@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610242043';
+const APP_BUILD = '202610242110';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -491,6 +491,12 @@ function renderDrawer() {
 }
 /* ---------- WhatsApp potvrda porudžbine (v32): obaveštenje → pregled poruke → izmeni, kopiraj, pošalji ---------- */
 const WA = { id: null };
+const WA_ANDROID = /Android/i.test(navigator.userAgent);
+/* Android: uvek WhatsApp Business (paket com.whatsapp.w4b), i kad je na telefonu i običan WhatsApp; ako Business nije instaliran, otvara se wa.me */
+function waLink(ph, tx) {
+  const web = `https://wa.me/${ph}?text=${encodeURIComponent(tx)}`;
+  return WA_ANDROID ? `intent://send?phone=${ph}&text=${encodeURIComponent(tx)}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(web)};end` : web;
+}
 const waSentAct = (oid) => state.acts.filter(a => a.order_id === oid && /^WhatsApp potvrda poslata/.test(a.body || '')).pop();
 function waMsg(o) {
   const t = totals(o), its = itemsOf(o.id), ime = String(o.customer_name || '').trim().split(/\s+/)[0];
@@ -504,7 +510,7 @@ function waMsg(o) {
 }
 function waCtaHtml(o) {
   const a = waSentAct(o.id);
-  return `<button type="button" class="wa-cta ${a ? 'sent' : ''}" data-waopen="${o.id}"><span class="wa-ic" aria-hidden="true">✆</span><span><b>${a ? 'WhatsApp potvrda poslata ✓' : 'Pošalji potvrdu na WhatsApp'}</b><small>${a ? `${esc(a.author)} · ${fmtDT(a.created_at)} · klikni da pošalješ ponovo` : 'pregled poruke, izmeni, kopiraj ili pošalji'}</small></span></button>`;
+  return `<button type="button" class="wa-cta ${a ? 'sent' : ''}" data-waopen="${o.id}"><span class="wa-ic" aria-hidden="true">✆</span><span><b>${a ? 'WhatsApp potvrda poslata ✓' : 'Pošalji potvrdu na WhatsApp Business'}</b><small>${a ? `${esc(a.author)} · ${fmtDT(a.created_at)} · klikni da pošalješ ponovo` : 'pregled poruke, izmeni, kopiraj ili pošalji'}</small></span></button>`;
 }
 function waEl() {
   let el = $('waModal'); if (el) return el;
@@ -515,14 +521,14 @@ function waEl() {
     <div class="field"><label>Poruka <i class="wa-hint">možeš da je izmeniš pre slanja</i></label><textarea id="waText" rows="11"></textarea></div>
     <div class="wa-sent" id="waSent"></div>
     <div class="wa-btns">
-      <a class="btn-gold wa-send" id="waSend" href="#" target="_blank" rel="noopener">✆ Pošalji na WhatsApp</a>
+      <a class="btn-gold wa-send" id="waSend" href="#" ${WA_ANDROID ? '' : 'target="_blank" '}rel="noopener">✆ Pošalji na WhatsApp Business</a>
       <button type="button" class="btn-ghost" id="waCopy">Kopiraj</button>
       <a class="btn-ghost" id="waViber" href="#">Viber</a>
     </div>
     <div class="modal-actions wa-foot"><button type="button" class="btn-ghost" id="waReset">Vrati početni tekst</button><button type="button" class="btn-ghost" id="waOk" style="display:none">Kupac je potvrdio ✓</button><button type="button" class="btn-ghost" data-close>Zatvori</button></div>
   </div>`;
   document.body.appendChild(el);
-  const upd = () => { const ph = intlNum($('waPhone').value), tx = $('waText').value; $('waSend').href = ph ? `https://wa.me/${ph}?text=${encodeURIComponent(tx)}` : '#'; $('waViber').href = ph ? `viber://chat?number=%2B${ph}` : '#'; };
+  const upd = () => { const ph = intlNum($('waPhone').value), tx = $('waText').value; $('waSend').href = ph ? waLink(ph, tx) : '#'; $('waViber').href = ph ? `viber://chat?number=%2B${ph}` : '#'; };
   el.addEventListener('input', (e) => { if (e.target.id === 'waText' || e.target.id === 'waPhone') upd(); });
   $('waCopy').addEventListener('click', () => waCopy().then(ok => toast(ok ? 'Poruka kopirana ✓' : 'Kopiranje nije uspelo, označi tekst i kopiraj ručno')));
   $('waViber').addEventListener('click', (e) => { if (!intlNum($('waPhone').value)) { e.preventDefault(); return toast('Upiši broj telefona'); } waCopy().then(() => toast('Tekst je kopiran, nalepi ga u Viber')); waLogSent('Viber'); });
