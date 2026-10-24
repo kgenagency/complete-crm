@@ -111,7 +111,12 @@ async function onAudit(a: any) {
     const sum = (its || []).reduce((s: number, i: any) => s + Number(i.qty || 0) * Number(i.unit_price || 0), 0) - Number(r.discount || 0) + Number(r.shipping_price || 0);
     const src = { meta: 'Meta Ads', tiktok: 'TikTok Ads', google: 'Google Ads' }[r.source as string];
     const who = PEOPLE[actor] ? ` · uneo/la ${pname(actor)}` : actor === 'shopify' ? ' · sa sajta' : '';
-    out.push(await pushTo(USERS.filter(u => u !== actor), 'orders', { title: `🛍 Nova porudžbina ${r.order_no || ''}`.trim(), body: [r.customer_name, r.city, (its || []).length ? rsd(sum) : '', src].filter(Boolean).join(' · ') + who, tag: `order-${r.id}`, go: `ref:order:${r.id}` }));
+    if (actor === 'shopify' && r.phone) {
+      // porudžbina sa sajta: obaveštenje vodi pravo na pregled WhatsApp potvrde (izmeni, kopiraj, pošalji)
+      out.push(await pushTo(USERS, 'orders', { title: `📲 Potvrdi porudžbinu · ${r.customer_name || 'kupac'}`, body: [r.order_no, (its || []).length ? rsd(sum) : '', r.city, src].filter(Boolean).join(' · ') + ' · klikni za WhatsApp poruku', tag: `order-${r.id}`, go: `wa:order:${r.id}` }));
+    } else {
+      out.push(await pushTo(USERS.filter(u => u !== actor), 'orders', { title: `🛍 Nova porudžbina ${r.order_no || ''}`.trim(), body: [r.customer_name, r.city, (its || []).length ? rsd(sum) : '', src].filter(Boolean).join(' · ') + who, tag: `order-${r.id}`, go: `ref:order:${r.id}` }));
+    }
   }
   // 3) nova prijava (povrat, zamena, reklamacija) sa forme ili ručno
   if (tbl === 'h_returns' && a.op === 'INSERT') {
