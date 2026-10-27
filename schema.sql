@@ -1255,3 +1255,77 @@ begin
 end $function$;
 revoke all on function public.h_shopify_customer_in(jsonb) from public, anon, authenticated;
 select 'ok';
+
+-- ===== v35: Meta reklame -> CRM (crm-meta, svakog sata) + pakovanje, kurir i nabavna za porudžbine sa sajta =====
+create or replace function public.h_shopify_order_in(o jsonb)
+ returns jsonb language plpgsql security definer set search_path to 'public'
+as $function$
+declare ex record; nid uuid; it jsonb; pk record; held boolean; n_items int := 0; out_note text := ''; fb_pid uuid;
+begin
+  perform set_config('request.jwt.claims', '{"email":"shopify@harizma.local"}', true);
+  select * into ex from h_orders where shopify_order_id = o->>'shopify_order_id' limit 1;
+  if found and ex.deleted_at is not null then return jsonb_build_object('skip', 'obrisana u CRM-u', 'id', ex.id); end if;
+  if not found then
+    insert into h_orders (created_at, order_no, channel, customer_name, phone, email, address, city, postal_code, status, payment,
+                          shipping_price, discount, discount_code, note, shopify_order_id, source, tracking_no, courier, packaging_cost, shipping_cost)
+    values (coalesce((o->>'created_at')::timestamptz, now()), o->>'order_no', 'shopify', coalesce(nullif(o->>'customer_name', ''), 'Kupac sa sajta'),
+            nullif(o->>'phone', ''), nullif(o->>'email', ''), nullif(o->>'address', ''), nullif(o->>'city', ''), nullif(o->>'postal_code', ''),
+            case when (o->>'cancelled')::boolean then 'cancelled' else 'new' end, coalesce(nullif(o->>'payment', ''), 'cod'),
+            coalesce((o->>'shipping_price')::numeric, 0), coalesce((o->>'discount')::numeric, 0), nullif(o->>'discount_code', ''),
+            nullif(o->>'note', ''), o->>'shopify_order_id', coalesce(nullif(o->>'source', ''), 'organic'), nullif(o->>'tracking_no', ''), nullif(o->>'courier', ''),
+            (select coalesce(sum(p.per_order * coalesce(p.unit_price, 0)), 0) from h_packaging p where p.deleted_at is null and p.per_order > 0),
+            coalesce(nullif((select v from h_private where k = 'ship_cost_default'), '')::numeric, 0))
+    returning id into nid;
+    for it in select * from jsonb_array_elements(coalesce(o->'items', '[]'::jsonb)) loop
+      -- artikal koji nije povezan sa Garderobom: model po prvoj reči naziva (npr. "IRIS duks – Bež" -> IRIS), da nabavna ne bude 0
+      select id into fb_pid from h_products where deleted_at is null and upper(name) = upper(split_part(trim(it->>'name'), ' ', 1)) limit 1;
+      insert into h_order_items (order_id, product_id, variant_id, name, size, qty, unit_price, unit_cost)
+      values (nid, coalesce(nullif(it->>'product_id', '')::uuid, (select product_id from h_variants where id = nullif(it->>'variant_id', '')::uuid), fb_pid),
+              nullif(it->>'variant_id', '')::uuid, it->>'name', it->>'size',
+              greatest(1, coalesce((it->>'qty')::int, 1)), coalesce((it->>'unit_price')::numeric, 0),
+              coalesce(nullif(it->>'unit_cost', '')::numeric, (select p.buy_price from h_variants v join h_products p on p.id = v.product_id where v.id = nullif(it->>'variant_id', '')::uuid), (select buy_price from h_products where id = fb_pid), 0));
+      n_items := n_items + 1;
+      if not (o->>'cancelled')::boolean and nullif(it->>'variant_id', '') is not null then
+        update h_variants set stock = stock - greatest(1, coalesce((it->>'qty')::int, 1)) where id = (it->>'variant_id')::uuid;
+      end if;
+    end loop;
+    if not (o->>'cancelled')::boolean then
+      for pk in select * from h_packaging where deleted_at is null and per_order > 0 loop
+        update h_packaging set stock = greatest(0, stock - pk.per_order) where id = pk.id;
+      end loop;
+    end if;
+    insert into h_activities (order_id, type, author, body)
+    values (nid, 'system', 'Shopify', 'Porudžbina stigla sa sajta ' || coalesce(o->>'order_no', '') || ' (Shopify)' ||
+            case when exists (select 1 from jsonb_array_elements(coalesce(o->'items', '[]'::jsonb)) e where nullif(e->>'variant_id', '') is null)
+                 then ' · neki artikli nisu povezani sa Garderobom, stanje za njih nije skinuto' else '' end);
+    return jsonb_build_object('created', true, 'id', nid, 'items', n_items);
+  end if;
+  -- već postoji: otkazivanje i slanje (praćenje) sa Shopify-ja
+  if (o->>'cancelled')::boolean and ex.status not in ('cancelled', 'returned') then
+    held := ex.status not in ('cancelled', 'returned');
+    update h_orders set status = 'cancelled' where id = ex.id;
+    if held then
+      update h_variants v set stock = v.stock + i.qty from h_order_items i where i.order_id = ex.id and i.deleted_at is null and i.variant_id = v.id;
+      insert into h_shopify_queue (kind, ref) select 'stock', i.variant_id from h_order_items i where i.order_id = ex.id and i.deleted_at is null and i.variant_id is not null
+        on conflict (kind, ref) where done_at is null do nothing;
+    end if;
+    insert into h_activities (order_id, type, author, body) values (ex.id, 'status', 'Shopify', 'Otkazana na Shopify-ju, roba vraćena na stanje');
+    out_note := 'cancelled';
+  end if;
+  if nullif(o->>'tracking_no', '') is not null and ex.tracking_no is distinct from o->>'tracking_no' and ex.status not in ('cancelled', 'returned') then
+    update h_orders set tracking_no = o->>'tracking_no', courier = coalesce(nullif(o->>'courier', ''), courier),
+      status = case when status in ('new', 'confirmed', 'packed') then 'shipped' else status end,
+      shipped_at = case when status in ('new', 'confirmed', 'packed') then now() else shipped_at end
+    where id = ex.id;
+    insert into h_activities (order_id, type, author, body) values (ex.id, 'status', 'Shopify', 'Poslata sa Shopify-ja, broj pošiljke ' || (o->>'tracking_no'));
+    out_note := out_note || ' shipped';
+  end if;
+  return jsonb_build_object('created', false, 'id', ex.id, 'changed', nullif(trim(out_note), ''));
+end $function$;
+revoke all on function public.h_shopify_order_in(jsonb) from public, anon, authenticated;
+select cron.unschedule('crm-meta-sync') where exists (select 1 from cron.job where jobname = 'crm-meta-sync');
+select cron.schedule('crm-meta-sync', '17 * * * *', $cron$
+  select net.http_post(url := 'https://treqdonahihterhaxxfw.supabase.co/functions/v1/crm-meta', body := '{"days":3}'::jsonb,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-crm-hook', (select v from public.h_private where k = 'push_hook')), timeout_milliseconds := 55000)
+$cron$);
+select 'ok';
