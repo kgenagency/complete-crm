@@ -256,6 +256,47 @@ async function pullOrders() {
   await privSet('shopify_orders_pulled_at', started);
   return { seen: n, created: made };
 }
+/* ---------------- napuštene korpe (v36): Shopify abandoned checkouts -> h_abandoned ---------------- */
+// korpa se upisuje 30 min posle napuštanja; ako je kupac u međuvremenu poručio (isti mejl ili telefon), ulazi odmah kao spašena
+const cartKey = (items: any[]) => (items || []).map((i: any) => `${i.title}|${i.variant || ''}|${Number(i.qty) || 0}|${Number(i.price) || 0}`).join(';');
+async function pullAbandoned() {
+  const since = new Date(Date.now() - 14 * 864e5).toISOString();
+  const d: any = await gql(`query($q: String!) { abandonedCheckouts(first: 50, reverse: true, sortKey: CREATED_AT, query: $q) { nodes { id createdAt completedAt abandonedCheckoutUrl totalPriceSet { shopMoney { amount } } subtotalPriceSet { shopMoney { amount } } shippingAddress { name phone city address1 zip } billingAddress { name phone } customer { firstName lastName defaultEmailAddress { emailAddress } defaultPhoneNumber { phoneNumber } } lineItems(first: 30) { nodes { title variantTitle quantity originalUnitPriceSet { shopMoney { amount } } } } } } }`, { q: `created_at:>='${since}'` });
+  const nodes = (d.abandonedCheckouts?.nodes || []).filter((c: any) => !c.completedAt && Date.now() - Date.parse(c.createdAt) > 30 * 60e3);
+  if (!nodes.length) return { seen: 0, created: 0, updated: 0 };
+  const ids = nodes.map((c: any) => String(c.id).split('/').pop());
+  const { data: have } = await db.from('h_abandoned').select('id, shopify_checkout_id, items, total').in('shopify_checkout_id', ids);
+  let created = 0, updated = 0;
+  for (const c of nodes) {
+    const sid = String(c.id).split('/').pop() as string, sa = c.shippingAddress || {}, ba = c.billingAddress || {}, cu = c.customer || {};
+    const name = String(sa.name || ba.name || [cu.firstName, cu.lastName].filter(Boolean).join(' ') || '').trim();
+    if (/\btest\b/i.test(name)) continue; // probne porudžbine se ne vode
+    const row: Record<string, unknown> = {
+      shopify_checkout_id: sid, abandoned_at: c.createdAt, customer_name: name || null,
+      phone: sa.phone || ba.phone || cu.defaultPhoneNumber?.phoneNumber || null, email: cu.defaultEmailAddress?.emailAddress || null,
+      city: sa.city || null, address: [sa.address1, [sa.zip, sa.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || null,
+      items: (c.lineItems?.nodes || []).map((l: any) => ({ title: l.title, variant: l.variantTitle || '', qty: Number(l.quantity) || 1, price: num(l.originalUnitPriceSet?.shopMoney?.amount) })),
+      subtotal: num(c.subtotalPriceSet?.shopMoney?.amount), total: num(c.totalPriceSet?.shopMoney?.amount), recovery_url: c.abandonedCheckoutUrl || null,
+    };
+    const h = (have || []).find((x: any) => x.shopify_checkout_id === sid);
+    if (!h) {
+      const { data: rec } = await db.rpc('h_abandoned_match_order', { p_email: row.email, p_phone: row.phone, p_after: row.abandoned_at });
+      if (rec) { row.status = 'recovered'; row.recovered_order_id = rec; row.recovered_at = new Date().toISOString(); }
+      const { error } = await db.from('h_abandoned').insert(row);
+      if (error) throw new Error(error.message);
+      created++;
+    } else if (cartKey(h.items) !== cartKey(row.items as any[]) || num(h.total) !== row.total) {
+      const { error } = await db.from('h_abandoned').update({ items: row.items, total: row.total, subtotal: row.subtotal, recovery_url: row.recovery_url }).eq('id', h.id);
+      if (error) throw new Error(error.message);
+      updated++;
+    }
+  }
+  if (created) await logEv('checkouts/pull', true, `napuštene korpe: ${created} novih`, '', 'in');
+  return { seen: nodes.length, created, updated };
+}
+async function cartsSafe() {
+  try { return await pullAbandoned(); } catch (e) { const m = String((e as Error)?.message || e); await logEv('checkouts/pull', false, m, '', 'in'); return { error: m }; }
+}
 async function reconcile() {
   if (!(await priv('shopify_cid'))) return { skip: 'nema ključa' };
   // CRM je glavni za stanje: svaka povezana veličina čije se stanje razlikuje ide u red
@@ -323,7 +364,8 @@ Deno.serve(async (req) => {
       if (body.queue) return json({ ok: true, res: await runQueue() });
       if (body.cron) {
         const last = Date.parse(await priv('shopify_reconciled_at')) || 0;
-        return json({ ok: true, res: Date.now() - last > 55 * 60e3 ? await reconcile() : await runQueue() });
+        const res = Date.now() - last > 55 * 60e3 ? await reconcile() : await runQueue();
+        return json({ ok: true, res, carts: await cartsSafe() });
       }
       if (body.dry && body.order) return json({ ok: true, res: await normOrder(body.order) });
       if (body.status) return json({ ok: true, res: await status() });
@@ -348,7 +390,8 @@ Deno.serve(async (req) => {
       await logEv('povezivanje', true, `ključ aplikacije povezao ${user}`, '', 'out');
       return json({ ok: true, res: await reconcile() });
     }
-    if (body.sync) return json({ ok: true, res: await reconcile(), status: await status() });
+    if (body.carts) return json({ ok: true, res: await cartsSafe() });
+    if (body.sync) return json({ ok: true, res: await reconcile(), carts: await cartsSafe(), status: await status() });
     return json({ ok: true, res: await status() });
   } catch (e) { return json({ ok: false, error: String((e as Error)?.message || e) }, 500); }
 });
