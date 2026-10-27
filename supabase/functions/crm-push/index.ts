@@ -123,6 +123,12 @@ async function onAudit(a: any) {
     const RT: Record<string, string> = { return: 'Povrat', exchange: 'Zamena', complaint: 'Reklamacija', feedback: 'Utisak' };
     out.push(await pushTo(USERS.filter(u => u !== actor), 'returns', { title: `↩ ${r.source === 'form' ? 'Nova prijava sa forme' : 'Nova prijava'}: ${RT[r.type] || 'Povrat'}`, body: [r.case_no, r.customer_name, r.item, cut(r.reason, 60)].filter(Boolean).join(' · '), tag: `ret-${r.id}`, go: `ref:ret:${r.id}` }));
   }
+  // 4) napuštena korpa sa sajta (v36): samo sveže (do 6 h) i još otvorene; klik vodi na WhatsApp poruku
+  if (tbl === 'h_abandoned' && a.op === 'INSERT' && r.status === 'open' && Date.now() - Date.parse(r.abandoned_at || '') < 6 * 3600e3) {
+    const its = Array.isArray(r.items) ? r.items : [];
+    const what = its.map((i: any) => String(i.title || '')).filter(Boolean).slice(0, 2).join(', ') + (its.length > 2 ? ` +${its.length - 2}` : '');
+    out.push(await pushTo(USERS, 'orders', { title: `🛒 Napuštena korpa · ${r.customer_name || 'kupac'}`, body: [what, Number(r.total) ? rsd(Number(r.total)) : '', r.city].filter(Boolean).join(' · ') + (r.phone ? ' · klikni za WhatsApp poruku' : ''), tag: `cart-${r.id}`, go: r.phone ? `wa:cart:${r.id}` : `ref:cart:${r.id}` }));
+  }
   return out;
 }
 
