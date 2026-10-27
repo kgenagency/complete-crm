@@ -1911,6 +1911,19 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 .shp-ev{display:grid;grid-template-columns:16px auto 1fr auto;gap:8px;align-items:baseline;padding:4px 0;font-size:12.5px}.shp-ev>span:first-child{color:#3c9a5f;font-weight:800}.shp-ev.bad>span:first-child{color:#c0392b}
 .shp-ev .shp-m{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.shp-ev time{color:var(--muted);font-size:11.5px}
 @media (max-width:759px){.shp-grid{grid-template-columns:1fr}.shp-form input{font-size:16px}}
+/* v36 napuštene korpe */
+.cart-row.st-recovered td{background:rgba(37,211,102,.05)}
+.cart-row.st-lost td{opacity:.6}
+.cart-row.hl td{background:#fffaf0}
+.cart-st{font:inherit;font-size:12.5px;font-weight:600;padding:5px 8px;border-radius:99px;border:1px solid var(--line);background:#fff;color:var(--ink-2)}
+.cart-st.s-open{background:#fff6e5;border-color:#f0d9a8;color:#8a5a00}
+.cart-st.s-contacted{background:#eef4ff;border-color:#c9d8f5;color:#2a4b8d}
+.cart-st.s-recovered{background:#e9f8ef;border-color:#bfe6cc;color:#1d6b3a}
+.cart-st.s-lost{background:#f3f3f3;color:#777}
+.cart-acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.cart-acts .btn-ghost{padding:6px 10px;font-size:12.5px;text-decoration:none;white-space:nowrap}
+.cart-acts .cart-wa{border-color:#25D366;color:#128c4a}
+.cart-items small{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -2072,7 +2085,7 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
           <button class="btn-gold" id="newOrderBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Nova porudžbina</button>
         </div>
         <div class="toolbar">
-          <div class="seg" id="orderViewSeg"><button data-view="table" class="active">Tabela</button><button data-view="pipeline">Pipeline</button></div>
+          <div class="seg" id="orderViewSeg"><button data-view="table" class="active">Tabela</button><button data-view="pipeline">Pipeline</button><button data-view="carts">Napuštene korpe</button></div>
           <div class="seg seg-x" id="chSeg"><button data-ch="all" class="active">Sve</button><button data-ch="instagram">Instagram</button><button data-ch="shopify">Shopify</button></div>
           <div class="seg seg-x" id="srcSeg" title="Izvor porudžbine"><button data-src="all" class="active">Svi izvori</button><button data-src="organic">Organic</button><button data-src="meta">Meta Ads</button><button data-src="tiktok">TikTok Ads</button><button data-src="google">Google Ads</button></div>
           <div class="select-wrap"><select id="orderStatusFilter"><option value="all">Svi statusi</option></select></div>
@@ -2083,6 +2096,10 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
           <tbody id="orderTbody"></tbody>
         </table></div>
         <div class="kanban" id="kanban"></div>
+        <div class="table-card" id="cartsCard" style="display:none"><table>
+          <thead><tr><th>Kupac</th><th>Korpa</th><th>Iznos</th><th>Napuštena</th><th>Status</th><th></th></tr></thead>
+          <tbody id="cartsTbody"></tbody>
+        </table></div>
       </div>
 
       <!-- KUPCI -->
@@ -2801,8 +2818,8 @@ html.scroll-lock body{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202610242135"></script>
-<script>window.HTML_BUILD="202610242135";</script>
-<script src="app.js?v=202610242135"></script>
+<script src="config.js?v=202610271100"></script>
+<script>window.HTML_BUILD="202610271100";</script>
+<script src="app.js?v=202610271100"></script>
 </body>
 </html>

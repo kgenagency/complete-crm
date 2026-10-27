@@ -1329,3 +1329,79 @@ select cron.schedule('crm-meta-sync', '17 * * * *', $cron$
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-crm-hook', (select v from public.h_private where k = 'push_hook')), timeout_milliseconds := 55000)
 $cron$);
 select 'ok';
+
+-- ===== v36: napuštene korpe sa sajta (Shopify abandoned checkouts) u CRM-u =====
+create table if not exists public.h_abandoned (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  shopify_checkout_id text not null unique,
+  abandoned_at timestamptz not null,
+  customer_name text, phone text, email text, city text, address text,
+  items jsonb not null default '[]'::jsonb,           -- [{title, variant, qty, price}]
+  subtotal numeric(10,2), total numeric(10,2),
+  recovery_url text,                                   -- link kojim kupac završava istu korpu
+  status text not null default 'open' check (status in ('open', 'contacted', 'recovered', 'lost')),
+  contacted_at timestamptz, contacted_by text,
+  recovered_order_id uuid references public.h_orders(id) on delete set null,
+  recovered_at timestamptz,
+  note text,
+  deleted_at timestamptz
+);
+create index if not exists h_abandoned_at on public.h_abandoned (abandoned_at desc);
+alter table public.h_abandoned enable row level security;
+drop policy if exists "team all" on public.h_abandoned;
+drop policy if exists "harizma tim" on public.h_abandoned;
+create policy "harizma tim" on public.h_abandoned for all to authenticated
+  using (crm_user() in ('konstantin', 'stasa', 'marjan')) with check (crm_user() in ('konstantin', 'stasa', 'marjan'));
+drop trigger if exists h_audit_trg on public.h_abandoned;
+create trigger h_audit_trg after insert or update or delete on public.h_abandoned for each row execute function public.h_audit_fn();
+
+-- porudžbina posle napuštene korpe (isti mejl ili telefon) -> id porudžbine
+create or replace function public.h_abandoned_match_order(p_email text, p_phone text, p_after timestamptz)
+ returns uuid language sql stable security definer set search_path to 'public'
+as $$
+  select o.id from h_orders o
+  where o.deleted_at is null and o.created_at >= p_after - interval '5 minutes'
+    and ((nullif(lower(trim(p_email)), '') is not null and lower(o.email) = lower(trim(p_email)))
+      or (nullif(h_norm_phone(p_phone), '') is not null and h_norm_phone(o.phone) = h_norm_phone(p_phone)))
+  order by o.created_at limit 1
+$$;
+revoke all on function public.h_abandoned_match_order(text, text, timestamptz) from public, anon, authenticated;
+
+-- kad stigne porudžbina: otvorena ili kontaktirana korpa istog kupca (14 dana) postaje spašena
+create or replace function public.h_abandoned_recover()
+ returns trigger language plpgsql security definer set search_path to 'public'
+as $$
+begin
+  update h_abandoned set status = 'recovered', recovered_order_id = new.id, recovered_at = now()
+  where deleted_at is null and status in ('open', 'contacted') and abandoned_at > now() - interval '14 days'
+    and abandoned_at <= new.created_at + interval '5 minutes'
+    and ((nullif(lower(trim(new.email)), '') is not null and lower(email) = lower(trim(new.email)))
+      or (nullif(h_norm_phone(new.phone), '') is not null and h_norm_phone(phone) = h_norm_phone(new.phone)));
+  return new;
+exception when others then return new;
+end $$;
+drop trigger if exists h_abandoned_recover_trg on public.h_orders;
+create trigger h_abandoned_recover_trg after insert on public.h_orders for each row execute function public.h_abandoned_recover();
+
+-- obaveštenje na telefon i za novu napuštenu korpu
+create or replace function public.h_push_hook()
+ returns trigger language plpgsql security definer set search_path to 'public', 'extensions'
+as $function$
+declare sec text; rel boolean := false; ch jsonb := coalesce(new.changed, '{}'::jsonb);
+begin
+  if new.op = 'INSERT' and new.tbl in ('h_orders', 'h_returns', 'h_abandoned') then rel := true; end if;
+  if jsonb_typeof(new.new_row -> 'assignees') = 'array' and jsonb_array_length(new.new_row -> 'assignees') > 0
+     and (new.op = 'INSERT' or ch ? 'assignees' or ch ? 'task_done_at' or ch ? 'task_prio') then rel := true; end if;
+  if new.tbl like 'h\_%' and new.new_row is not null
+     and (case when new.op = 'INSERT' or new.changed is null then new.new_row::text else new.changed::text end) ~* '@(konstantin|sta[sšSŠ]a|marjan|svi|sve|all)' then rel := true; end if;
+  if not rel then return new; end if;
+  select v into sec from public.h_private where k = 'push_hook';
+  perform net.http_post(url := 'https://treqdonahihterhaxxfw.supabase.co/functions/v1/crm-push',
+    body := jsonb_build_object('audit', to_jsonb(new)),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-crm-hook', sec),
+    timeout_milliseconds := 15000);
+  return new;
+exception when others then return new;
+end $function$;
+select 'ok';

@@ -1,5 +1,5 @@
 /* ================= COMPLETE CRM · HARIZMA modul ================= */
-const APP_BUILD = '202610242135';
+const APP_BUILD = '202610271100';
 try { fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => { const m = t.match(/HTML_BUILD="(\d+)"/); if (m && m[1] > APP_BUILD && sessionStorage.getItem('crm_upd') !== m[1]) { sessionStorage.setItem('crm_upd', m[1]); location.replace(location.pathname + '?v=' + m[1]); } }).catch(() => {}); } catch (e) {}
 if (window.HTML_BUILD !== APP_BUILD) {
   // stranica i kod nisu iste verzije (keš) → učitaj ponovo sveže
@@ -71,6 +71,7 @@ let state = {
   openOrderId: null, dTab: 'info',
   editOrderId: null, editProductId: null,
   attach: null,
+  carts: [], hlCart: null,
 };
 
 /* ---------------- helpers ---------------- */
@@ -156,6 +157,7 @@ async function loadData() {
   ]);
   Object.assign(state, { products, variants, orders, items, ads, acts, posts, ideas, story, notes, pack, rets, settings, promos, milestones, daily, customers, levents, codes });
   try { state.notesDel = await q(sb.from('h_notes').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(300)); } catch (e) { state.notesDel = state.notesDel || []; }
+  try { state.carts = await q(sb.from('h_abandoned').select('*').is('deleted_at', null).order('abandoned_at', { ascending: false }).limit(300)); } catch (e) { state.carts = state.carts || []; } // v36 napuštene korpe
 }
 
 async function log(fields) {
@@ -275,7 +277,48 @@ function filteredOrders(skipSrc) {
   });
 }
 function itemsSummary(o) { return itemsOf(o.id).map(i => `${esc(i.name)} ${esc(i.size || '')}${i.qty > 1 ? ' ×' + i.qty : ''}`).join(', ') || '—'; }
+/* ---------- v36: napuštene korpe sa sajta (Shopify), WhatsApp poruka, status, spašene ---------- */
+const CART_ST = { open: 'Otvorena', contacted: 'Kontaktirana', recovered: 'Spašena ✓', lost: 'Izgubljena' };
+const cartById = (id) => (state.carts || []).find(c => c.id === id);
+const cartsOpen = () => (state.carts || []).filter(c => c.status === 'open');
+const cartVar = (v) => v && !/^univerzalna/i.test(v) ? v : '';
+function cartItemsTxt(c) { return (c.items || []).map(i => `${esc(i.title)}${cartVar(i.variant) ? ` <small>${esc(i.variant)}</small>` : ''}${n(i.qty) > 1 ? ' ×' + i.qty : ''}`).join(', ') || '—'; }
+function renderCarts() {
+  const qq = state.q.trim().toLowerCase();
+  const list = (state.carts || []).filter(c => !qq || [c.customer_name, c.phone, c.email, c.city, ...(c.items || []).map(i => i.title)].join(' ').toLowerCase().includes(qq));
+  const rec = list.filter(c => c.status === 'recovered'), open = list.filter(c => c.status === 'open');
+  $('orderCount').textContent = `${list.length} ${bpl(list.length, 'korpa', 'korpe', 'korpi')}${open.length ? ` · ${open.length} ${bpl(open.length, 'čeka poruku', 'čekaju poruku', 'čeka poruku')}` : ''}${rec.length ? ` · spašeno ${rec.length} (${rsd(rec.reduce((a, c) => a + n(c.total), 0))})` : ''}`;
+  $('cartsTbody').innerHTML = list.map(c => `<tr class="cart-row st-${c.status}${state.hlCart === c.id ? ' hl' : ''}" data-cart="${c.id}">
+    <td><div class="lead-name">${esc(c.customer_name || 'Kupac sa sajta')}</div><div class="lead-social">${esc(c.phone || c.email || '')}${c.city ? ' · ' + esc(c.city) : ''}</div></td>
+    <td class="activity-cell cart-items">${cartItemsTxt(c)}</td>
+    <td class="num">${rsd(c.total)}</td>
+    <td class="date-cell">${fmtDT(c.abandoned_at)}${c.contacted_at ? `<div class="lead-social">poslato: ${esc(c.contacted_by || '')}, ${fmtDate(c.contacted_at)}</div>` : ''}</td>
+    <td><select class="cart-st s-${c.status}" data-cartst="${c.id}">${Object.entries(CART_ST).map(([k, v]) => `<option value="${k}"${k === c.status ? ' selected' : ''}>${v}</option>`).join('')}</select>${c.recovered_order_id ? `<div class="lead-social"><a href="#" data-order="${c.recovered_order_id}">${esc(order(c.recovered_order_id)?.order_no || 'porudžbina')}</a></div>` : ''}</td>
+    <td><div class="cart-acts">${c.phone ? `<button type="button" class="btn-ghost cart-wa" data-cartwa="${c.id}">✆ WhatsApp</button>` : ''}${c.recovery_url ? `<a class="btn-ghost" href="${esc(c.recovery_url)}" target="_blank" rel="noopener" title="Link kojim kupac završava istu korpu">Link korpe</a>` : ''}</div></td></tr>`).join('')
+    || `<tr><td colspan="6" class="empty">Nema napuštenih korpi. Ovde se sami pojavljuju kupci koji su na sajtu ušli u kasu a nisu poručili, 30 minuta posle odustajanja.</td></tr>`;
+}
+function showCarts(id) {
+  state.orderView = 'carts'; state.hlCart = id || null; renderOrders();
+  if (id) setTimeout(() => { const tr = document.querySelector(`tr[data-cart="${id}"]`); if (tr) tr.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 80);
+}
+document.addEventListener('change', async (e) => {
+  const s = e.target.closest && e.target.closest('[data-cartst]'); if (!s) return;
+  const c = cartById(s.dataset.cartst); if (!c) return;
+  const patch = { status: s.value };
+  if (s.value === 'contacted' && !c.contacted_at) Object.assign(patch, { contacted_at: new Date().toISOString(), contacted_by: state.user.display });
+  try { await q(sb.from('h_abandoned').update(patch).eq('id', c.id)); Object.assign(c, patch); renderOrders(); toast('Sačuvano ✓'); } catch (err) { fail(err); renderOrders(); }
+});
 function renderOrders() {
+  const isCarts = state.orderView === 'carts';
+  ['chSeg', 'srcSeg'].forEach(id => { const el = $(id); if (el) el.style.display = isCarts ? 'none' : ''; });
+  { const sf = $('orderStatusFilter'); if (sf && sf.parentElement) sf.parentElement.style.display = isCarts ? 'none' : ''; }
+  { const cn = cartsOpen().length, b = document.querySelector('#orderViewSeg button[data-view="carts"]'); if (b) b.innerHTML = `Napuštene korpe${cn ? ` <span class="seg-n">${cn}</span>` : ''}`; }
+  if ($('cartsCard')) $('cartsCard').style.display = isCarts ? '' : 'none';
+  if (isCarts) {
+    $('orderTableCard').style.display = 'none'; $('kanban').style.display = 'none';
+    document.querySelectorAll('#orderViewSeg button').forEach(b => b.classList.toggle('active', b.dataset.view === 'carts'));
+    return renderCarts();
+  }
   const list = filteredOrders();
   { const base = filteredOrders(true), cnt = { all: base.length }; base.forEach(o => { const k = srcOf(o); cnt[k] = (cnt[k] || 0) + 1; });
     document.querySelectorAll('#srcSeg button').forEach(b => { b.classList.toggle('active', b.dataset.src === state.src); const k = b.dataset.src; b.innerHTML = `${k === 'all' ? 'Svi izvori' : OSRC[k]}${cnt[k] ? ` <span class="seg-n">${cnt[k]}</span>` : ''}`; }); }
@@ -490,7 +533,7 @@ function renderDrawer() {
   }
 }
 /* ---------- WhatsApp potvrda porudžbine (v32): obaveštenje → pregled poruke → izmeni, kopiraj, pošalji ---------- */
-const WA = { id: null };
+const WA = { id: null, kind: 'order' };
 const WA_ANDROID = /Android/i.test(navigator.userAgent);
 const WA_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const WA_PHONE = WA_ANDROID || WA_IOS;
@@ -542,13 +585,14 @@ function waEl() {
   $('waCopy').addEventListener('click', () => waCopy().then(ok => toast(ok ? 'Poruka kopirana ✓' : 'Kopiranje nije uspelo, označi tekst i kopiraj ručno')));
   $('waViber').addEventListener('click', (e) => { if (!intlNum($('waPhone').value)) { e.preventDefault(); return toast('Upiši broj telefona'); } waCopy().then(() => toast('Tekst je kopiran, nalepi ga u Viber')); waLogSent('Viber'); });
   $('waSend').addEventListener('click', (e) => { if (!intlNum($('waPhone').value)) { e.preventDefault(); return toast('Upiši broj telefona'); } waLogSent('WhatsApp'); });
-  $('waReset').addEventListener('click', () => { const o = order(WA.id); if (o) { $('waText').value = waMsg(o); upd(); } });
+  $('waReset').addEventListener('click', () => { if (WA.kind === 'cart') { const c = cartById(WA.id); if (c) { $('waText').value = cartMsg(c); upd(); } return; } const o = order(WA.id); if (o) { $('waText').value = waMsg(o); upd(); } });
   $('waOk').addEventListener('click', async () => { const o = order(WA.id); if (!o) return; await setOrderStatus(o, 'confirmed'); el.classList.remove('open'); if (state.openOrderId === o.id) renderDrawer(); toast('Porudžbina je potvrđena ✓'); });
   el._upd = upd;
   return el;
 }
 async function waCopy() { const tx = $('waText').value; try { await navigator.clipboard.writeText(tx); return true; } catch (e) { try { const ta = $('waText'); ta.focus(); ta.select(); return document.execCommand('copy'); } catch (x) { return false; } } }
 async function waLogSent(via) {
+  if (WA.kind === 'cart') return cartLogSent(via);
   const o = order(WA.id); if (!o) return;
   try {
     const ph = $('waPhone').value.trim();
@@ -558,6 +602,7 @@ async function waLogSent(via) {
   } catch (e) { fail(e); }
 }
 function waFill(o) {
+  if (WA.kind === 'cart') { const c = cartById(WA.id); $('waSent').innerHTML = c && c.contacted_at ? `Poslato: <b>${esc(c.contacted_by || '')}</b> · ${fmtDT(c.contacted_at)}. Kad kupac poruči, korpa se sama označi kao spašena.` : ''; $('waOk').style.display = 'none'; return; }
   const a = waSentAct(o.id);
   $('waSent').innerHTML = a ? `Poslato: <b>${esc(a.author)}</b> · ${fmtDT(a.created_at)}. Kad kupac odgovori DA, klikni „Kupac je potvrdio“.` : '';
   $('waOk').style.display = o.status === 'new' ? '' : 'none';
@@ -567,14 +612,42 @@ async function openWaModal(id) {
   if (!o) { try { await loadData(); renderAll(); } catch (e) {} o = order(id); }
   if (!o) return toast('Porudžbina nije pronađena');
   if (!itemsOf(o.id).length) { try { await loadData(); renderAll(); o = order(id) || o; } catch (e) {} }
-  WA.id = o.id; const el = waEl();
+  WA.id = o.id; WA.kind = 'order'; const el = waEl();
   $('waTitle').textContent = `Potvrda porudžbine · ${o.customer_name || ''}`;
   $('waSub').textContent = [o.order_no, rsd(totals(o).revenue), o.city].filter(Boolean).join(' · ');
   $('waPhone').value = o.phone || ''; $('waText').value = waMsg(o);
   waFill(o); el._upd(); el.classList.add('open');
   if (!o.phone) toast('Porudžbina nema broj telefona, upiši ga');
 }
-document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-waopen]'); if (b) { e.preventDefault(); openWaModal(b.dataset.waopen); } });
+document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-waopen]'); if (b) { e.preventDefault(); openWaModal(b.dataset.waopen); } const cw = e.target.closest && e.target.closest('[data-cartwa]'); if (cw) { e.preventDefault(); openCartWa(cw.dataset.cartwa); } });
+/* napuštena korpa: poruka kupcu (komadi iz korpe, ponuda da završimo porudžbinu, link korpe) */
+function cartMsg(c) {
+  const ime = String(c.customer_name || '').trim().split(/\s+/)[0];
+  const L = [`Zdravo${ime ? ' ' + ime : ''}, ovde HARIZMA.`, '', 'Videli smo da si na sajtu izabrala:'];
+  (c.items || []).forEach(i => L.push(`• ${i.title}${cartVar(i.variant) ? ` (${i.variant})` : ''}${n(i.qty) > 1 ? ` x${i.qty}` : ''}`));
+  L.push('', 'Porudžbina nije završena, pa ako ti je nešto zapelo ili imaš pitanje oko veličine, tu smo.');
+  L.push('', 'Ako hoćeš, samo odgovori DA i mi završavamo porudžbinu za tebe. Plaćaš pouzećem kad paket stigne.');
+  if (c.recovery_url) L.push('', `Ili je završi sama ovde: ${c.recovery_url}`);
+  return L.join('\n');
+}
+async function openCartWa(id) {
+  let c = cartById(id);
+  if (!c) { try { await loadData(); renderAll(); } catch (e) {} c = cartById(id); }
+  if (!c) return toast('Korpa nije pronađena');
+  WA.id = c.id; WA.kind = 'cart'; const el = waEl();
+  $('waTitle').textContent = `Napuštena korpa · ${c.customer_name || ''}`;
+  $('waSub').textContent = [rsd(c.total), c.city, fmtDT(c.abandoned_at)].filter(Boolean).join(' · ');
+  $('waPhone').value = c.phone || ''; $('waText').value = cartMsg(c);
+  waFill(); el._upd(); el.classList.add('open');
+  if (!c.phone) toast('Korpa nema broj telefona, upiši ga');
+}
+async function cartLogSent(via) {
+  const c = cartById(WA.id); if (!c) return;
+  const patch = { contacted_at: new Date().toISOString(), contacted_by: state.user.display };
+  if (c.status === 'open') patch.status = 'contacted';
+  const ph = $('waPhone').value.trim(); if (ph && ph !== (c.phone || '')) patch.phone = ph;
+  try { await q(sb.from('h_abandoned').update(patch).eq('id', c.id)); Object.assign(c, patch); waFill(); renderOrders(); } catch (e) { fail(e); }
+}
 async function saveShipping() {
   const o = order(state.openOrderId); if (!o) return;
   const patch = { courier: $('dCourier').value.trim() || null, tracking_no: $('dTrack').value.trim() || null };
@@ -2342,7 +2415,7 @@ async function deleteMs() {
 }
 function openRef(ref) {
   const [k, id] = ref.split(':');
-  if (k === 'order') openDrawer(id); else if (k === 'post') openPostModal(id); else if (k === 'ret') openRetModal(id); else if (k === 'promo') openPromoModal(id);
+  if (k === 'order') openDrawer(id); else if (k === 'cart') showCarts(id); else if (k === 'post') openPostModal(id); else if (k === 'ret') openRetModal(id); else if (k === 'promo') openPromoModal(id);
   else if (k === 'idea') openIdeaModal(id); else if (k === 'pack') openPackModal(id); else if (k === 'product') openProductModal(id); else if (k === 'ms') openMsModal(id); else if (k === 'cust') openCustModal(id); else if (k === 'code') openCodeModal(id);
 }
 function periodLabel() { const P = state.period; return P === 'custom' ? `${state.range.from || '…'} do ${state.range.to || '…'}` : P === '0' || P === 0 ? 'sve vreme' : P === '1' || P === 1 ? 'danas' : `poslednjih ${P} dana`; }
@@ -2430,7 +2503,7 @@ function runCmd(it) {
   if (it.k === 'act') return it.run();
   if (it.k === 'filter') return setQuery(it.q);
   remember({ k: it.k, id: it.id, label: it.title, sub: it.sub });
-  const tabFor = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' };
+  const tabFor = { order: 'orders', cart: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' };
   if (tabFor[it.k] && state.tab !== tabFor[it.k]) setTab(tabFor[it.k]);
   if (it.k === 'cust') return openCustModal(it.id);
   if (it.k === 'code') return openCodeModal(it.id);
@@ -2690,6 +2763,7 @@ const custName = (id) => state.customers.find(c => c.id === id)?.name || 'kupac'
 const NF_TBL = {
   h_orders: { cat: 'order', label: 'porudžbinu', name: r => `${r.order_no || ''} · ${r.customer_name}`, open: r => `order:${r.id}`, ins: () => 'nova porudžbina', prio: 10 },
   h_order_items: { skip: true },
+  h_abandoned: { cat: 'order', label: 'napuštenu korpu', name: r => `${r.customer_name || 'kupac'} · ${rsd(r.total)}`, open: r => `cart:${r.id}`, ins: () => 'napuštena korpa sa sajta', prio: 7 },
   h_products: { cat: 'stock', label: 'komad', name: r => r.name, open: r => `product:${r.id}`, ins: () => 'nov komad', prio: 7 },
   h_variants: { cat: 'stock', label: 'zalihu', name: r => `${prodName(r.product_id)} ${r.size}`, open: r => `product:${r.product_id}`, ins: r => `nova veličina ${prodName(r.product_id)}`, prio: 3, only: r => true },
   h_customers: { cat: 'customer', label: 'kupca', name: r => r.name, open: r => `cust:${r.id}`, ins: () => 'nov kupac', prio: 6 },
@@ -2876,13 +2950,13 @@ let nfReloadT = null, nfPending = false;
 function applyAuditRow(a) {
   try {
     const row = a.new_row; if (!row) return;
-    const lists = { h_notes: 'notes', h_orders: 'orders', h_products: 'products', h_variants: 'variants', h_posts: 'posts', h_returns: 'rets', h_promotions: 'promos', h_milestones: 'milestones', h_customers: 'customers', h_site_ideas: 'ideas', h_packaging: 'pack', h_discount_codes: 'codes', h_activities: 'acts', h_order_items: 'items', h_ad_spend: 'ads', h_loyalty_events: 'levents' };
+    const lists = { h_notes: 'notes', h_orders: 'orders', h_products: 'products', h_variants: 'variants', h_posts: 'posts', h_returns: 'rets', h_promotions: 'promos', h_milestones: 'milestones', h_customers: 'customers', h_site_ideas: 'ideas', h_packaging: 'pack', h_discount_codes: 'codes', h_activities: 'acts', h_order_items: 'items', h_ad_spend: 'ads', h_loyalty_events: 'levents', h_abandoned: 'carts' };
     const key = lists[a.tbl]; if (!key || !Array.isArray(state[key])) return;
     const arr = state[key]; const i = arr.findIndex(x => x.id === row.id);
     if (key === 'notes') { state.notesDel = (state.notesDel || []).filter(x => x.id !== row.id); if (row.deleted_at) state.notesDel.unshift(row); }
     if (row.deleted_at) { if (i >= 0) arr.splice(i, 1); }
     else if (i >= 0) Object.assign(arr[i], row);
-    else if (['products', 'orders', 'rets', 'ideas', 'ads'].includes(key)) arr.unshift(row); // ove liste su najnovije prvo
+    else if (['products', 'orders', 'rets', 'ideas', 'ads', 'carts'].includes(key)) arr.unshift(row); // ove liste su najnovije prvo
     else arr.push(row);
     renderAll();
   } catch (e) {}
@@ -3593,7 +3667,7 @@ function bindEvents() {
     const ca = e.target.closest('[data-chgall]'); if (ca) { const t = ca.dataset.chgall; state.chgAll[t] = !state.chgAll[t]; return renderChgPanel(t); }
     const bm = e.target.closest('[data-bm]'); if (bm) { e.stopPropagation(); return nfMenu(bm.dataset.bm); }
     const nd = e.target.closest('[data-ndis]'); if (nd) { e.stopPropagation(); return nfDismiss(+nd.dataset.ndis); }
-    const no = e.target.closest('[data-nopen]'); if (no) { e.stopPropagation(); const r = no.dataset.nopen; $('notifModal').classList.remove('open'); if (r.startsWith('tab:')) return setTab(r.slice(4)); const tabFor = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' }; const k = r.split(':')[0]; if (tabFor[k] && state.tab !== tabFor[k]) setTab(tabFor[k]); return openRef(r); }
+    const no = e.target.closest('[data-nopen]'); if (no) { e.stopPropagation(); const r = no.dataset.nopen; $('notifModal').classList.remove('open'); if (r.startsWith('tab:')) return setTab(r.slice(4)); const tabFor = { order: 'orders', cart: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' }; const k = r.split(':')[0]; if (tabFor[k] && state.tab !== tabFor[k]) setTab(tabFor[k]); return openRef(r); }
     const mtile = e.target.closest('[data-metric]'); if (mtile) return openMetric(mtile.dataset.metric);
     if (e.target.id === 'hnAdd' || e.target.closest('#hnAdd')) return openNoteModal('general');
     if (e.target.id === 'loySave') return saveLoyalty();
@@ -3792,6 +3866,7 @@ const BOT_TIPS = {
 };
 const BOT_FAQ = [
   { g: [['whatsapp', 'viber', 'potvrdu poslat', 'potvrda kupcu', 'poruka kupcu', 'poruku kupcu']], a: '<b>WhatsApp potvrda porudžbine</b>: kad stigne porudžbina sa sajta, svima stiže obaveštenje „📲 Potvrdi porudžbinu · ime kupca“. Klik otvara pregled poruke (pozdrav, komadi, iznos za pouzeće, adresa, „odgovori DA“). Poruku možeš da izmeniš, pa <b>Pošalji na WhatsApp</b> (otvara WhatsApp sa tim tekstom, samo pritisneš pošalji), <b>Kopiraj</b> ili <b>Viber</b> (tekst se kopira, nalepiš ga). U porudžbini se beleži ko je poslao i kad, a kad kupac odgovori DA klikneš <b>Kupac je potvrdio</b> i status ide na Potvrđena. Isto dugme stoji i u svakoj porudžbini sa telefonom, i za porudžbine iz DM-a.', b: [['Otvori Porudžbine', 'tab:orders']] },
+  { g: [['napusten', 'napušten', 'abandon', 'odustal', 'nije zavrsil', 'nije završil']], a: '<b>Napuštene korpe</b>: kupci koji su na sajtu ušli u kasu, upisali podatke i nisu poručili. Pojave se same 30 minuta posle odustajanja (Porudžbine → <b>Napuštene korpe</b>), a svima stiže obaveštenje „🛒 Napuštena korpa · ime“. Klik otvara gotovu WhatsApp poruku sa komadima iz korpe i linkom da završi porudžbinu. Kad pošalješ, korpa je <b>Kontaktirana</b>, a kad kupac poruči, sama postaje <b>Spašena</b>.', b: [['Napuštene korpe', 'oview:carts']] },
   { g: [['status', 'faz', 'pomer', 'prevuc', 'poslat', 'isporuc', 'spakov', 'potvrd']], a: 'Otvori porudžbinu i promeni status (Nova → Potvrđena → Spakovana → Poslata → Isporučena). U pogledu <b>Pipeline</b> samo prevučeš karticu u sledeću kolonu.', b: [['Porudžbine', 'tab:orders'], ['Pipeline pogled', 'oview:pipeline']] },
   { g: [['porudzbin', 'narudzbin', 'order'], ['dodam', 'dodaj', 'unes', 'napravi', 'nov', 'kreir', 'ubac', 'upis']], a: 'Klikni <b>+ Nova porudžbina</b> (ili taster <kbd>N</kbd>). Upišeš kupca, dodaš komade i veličine, a cena, profit i zalihe se računaju sami. Kupac se sam pravi ili povezuje sa postojećim.', b: [['Nova porudžbina', 'act:Nova porudžbina'], ['Porudžbine', 'tab:orders']] },
   { g: [['otkaz', 'storn', 'ponist']], a: 'Otvori porudžbinu i stavi status <b>Otkazana</b>. Roba se sama vraća na stanje, a porudžbina se više ne računa u prihod.', b: [['Porudžbine', 'tab:orders']] },
@@ -5981,8 +6056,9 @@ function crmGo(r) {
   if (r.startsWith('huddle:')) { const room = r.slice(7); openChat(room); if (HUD.room !== room) { HUD.ring = null; hudRing(room, null, true); } return; }
   if (r.startsWith('item:')) { const [, tbl, id] = r.split(':'); return itemOpen(tbl, id); }
   if (r.startsWith('wa:order:')) { if (state.tab !== 'orders') setTab('orders'); return openWaModal(r.slice(9)); } // obaveštenje „Potvrdi porudžbinu“ → pregled WhatsApp poruke
+  if (r.startsWith('wa:cart:')) { if (state.tab !== 'orders') setTab('orders'); showCarts(r.slice(8)); return openCartWa(r.slice(8)); } // obaveštenje „Napuštena korpa“ → WhatsApp poruka
   if (r.startsWith('ref:')) r = r.slice(4);
-  const tabFor = { order: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' };
+  const tabFor = { order: 'orders', cart: 'orders', cust: 'customers', product: 'products', post: 'posts', ret: 'returns', promo: 'promos', code: 'customers', ms: 'history', idea: 'site', pack: 'packaging' };
   const k = r.split(':')[0]; if (tabFor[k] && state.tab !== tabFor[k]) setTab(tabFor[k]);
   try { openRef(r); } catch (e) {}
 }
