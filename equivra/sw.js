@@ -1,5 +1,5 @@
 // EQUIVRA CRM · keš za brže otvaranje (podaci uvek idu uživo iz baze)
-const V = 'eq-crm-202611250100';
+const V = 'eq-crm-202611251030';
 const SHELL = ['./', 'index.html', 'app.js', 'config.js', 'mono.webp', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(V).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== V).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });

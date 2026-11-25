@@ -3,7 +3,7 @@
 const AUTH_DOMAIN = 'complete-crm.local';
 const sb = window.supabase.createClient(window.CRM_SUPABASE_URL, window.CRM_SUPABASE_ANON_KEY);
 const site = window.supabase.createClient(window.SITE_SUPABASE_URL, window.SITE_SUPABASE_KEY, {
-  auth: { storageKey: 'equivra-site-admin', persistSession: true, autoRefreshToken: true },
+  auth: { storageKey: 'equivra-site-public', persistSession: false, autoRefreshToken: false },
 });
 const SITE_URL = window.SITE_URL || '';
 
@@ -80,7 +80,6 @@ async function start() {
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   $('#uName').textContent = S.user.display; $('#uInit').textContent = S.user.display.charAt(0).toUpperCase();
   await loadAll();
-  const { data } = await site.auth.getSession(); S.siteSession = data.session;
   loadSite();
   realtime();
   go(S.view);
@@ -164,7 +163,7 @@ VIEWS.danas = () => {
   const hello = new Date().getHours() < 12 ? 'Dobro jutro' : new Date().getHours() < 18 ? 'Dobar dan' : 'Dobro veče';
   const open = S.tasks.filter((x) => !x.done).slice(0, 12);
   const feed = S.acts.slice(0, 14);
-  return head(`${hello}, ${esc(S.user.display)}`, next ? `Sledeća aukcija: <b>${esc(next.naziv)}</b>, ${fmtDT(next.pocetak)}${next.lokacija ? ' · ' + esc(next.lokacija) : ''}` : 'Pregled dana: ko čeka poziv, šta je stiglo sa sajta i šta je na redu.', `<button class="btn ghost" data-act="sync">↻ Sinhronizuj sa sajtom</button><button class="btn" data-act="newContact">+ Kontakt</button>`) +
+  return head(`${hello}, ${esc(S.user.display)}`, next ? `Sledeća aukcija: <b>${esc(next.naziv)}</b>, ${fmtDT(next.pocetak)}${next.lokacija ? ' · ' + esc(next.lokacija) : ''}` : 'Pregled dana: ko čeka poziv, šta je stiglo sa sajta i šta je na redu.', `<button class="btn ghost" data-act="sync">↻ Proveri sajt</button><button class="btn" data-act="newContact">+ Kontakt</button>`) +
   `<section class="stats">${stat('Novi kontakti', newC, 'u poslednjih 7 dana')}${stat('Za danas', fu.length, 'follow-upi i zadaci')}${stat('Konji u pripremi', prep, 'u pipeline-u prodavaca')}${stat('Očekivana provizija', eur(expectedCommission()), '5% kupac + 5% prodavac')}</section>
   <div class="grid2">
     <div class="panel"><div class="panel-h"><h2>Za danas</h2><span class="pill ${fu.length ? 'p-ochre' : 'p-green'}">${fu.length}</span></div><div class="panel-b">
@@ -176,7 +175,7 @@ VIEWS.danas = () => {
     </div></div>
   </div>
   <div class="panel" style="margin-top:16px"><div class="panel-h"><h2>Šta se dešavalo</h2></div><div class="panel-b"><ul class="tl" style="margin-top:10px">
-    ${feed.length ? feed.map((a) => `<li class="k-${a.kind}"><b>${a.contact_id && C(a.contact_id) ? esc(C(a.contact_id).name) + ': ' : ''}</b>${esc(a.body)}<time>${ACT[a.kind] || a.kind} · ${a.author ? esc(a.author) + ' · ' : ''}${ago(a.created_at)}</time></li>`).join('') : '<div class="empty">Još nema aktivnosti. Kliknite „Sinhronizuj sa sajtom" da povučete podatke.</div>'}
+    ${feed.length ? feed.map((a) => `<li class="k-${a.kind}"><b>${a.contact_id && C(a.contact_id) ? esc(C(a.contact_id).name) + ': ' : ''}</b>${esc(a.body)}<time>${ACT[a.kind] || a.kind} · ${a.author ? esc(a.author) + ' · ' : ''}${ago(a.created_at)}</time></li>`).join('') : '<div class="empty">Još nema aktivnosti. Kad se sajt poveže (Podešavanja), sve sa sajta stiže ovde samo.</div>'}
   </ul></div></div>`;
 };
 BIND.danas = () => bindCommon();
@@ -614,51 +613,47 @@ BIND.istorija = async () => {
 
 /* ---------- PODEŠAVANJA ---------- */
 VIEWS.podesavanja = () => {
-  const s = S.siteSession;
-  return head('Podešavanja', 'Veza sa EQUIVRA sajtom i podaci za kasnije automatsko slanje.', '') + `
-  <div class="grid2"><div class="panel"><div class="panel-h"><h2>Veza sa sajtom</h2><span class="pill ${s ? 'p-green' : 'p-ochre'}">${s ? 'Povezano' : 'Nije povezano'}</span></div><div class="panel-b" style="padding-top:12px">
-    <p style="margin-top:0;font-size:14px;color:var(--ink-2)">Prijavite se admin nalogom sa sajta (equivra@gmail.com). CRM tada povlači registracije, prijave konja, poruke, newsletter prijave i ponude. Lozinka se ne čuva u CRM-u, samo sesija u ovom pregledaču.</p>
-    ${s ? `<div class="kv"><span>Nalog</span><b>${esc(s.user.email)}</b></div><div class="row" style="margin-top:12px"><button class="btn" data-act="sync">↻ Sinhronizuj sada</button><button class="btn ghost" id="siteOut">Odjavi sajt</button></div><p class="hint" id="syncInfo">${LS.get('eq_last_sync', '') ? 'Poslednja sinhronizacija: ' + fmtDT(LS.get('eq_last_sync')) : ''}</p>` :
-    `<div class="field"><label>E-mail admin naloga na sajtu</label><input id="se" type="email" value="equivra@gmail.com" autocomplete="username"></div><div class="field"><label>Lozinka sa sajta</label><input id="sp" type="password" autocomplete="current-password"></div><button class="btn" id="siteIn">Poveži sajt</button><div class="err" id="serr"></div>`}
+  const st = setting('site_status', 'nije povezano'); const on = st.startsWith('povezano');
+  return head('Podešavanja', 'Veza sa EQUIVRA sajtom radi sama, kao Shopify kod Harizme.', '') + `
+  <div class="grid2"><div class="panel"><div class="panel-h"><h2>Veza sa sajtom</h2><span class="pill ${on ? 'p-green' : 'p-ochre'}">${esc(on ? 'Povezano' : st.charAt(0).toUpperCase() + st.slice(1))}</span></div><div class="panel-b" style="padding-top:12px">
+    ${on ? `<p style="margin-top:0;font-size:14px;color:var(--ink-2)">Server na svakih 5 minuta sam povlači nove registracije, prijave konja, poruke, newsletter prijave i ponude sa sajta. Ne morate ništa da radite.</p>
+      <div class="kv"><span>Nalog sajta</span><b>${esc(setting('site_account', '—'))}</b></div>
+      <div class="kv"><span>Poslednja provera</span><b>${setting('site_last_sync') ? fmtDT(setting('site_last_sync')) : '—'}</b></div>
+      <div class="row" style="margin-top:12px"><button class="btn" data-act="sync">↻ Proveri odmah</button><button class="btn ghost" id="siteFull">Povuci sve ponovo</button><button class="btn danger" id="siteOut">Prekini vezu</button></div>` :
+    `<p style="margin-top:0;font-size:14px;color:var(--ink-2)">Povezuje se jednom, admin nalogom sa sajta (equivra@gmail.com). Lozinka se ne čuva nigde, server pamti samo vezu i od tada sam povlači podatke na svakih 5 minuta.</p>
+      <div class="field"><label>E-mail admin naloga na sajtu</label><input id="se" type="email" value="${esc(setting('site_account', 'equivra@gmail.com'))}" autocomplete="username"></div>
+      <div class="field"><label>Lozinka sa sajta</label><input id="sp" type="password" autocomplete="current-password"></div>
+      <button class="btn" id="siteIn">Poveži sajt</button><div class="err" id="serr"></div>`}
   </div></div>
-  <div class="panel"><div class="panel-h"><h2>Automatski prijem</h2></div><div class="panel-b" style="padding-top:12px;font-size:14px;color:var(--ink-2)">
-    <p style="margin-top:0">Kad sajt bude podešen da sam javlja nove događaje, šalje ih funkciji <code>e_ingest</code> u ovoj bazi sa tajnim ključem ispod. Do tada koristite „Sinhronizuj sa sajtom".</p>
-    <div class="kv"><span>Tajni ključ</span><b style="font-family:ui-monospace,monospace;font-size:12px;word-break:break-all">${esc(setting('ingest_secret', '—'))}</b></div>
-    <div class="sec">WhatsApp i Viber masovno slanje</div>
-    <p>Za automatsko slanje bez dodira po poruci potreban je WhatsApp Business API (Meta) i Viber Business nalog kod provajdera (npr. Infobip). Do tada kampanje rade preko reda za ručno slanje: jedan dodir po primaocu.</p>
+  <div class="panel"><div class="panel-h"><h2>Poruke i kanali</h2></div><div class="panel-b" style="padding-top:12px;font-size:14px;color:var(--ink-2)">
+    <p style="margin-top:0">Kampanje rade preko reda za slanje: jedan dodir po primaocu otvara WhatsApp, Viber ili e-mail sa gotovim tekstom. Poruke idu samo kontaktima koji su dali saglasnost.</p>
+    <p>Za potpuno automatsko masovno slanje potreban je WhatsApp Business API (Meta) i Viber Business nalog kod provajdera (npr. Infobip).</p>
   </div></div></div>`;
 };
+async function fn(body) {
+  const { data, error } = await sb.functions.invoke('crm-equivra', { body });
+  if (error) { let msg = error.message; try { const j = await error.context.json(); msg = j.error || msg; } catch (e) {} throw new Error(msg); }
+  if (data && data.ok === false) throw new Error(data.error || 'greška');
+  return data;
+}
+async function reloadSettings() { S.settings = await q(sb.from('e_settings').select('*')); }
 BIND.podesavanja = () => {
   bindCommon();
-  if ($('#siteIn')) $('#siteIn').addEventListener('click', async () => { $('#serr').textContent = ''; const { data, error } = await site.auth.signInWithPassword({ email: $('#se').value.trim(), password: $('#sp').value }); if (error) { $('#serr').textContent = 'Prijava na sajt nije uspela: ' + error.message; return; } S.siteSession = data.session; toast('Sajt je povezan'); loadSite(); render(); });
-  if ($('#siteOut')) $('#siteOut').addEventListener('click', async () => { await site.auth.signOut(); S.siteSession = null; render(); });
+  if ($('#siteIn')) $('#siteIn').addEventListener('click', async () => {
+    const btn = $('#siteIn'); btn.disabled = true; btn.textContent = 'Povezujem…'; $('#serr').textContent = '';
+    try { const r = await fn({ connect: true, email: $('#se').value.trim(), password: $('#sp').value }); $('#sp').value = ''; toast(`Sajt povezan, prebačeno ${r.res?.processed ?? 0} zapisa`); await reloadSettings(); await loadAll(); render(); }
+    catch (e) { $('#serr').textContent = 'Povezivanje nije uspelo: ' + e.message; btn.disabled = false; btn.textContent = 'Poveži sajt'; }
+  });
+  if ($('#siteFull')) $('#siteFull').addEventListener('click', () => syncSite(true));
+  if ($('#siteOut')) $('#siteOut').addEventListener('click', async () => { if (!confirm('Prekinuti automatsku vezu sa sajtom?')) return; await fn({ disconnect: true }); await reloadSettings(); render(); });
 };
 
 /* ---------- SINHRONIZACIJA SA SAJTA ---------- */
-async function syncSite() {
-  if (!S.siteSession) { toast('Prvo povežite sajt u Podešavanjima'); go('podesavanja'); return; }
-  toast('Sinhronizujem sa sajtom…');
-  let added = 0, errors = 0;
-  const call = async (event, key, payload) => { try { await q(sb.rpc('e_sync', { p_event: event, p_ext_key: key, p_payload: payload })); added++; } catch (e) { errors++; } };
-  const pick = async (tbl, cols) => { const { data, error } = await site.from(tbl).select(cols).order('created_at', { ascending: true }).limit(5000); if (error) { console.warn(tbl, error); return []; } return data || []; };
-  const [profiles, subs, msgs, news, bids, horses] = await Promise.all([
-    pick('profiles', 'id,ime,telefon,email,grad,drzava,tip_lica,status,created_at'),
-    pick('horse_submissions', 'id,ime_vlasnika,telefon,email,ime_konja,namena,zeljena_cena,lokacija,created_at'),
-    pick('contact_messages', 'id,ime,email,telefon,tema,poruka,created_at'),
-    pick('newsletter_signups', 'id,email,created_at'),
-    pick('bids', 'id,horse_id,user_id,iznos,status,created_at'),
-    pick('horses', 'id,name,lot_number'),
-  ]);
-  const prof = Object.fromEntries(profiles.map((p) => [p.id, p])); const hn = Object.fromEntries(horses.map((h) => [h.id, h]));
-  for (const p of profiles) { if ((p.email || '').toLowerCase() === 'equivra@gmail.com') continue; await call('registracija', 'reg:' + p.id, { name: p.ime, phone: p.telefon, email: p.email, city: p.grad, country: p.drzava, site_user_id: p.id, at: p.created_at }); }
-  for (const s of subs) await call('prijava_konja', 'sub:' + s.id, { name: s.ime_vlasnika, phone: s.telefon, email: s.email, horse: s.ime_konja, price: s.zeljena_cena, at: s.created_at });
-  for (const m of msgs) await call('kontakt', 'msg:' + m.id, { name: m.ime, phone: m.telefon, email: m.email, message: `[${m.tema}] ${m.poruka}`, at: m.created_at });
-  for (const x of news) await call('newsletter', 'nl:' + x.id, { email: x.email, email_optin: true, at: x.created_at });
-  for (const b of bids.filter((b) => b.status === 'vazeca')) { const p = prof[b.user_id]; if (!p) continue; await call('ponuda', 'bid:' + b.id, { name: p.ime, phone: p.telefon, email: p.email, horse: hn[b.horse_id] ? `Lot ${hn[b.horse_id].lot_number} ${hn[b.horse_id].name}` : '', amount: b.iznos, at: b.created_at }); }
-  LS.set('eq_last_sync', new Date().toISOString());
-  await loadAll(); await loadSite();
-  toast(errors ? `Sinhronizovano, ${errors} grešaka (vidi konzolu)` : `Sajt sinhronizovan (${profiles.length + subs.length + msgs.length + news.length + bids.length} zapisa proverено)`.replace('proverено', 'provereno'));
-  render();
+async function syncSite(full = false) {
+  if (!setting('site_status', '').startsWith('povezano')) { toast('Prvo povežite sajt (jednom)'); go('podesavanja'); return; }
+  toast('Proveravam sajt…');
+  try { const r = await fn({ sync: true, full }); await reloadSettings(); await loadAll(); await loadSite(); toast(r.res?.errors ? `Gotovo, ${r.res.errors} grešaka` : 'Sve je ažurno sa sajta'); render(); }
+  catch (e) { toast('Sinhronizacija: ' + e.message); await reloadSettings(); render(); }
 }
 
 /* ---------- CSV ---------- */
