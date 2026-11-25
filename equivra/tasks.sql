@@ -83,9 +83,9 @@ create trigger e_task_notify before insert or update on public.e_tasks for each 
 
 -- 5) nešto novo sa sajta (samo sveže, ne kad se povlači stara istorija)
 create or replace function public.e_inbox_notify() returns trigger language plpgsql security definer set search_path = public as $$
-declare c record; at timestamptz := coalesce((new.payload->>'at')::timestamptz, now());
+declare c record; v_at timestamptz := coalesce((new.payload->>'at')::timestamptz, now());
 begin
-  if at < now() - interval '6 hours' then return new; end if;
+  if v_at < now() - interval '6 hours' then return new; end if;
   select name into c from e_contacts where id = new.contact_id;
   insert into e_notifs (username, actor, kind, title, body, go)
   values ('*', 'sajt', 'lead',
