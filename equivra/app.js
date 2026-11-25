@@ -44,7 +44,7 @@ const mailLink = (email, subj, body) => `mailto:${encodeURIComponent(email || ''
 const telLink = (phone) => `tel:+${normPhone(phone)}`;
 const LS = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), 2600); }
-async function q(p) { const { data, error } = await p; if (error) { console.error(error); toast('Greška: ' + (error.message || error)); throw error; } return data; }
+async function q(p) { const { data, error } = await p; if (error) { console.error(error); try { sfx('error'); } catch (e) {} toast('Greška: ' + (error.message || error)); throw error; } return data; }
 async function copy(t) { try { await navigator.clipboard.writeText(t); toast('Tekst je kopiran'); } catch (e) { prompt('Kopirajte tekst:', t); } }
 
 /* ---------- stanje ---------- */
@@ -74,15 +74,20 @@ $('#loginForm').addEventListener('submit', async (e) => {
   if (error) { $('#lerr').textContent = 'Pogrešno korisničko ime ili lozinka.'; return; }
   S.user = userFrom(data.user); $('#lp').value = ''; await start();
 });
-$('#userChip').addEventListener('click', async () => { if (confirm('Odjaviti se iz CRM-a?')) { await sb.auth.signOut(); location.reload(); } });
+$('#bell').addEventListener('click', (e) => { e.stopPropagation(); bellMenu(); });
+$('#userChip').addEventListener('click', async () => { if (confirm('Odjaviti se iz CRM-a?')) { sfx('bye'); await sb.auth.signOut(); sessionStorage.removeItem('eq_gate'); setTimeout(() => location.reload(), 700); } });
 
 async function start() {
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
-  $('#uName').textContent = S.user.display; $('#uInit').textContent = S.user.display.charAt(0).toUpperCase();
+  $('#uName').textContent = personName(who()); $('#uInit').textContent = personName(who()).charAt(0).toUpperCase(); $('#uInit').className = 'av ' + avCls(who());
+  const sp = splash(personName(who()));
+  $('#main').innerHTML = skeleton();
   await loadAll();
-  loadSite();
+  loadSite(); loadNotifs(); pushRefresh();
   realtime();
+  await sp;
   go(S.view);
+  const hg = decodeURIComponent((location.hash.match(/go=([^&]+)/) || [])[1] || ''); if (hg) { history.replaceState(null, '', location.pathname); openGo(hg); }
 }
 
 async function loadAll() {
@@ -114,8 +119,11 @@ function realtime() {
   sb.channel('eq-crm').on('postgres_changes', { event: '*', schema: 'public', table: 'e_activities' }, async () => { S.acts = await q(sb.from('e_activities').select('*').order('created_at', { ascending: false }).limit(1500)); if (!document.querySelector('.drawer.open')) render(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'e_deals' }, async () => { S.deals = await q(sb.from('e_deals').select('*').is('deleted_at', null)); if (S.view === 'pipeline' || S.view === 'danas') render(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'e_contacts' }, async () => { S.contacts = await q(sb.from('e_contacts').select('*').is('deleted_at', null).order('created_at', { ascending: false }).limit(5000)); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'e_tasks' }, async () => { S.tasks = await q(sb.from('e_tasks').select('*').order('due', { ascending: true, nullsFirst: false })); taskBadge(); if ((S.view === 'zadaci' || S.view === 'danas') && !$('#modal').classList.contains('open')) render(); })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'e_notifs' }, (p) => { const nf = p.new; if (!forMe(nf)) return; S.notifs.unshift(nf); bellBadge(); ncard(nf); })
     .subscribe();
 }
+function skeleton() { return `<div class="sk-head"><i></i><i></i></div><div class="stats">${'<div class="stat sk"></div>'.repeat(4)}</div><div class="grid2"><div class="panel sk tall"></div><div class="panel sk tall"></div></div>`; }
 
 /* ---------- navigacija ---------- */
 $('#nav').addEventListener('click', (e) => { const b = e.target.closest('button[data-v]'); if (b) go(b.dataset.v); });
@@ -125,7 +133,7 @@ function go(v) {
   $$('#nav button').forEach((b) => (b.dataset.v === v ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
   closeDrawer(); render(); window.scrollTo(0, 0);
 }
-function render() { const f = VIEWS[S.view] || VIEWS.danas; $('#main').innerHTML = f(); (BIND[S.view] || (() => {}))(); }
+function render() { const f = VIEWS[S.view] || VIEWS.danas; $('#main').innerHTML = `<div class="view-in">${f()}</div>`; (BIND[S.view] || (() => {}))(); taskBadge(); }
 
 function head(title, sub, btn = '') { return `<div class="page-head"><div><h1>${title}</h1><p>${sub}</p></div><div class="row">${btn}</div></div>`; }
 function stat(lbl, val, sub) { return `<div class="stat"><div class="lbl">${lbl}</div><div class="val">${val}</div><div class="sub">${sub}</div></div>`; }
@@ -161,9 +169,9 @@ VIEWS.danas = () => {
   const prep = S.deals.filter((d) => d.pipeline === 'prodavci' && !['prodat', 'nije_prodat', 'na_aukciji'].includes(d.stage)).length;
   const next = S.siteAuctions.filter((a) => a.pocetak && new Date(a.kraj || a.pocetak) > new Date() && a.status !== 'otkazana')[0];
   const hello = new Date().getHours() < 12 ? 'Dobro jutro' : new Date().getHours() < 18 ? 'Dobar dan' : 'Dobro veče';
-  const open = S.tasks.filter((x) => !x.done).slice(0, 12);
+  const open = S.tasks.filter((x) => !x.done).sort((a, b) => (a.assignee === who() ? 0 : 1) - (b.assignee === who() ? 0 : 1) || String(a.due || '9').localeCompare(String(b.due || '9'))).slice(0, 10);
   const feed = S.acts.slice(0, 14);
-  return head(`${hello}, ${esc(S.user.display)}`, next ? `Sledeća aukcija: <b>${esc(next.naziv)}</b>, ${fmtDT(next.pocetak)}${next.lokacija ? ' · ' + esc(next.lokacija) : ''}` : 'Pregled dana: ko čeka poziv, šta je stiglo sa sajta i šta je na redu.', `<button class="btn ghost" data-act="sync">↻ Proveri sajt</button><button class="btn" data-act="newContact">+ Kontakt</button>`) +
+  return head(`${hello}, ${esc(personName(who()))}`, next ? `Sledeća aukcija: <b>${esc(next.naziv)}</b>, ${fmtDT(next.pocetak)}${next.lokacija ? ' · ' + esc(next.lokacija) : ''}` : 'Pregled dana: ko čeka poziv, šta je stiglo sa sajta i šta je na redu.', `<button class="btn ghost" data-act="sync">↻ Proveri sajt</button><button class="btn" data-act="newContact">+ Kontakt</button>`) +
   `<section class="stats">${stat('Novi kontakti', newC, 'u poslednjih 7 dana')}${stat('Za danas', fu.length, 'follow-upi i zadaci')}${stat('Konji u pripremi', prep, 'u pipeline-u prodavaca')}${stat('Očekivana provizija', eur(expectedCommission()), '5% kupac + 5% prodavac')}</section>
   <div class="grid2">
     <div class="panel"><div class="panel-h"><h2>Za danas</h2><span class="pill ${fu.length ? 'p-ochre' : 'p-green'}">${fu.length}</span></div><div class="panel-b">
@@ -171,7 +179,7 @@ VIEWS.danas = () => {
         `<div class="li"><input type="checkbox" class="check" data-task-done="${it.x.id}"><div class="grow"><div class="t">${esc(it.x.title)}</div><div class="s">${it.x.assignee ? esc(it.x.assignee) + ' · ' : ''}${it.due < t ? 'kasni od ' + fmtD(it.due) : 'danas'}${it.x.contact_id && C(it.x.contact_id) ? ' · ' + esc(C(it.x.contact_id).name) : ''}</div></div></div>`).join('') : `<div class="empty">Sve je završeno za danas.</div>`}
     </div></div>
     <div class="panel"><div class="panel-h"><h2>Zadaci</h2><button class="btn sm ghost" data-act="newTask">+ Zadatak</button></div><div class="panel-b">
-      ${open.length ? open.map((x) => `<div class="li"><input type="checkbox" class="check" data-task-done="${x.id}"><div class="grow"><div class="t">${esc(x.title)}</div><div class="s">${x.assignee ? esc(x.assignee) : 'nije dodeljen'}${x.due ? ' · ' + fmtD(x.due) : ''}</div></div></div>`).join('') : `<div class="empty">Nema otvorenih zadataka.</div>`}
+      ${open.length ? open.map(taskRow).join('') : `<div class="empty">Nema otvorenih zadataka.</div>`}
     </div></div>
   </div>
   <div class="panel" style="margin-top:16px"><div class="panel-h"><h2>Šta se dešavalo</h2></div><div class="panel-b"><ul class="tl" style="margin-top:10px">
@@ -338,6 +346,7 @@ async function moveDeal(id, stage) {
   if (stage === 'odustao') { lost = prompt('Zašto je odustao?') || null; }
   const [nd] = await q(sb.from('e_deals').update({ stage, lost_reason: lost ?? d.lost_reason }).eq('id', id).select());
   Object.assign(d, nd);
+  if (['kupio', 'prodat', 'placeno'].includes(stage)) { const c = C(d.contact_id); celebrate(stage === 'prodat' ? 'Konj je prodat!' : stage === 'placeno' ? 'Provizija naplaćena!' : 'Kupac je kupio konja!', [d.title, c?.name, d.amount ? eur(d.amount) : ''].filter(Boolean).join(' · ')); } else sfx(stage === 'odustao' || stage === 'nije_prodat' ? 'soft' : 'move');
   if (d.contact_id) await logAct(d.contact_id, 'faza', `${PIPES[d.pipeline].t}: ${from} → ${stageLabel(d)}${lost ? ' (' + lost + ')' : ''}`, { deal_id: d.id });
   if (d.pipeline === 'kupci' && stage === 'kupio' && !S.deals.find((x) => x.pipeline === 'naplata' && x.contact_id === d.contact_id && x.horse_id === d.horse_id)) {
     const [nn] = await q(sb.from('e_deals').insert({ pipeline: 'naplata', stage: 'prodato', contact_id: d.contact_id, horse_id: d.horse_id, title: d.title, amount: d.amount, owner: d.owner }).select());
@@ -592,14 +601,6 @@ function eventForm(e = {}) {
   $('#e_save').addEventListener('click', async () => { const row = { title: $('#e_title').value.trim(), kind: $('#e_kind').value, starts_at: new Date($('#e_start').value).toISOString(), place: $('#e_place').value || null, contact_id: $('#e_contact').value || null, note: $('#e_note').value || null, author: who() }; if (!row.title) { toast('Naziv je obavezan'); return; } if (e.id) { const [x] = await q(sb.from('e_events').update(row).eq('id', e.id).select()); Object.assign(e, x); } else { const [x] = await q(sb.from('e_events').insert(row).select()); S.events.push(x); if (row.contact_id) await logAct(row.contact_id, 'sastanak', `${EVK[row.kind]}: ${row.title}, ${fmtDT(row.starts_at)}`); } closeModal(); render(); });
   if (e.id) $('#e_del').addEventListener('click', async () => { if (!confirm('Obrisati događaj?')) return; await q(sb.from('e_events').delete().eq('id', e.id)); S.events = S.events.filter((x) => x.id !== e.id); closeModal(); render(); });
 }
-function taskForm() {
-  modal('Novi zadatak', `<div class="field"><label>Šta treba uraditi *</label><input id="x_title"></div>
-    <div class="frow"><div class="field"><label>Zadužen</label><input id="x_as" value="${esc(who())}"></div><div class="field"><label>Rok</label><input id="x_due" type="date" value="${today()}"></div></div>
-    <div class="field"><label>Kontakt</label><select id="x_c"><option value="">—</option>${S.contacts.slice(0, 800).map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
-    <div class="row"><button class="btn" id="x_save">Dodaj</button><button class="btn ghost" data-close>Otkaži</button></div>`);
-  $('#x_save').addEventListener('click', async () => { const title = $('#x_title').value.trim(); if (!title) return; const [x] = await q(sb.from('e_tasks').insert({ title, assignee: $('#x_as').value || null, due: $('#x_due').value || null, contact_id: $('#x_c').value || null, author: who() }).select()); S.tasks.push(x); closeModal(); render(); });
-}
-
 /* ---------- ISTORIJA ---------- */
 const TBL = { e_contacts: 'Kontakt', e_horses: 'Konj', e_deals: 'Pipeline', e_tasks: 'Zadatak', e_events: 'Događaj', e_segments: 'Segment', e_templates: 'Šablon', e_campaigns: 'Kampanja' };
 VIEWS.istorija = () => head('Istorija', 'Ko je šta promenio i kada. Obrisani kontakti mogu da se vrate.', '') + `<div class="panel"><div class="panel-b" id="audit"><div class="empty">Učitavam…</div></div></div>`;
@@ -628,6 +629,10 @@ VIEWS.podesavanja = () => {
   <div class="panel"><div class="panel-h"><h2>Poruke i kanali</h2></div><div class="panel-b" style="padding-top:12px;font-size:14px;color:var(--ink-2)">
     <p style="margin-top:0">Kampanje rade preko reda za slanje: jedan dodir po primaocu otvara WhatsApp, Viber ili e-mail sa gotovim tekstom. Poruke idu samo kontaktima koji su dali saglasnost.</p>
     <p>Za potpuno automatsko masovno slanje potreban je WhatsApp Business API (Meta) i Viber Business nalog kod provajdera (npr. Infobip).</p>
+  </div></div>
+  <div class="panel"><div class="panel-h"><h2>Obaveštenja i zvuk</h2><span class="pill ${pushState() === 'on' ? 'p-green' : 'p-ochre'}">${pushState() === 'on' ? 'Uključeno' : 'Isključeno'}</span></div><div class="panel-b" style="padding-top:12px;font-size:14px;color:var(--ink-2)">
+    <p style="margin-top:0">Na telefon i računar stiže: novi zadatak za tebe, hitan zadatak, rok koji ističe, završen zadatak i sve novo sa sajta (registracija, prijava konja, poruka, ponuda). Uključuje se posebno na svakom uređaju.</p>
+    <div class="row">${pushState() === 'on' ? `<button class="btn ghost" id="pushTest">Pošalji probno</button><button class="btn ghost" id="pushOff">Isključi na ovom uređaju</button>` : `<button class="btn" id="pushOn">📱 Uključi obaveštenja</button>`}<button class="btn ghost" data-soundbtn id="sndBtn">${soundOn() ? '🔔 Zvuci uključeni' : '🔕 Zvuci isključeni'}</button></div>
   </div></div></div>`;
 };
 async function fn(body) {
@@ -644,6 +649,10 @@ BIND.podesavanja = () => {
     try { const r = await fn({ connect: true, email: $('#se').value.trim(), password: $('#sp').value }); $('#sp').value = ''; toast(`Sajt povezan, prebačeno ${r.res?.processed ?? 0} zapisa`); await reloadSettings(); await loadAll(); render(); }
     catch (e) { $('#serr').textContent = 'Povezivanje nije uspelo: ' + e.message; btn.disabled = false; btn.textContent = 'Poveži sajt'; }
   });
+  if ($('#pushOn')) $('#pushOn').addEventListener('click', pushEnable);
+  if ($('#pushOff')) $('#pushOff').addEventListener('click', pushDisable);
+  if ($('#pushTest')) $('#pushTest').addEventListener('click', async () => { try { const r = await fn({ testPush: true }); toast(r.res?.sent ? 'Poslato, proveri telefon' : 'Nema uređaja za slanje'); } catch (e) { toast(e.message); } });
+  $('#sndBtn').addEventListener('click', () => setSound(!soundOn()));
   if ($('#siteFull')) $('#siteFull').addEventListener('click', () => syncSite(true));
   if ($('#siteOut')) $('#siteOut').addEventListener('click', async () => { if (!confirm('Prekinuti automatsku vezu sa sajtom?')) return; await fn({ disconnect: true }); await reloadSettings(); render(); });
 };
@@ -710,7 +719,9 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeMod
 function bindCommon(root = document) {
   $$('[data-open-c]', root).forEach((el) => el.addEventListener('click', (e) => { if (e.target.closest('a,button,select,input')) return; e.preventDefault(); $('#sres').classList.add('hidden'); openContact(el.dataset.openC); }));
   $$('[data-open-h]', root).forEach((el) => el.addEventListener('click', (e) => { if (e.target.closest('a,button,select,input')) return; $('#sres').classList.add('hidden'); openHorse(el.dataset.openH); }));
-  $$('[data-task-done]', root).forEach((cb) => cb.addEventListener('change', async () => { const x = S.tasks.find((t) => t.id === cb.dataset.taskDone); await q(sb.from('e_tasks').update({ done: true, done_at: new Date().toISOString() }).eq('id', x.id)); x.done = true; if (x.contact_id) await logAct(x.contact_id, 'beleska', 'Završeno: ' + x.title); toast('Zadatak završen'); render(); }));
+  $$('[data-task-done]', root).forEach((cb) => cb.addEventListener('change', () => toggleTask(cb.dataset.taskDone, cb)));
+  $$('[data-tk-done]', root).forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); toggleTask(b.dataset.tkDone, b); }));
+  $$('[data-tk]', root).forEach((el) => el.addEventListener('click', (e) => { if (e.target.closest('a,button,input,select')) return; openTask(el.dataset.tk); }));
   $$('[data-act]', root).forEach((b) => b.addEventListener('click', async (e) => {
     e.preventDefault(); const a = b.dataset.act; const id = b.dataset.id;
     if (a === 'newContact') contactForm();
@@ -731,6 +742,155 @@ function bindCommon(root = document) {
     if (a === 'sync') syncSite();
   }));
 }
+
+
+/* ================= ZADACI (ko šta treba da radi) ================= */
+const TEAM = { katarinabrzovan: { name: 'Kaca', f: true }, kaca: { name: 'Kaca', f: true }, konstantin: { name: 'Konstantin', f: false } };
+const PRIO = { hitno: 'Hitno', visok: 'Visok', normal: 'Normalan' };
+const personName = (k) => (TEAM[k]?.name || (k ? String(k).charAt(0).toUpperCase() + String(k).slice(1) : 'Niko'));
+const isF = (k) => !!TEAM[k]?.f;
+const avCls = (k) => (k === 'konstantin' ? 'av-k' : TEAM[k] ? 'av-c' : 'av-o');
+const teamKeys = () => { const ks = Object.keys(TEAM).filter((k) => k !== 'kaca'); if (S.user && !ks.includes(who())) ks.unshift(who()); return ks; };
+const taskWhen = (x) => (x.due_at ? new Date(x.due_at) : x.due ? new Date(x.due + 'T23:59:00') : null);
+function dueTxt(x) {
+  if (!x.due) return 'bez roka';
+  const d = x.due, t = today(), tm = x.due_at ? ' u ' + new Date(x.due_at).toLocaleTimeString('sr-Latn-RS', { hour: '2-digit', minute: '2-digit' }) : '';
+  if (d < t) return `kasni ${daysIn(d + 'T12:00:00') || 1} d`;
+  if (d === t) return 'danas' + tm;
+  if (d === addDays(t, 1)) return 'sutra' + tm;
+  return new Date(d + 'T12:00:00').toLocaleDateString('sr-Latn-RS', { weekday: 'short', day: 'numeric', month: 'short' }) + tm;
+}
+function dueLvl(x) { if (!x.due || x.done) return ''; const t = today(); const late = x.due < t || (x.due_at && new Date(x.due_at) < new Date()); return late ? 'late' : x.due === t ? 'today' : ''; }
+const myOpen = () => S.tasks.filter((x) => !x.done && (x.assignee === who() || !x.assignee));
+function taskBadge() { const b = document.querySelector('#nav button[data-v="zadaci"] .badge'); const k = myOpen().filter((x) => dueLvl(x)).length; if (b) { b.textContent = k; b.classList.toggle('hidden', !k); } }
+
+function taskRow(x) {
+  const lv = dueLvl(x), c = x.contact_id && C(x.contact_id);
+  return `<div class="tk ${x.done ? 'is-done' : ''} ${x.priority === 'hitno' && !x.done ? 'urgent' : ''}" data-tk="${x.id}">
+    <button class="tk-check" data-tk-done="${x.id}" aria-label="${x.done ? 'Vrati u otvorene' : 'Završi'}"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M7.5 12.5l3 3 6-6.5"/></svg></button>
+    <div class="grow"><div class="tk-t">${esc(x.title)}</div>
+      <div class="tk-m">${x.priority && x.priority !== 'normal' ? `<span class="tk-pr ${x.priority}">${PRIO[x.priority]}</span>` : ''}<span class="tk-due ${lv}">⏱ ${esc(x.done ? 'završeno ' + fmtD(x.done_at) : dueTxt(x))}</span>${c ? `<span class="tk-c">👤 ${esc(c.name)}</span>` : ''}${x.note ? '<span class="tk-c">📝</span>' : ''}${x.author && x.author !== x.assignee ? `<span class="tk-c">od ${esc(personName(x.author))}</span>` : ''}</div></div>
+    <span class="av ${avCls(x.assignee)}" title="${esc(personName(x.assignee))}">${esc(personName(x.assignee).charAt(0))}</span></div>`;
+}
+VIEWS.zadaci = () => {
+  const tab = S.tkTab || 'moji', me = who(), t = today();
+  let list = S.tasks.filter((x) => (tab === 'zavrseni' ? x.done : !x.done));
+  if (tab === 'moji') list = list.filter((x) => x.assignee === me || !x.assignee);
+  if (tab === 'dodelio') list = list.filter((x) => x.author === me && x.assignee && x.assignee !== me);
+  if (S.tkWho) list = list.filter((x) => x.assignee === S.tkWho);
+  const pr = { hitno: 0, visok: 1, normal: 2 };
+  list.sort((a, b) => (tab === 'zavrseni' ? String(b.done_at).localeCompare(String(a.done_at)) : (pr[a.priority] ?? 2) - (pr[b.priority] ?? 2) || String(a.due || '9').localeCompare(String(b.due || '9')) || String(a.due_at || '').localeCompare(String(b.due_at || ''))));
+  const groups = tab === 'zavrseni' ? [['Završeno', list.slice(0, 80)]] : [
+    ['Kasni', list.filter((x) => x.due && dueLvl(x) === 'late')], ['Danas', list.filter((x) => x.due === t && dueLvl(x) !== 'late')], ['Sutra', list.filter((x) => x.due === addDays(t, 1))],
+    ['Ove nedelje', list.filter((x) => x.due > addDays(t, 1) && x.due <= addDays(t, 7))], ['Kasnije', list.filter((x) => x.due > addDays(t, 7))], ['Bez roka', list.filter((x) => !x.due)]];
+  const cnt = (k) => S.tasks.filter((x) => !x.done && x.assignee === k).length;
+  return head('Zadaci', 'Ko šta treba da radi. Kad nekome dodelite zadatak, odmah mu stiže obaveštenje na telefon.', `<button class="btn" data-act="newTask">+ Novi zadatak</button>`) + `
+  <form class="tk-quick" id="tkQuick"><input id="tkqT" placeholder="Brzo dodaj zadatak i pritisni Enter…" autocomplete="off"><select id="tkqA">${teamKeys().map((k) => `<option value="${k}" ${k === me ? 'selected' : ''}>${esc(personName(k))}</option>`).join('')}</select><select id="tkqD"><option value="${t}">Danas</option><option value="${addDays(t, 1)}">Sutra</option><option value="${addDays(t, 7)}">Za nedelju</option><option value="">Bez roka</option></select><button class="btn">Dodaj</button></form>
+  <div class="tk-bar"><div class="seg">${[['moji', 'Moji'], ['svi', 'Svi otvoreni'], ['dodelio', 'Dodelio/la sam'], ['zavrseni', 'Završeni']].map(([k, l]) => `<button data-tktab="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="tk-people">${teamKeys().map((k) => `<button data-tkwho="${k}" class="${S.tkWho === k ? 'on' : ''}" title="${esc(personName(k))}"><span class="av ${avCls(k)}">${esc(personName(k).charAt(0))}</span>${esc(personName(k))} <b>${cnt(k)}</b></button>`).join('')}</div></div>
+  ${list.length ? groups.filter(([, l]) => l.length).map(([g, l]) => `<div class="panel tk-group"><div class="panel-h"><h2>${g}</h2><span class="pill ${g === 'Kasni' ? 'p-clay' : g === 'Danas' ? 'p-ochre' : ''}">${l.length}</span></div><div class="panel-b">${l.map(taskRow).join('')}</div></div>`).join('')
+    : `<div class="panel"><div class="empty big"><div class="empty-ic">✓</div>${tab === 'zavrseni' ? 'Još nema završenih zadataka.' : 'Sve je urađeno. Nema otvorenih zadataka.'}</div></div>`}`;
+};
+BIND.zadaci = () => {
+  bindCommon();
+  $$('[data-tktab]').forEach((b) => b.addEventListener('click', () => { S.tkTab = b.dataset.tktab; sfx('tick', 1, true); render(); }));
+  $$('[data-tkwho]').forEach((b) => b.addEventListener('click', () => { S.tkWho = S.tkWho === b.dataset.tkwho ? '' : b.dataset.tkwho; sfx('tick', 1, true); render(); }));
+  $('#tkQuick').addEventListener('submit', async (e) => {
+    e.preventDefault(); const title = $('#tkqT').value.trim(); if (!title) return;
+    const row = { title, assignee: $('#tkqA').value || null, due: $('#tkqD').value || null, author: who(), priority: 'normal' };
+    const [x] = await q(sb.from('e_tasks').insert(row).select()); S.tasks.push(x); render(); taskPop(x.assignee && x.assignee !== who() ? 'assign' : 'new', x); setTimeout(() => $('#tkqT')?.focus(), 30);
+  });
+};
+async function toggleTask(id, el) {
+  const x = S.tasks.find((t) => t.id === id); if (!x) return;
+  const done = !x.done;
+  if (el) { el.closest('.tk, .li')?.classList.add(done ? 'finishing' : 'reopen'); }
+  const patch = done ? { done: true, done_at: new Date().toISOString(), done_by: who() } : { done: false, done_at: null, done_by: null };
+  const [nx] = await q(sb.from('e_tasks').update(patch).eq('id', id).select()); Object.assign(x, nx);
+  if (done) { taskPop('done', x); if (x.contact_id) logAct(x.contact_id, 'beleska', 'Završeno: ' + x.title).catch(() => {}); } else { sfx('restore'); toast('Vraćeno u otvorene'); }
+  setTimeout(() => { render(); taskBadge(); }, done ? 480 : 0);
+}
+function openTask(id) { const x = S.tasks.find((t) => t.id === id); if (x) taskForm(x); }
+function taskForm(x = {}, preset = {}) {
+  const t = today(), tm = x.due_at ? new Date(x.due_at).toTimeString().slice(0, 5) : '';
+  modal(x.id ? 'Zadatak' : 'Novi zadatak', `<div class="field"><label>Šta treba uraditi *</label><input id="x_title" value="${esc(x.title || preset.title || '')}"></div>
+    <div class="frow"><div class="field"><label>Ko radi</label><select id="x_as">${teamKeys().map((k) => `<option value="${k}" ${(x.assignee || preset.assignee || who()) === k ? 'selected' : ''}>${esc(personName(k))}</option>`).join('')}</select></div>
+      <div class="field"><label>Prioritet</label><select id="x_pr">${Object.entries(PRIO).map(([k, l]) => `<option value="${k}" ${(x.priority || 'normal') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+    <div class="frow"><div class="field"><label>Rok</label><input id="x_due" type="date" value="${x.id ? x.due || '' : preset.due ?? t}"></div><div class="field"><label>Vreme (opciono)</label><input id="x_tm" type="time" value="${tm}"></div></div>
+    <div class="field"><label>Kontakt</label><select id="x_c"><option value="">—</option>${S.contacts.slice(0, 1500).map((c) => `<option value="${c.id}" ${(x.contact_id || preset.contact_id) === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+    <div class="field"><label>Detalji</label><textarea id="x_note" placeholder="Opis, brojevi, linkovi…">${esc(x.note || '')}</textarea></div>
+    ${x.id ? `<div class="note-box" style="font-size:12.5px">Napravio/la ${esc(personName(x.author))} · ${fmtDT(x.created_at)}${x.done ? ` · završio/la ${esc(personName(x.done_by))} ${fmtDT(x.done_at)}` : ''}</div>` : ''}
+    <div class="row"><button class="btn" id="x_save">${x.id ? 'Sačuvaj' : 'Dodaj zadatak'}</button>${x.id ? `<button class="btn ghost" id="x_tg">${x.done ? '↺ Vrati u otvorene' : '✓ Završi'}</button><button class="btn danger" id="x_del">Obriši</button>` : ''}<button class="btn ghost" data-close>Otkaži</button></div>`);
+  $('#x_save').addEventListener('click', async () => {
+    const title = $('#x_title').value.trim(); if (!title) { sfx('error'); $('#x_title').focus(); return; }
+    const due = $('#x_due').value || null, tmv = $('#x_tm').value;
+    const row = { title, assignee: $('#x_as').value || null, priority: $('#x_pr').value, due, due_at: due && tmv ? new Date(due + 'T' + tmv).toISOString() : null, contact_id: $('#x_c').value || null, note: $('#x_note').value.trim() || null };
+    if (x.id) { const before = x.assignee; const [nx] = await q(sb.from('e_tasks').update(row).eq('id', x.id).select()); Object.assign(x, nx); closeModal(); render(); if (before !== nx.assignee && nx.assignee !== who()) taskPop('assign', nx); else { sfx('check'); toast('Sačuvano'); } }
+    else { const [nx] = await q(sb.from('e_tasks').insert({ ...row, author: who() }).select()); S.tasks.push(nx); closeModal(); render(); taskPop(nx.assignee && nx.assignee !== who() ? 'assign' : 'new', nx); }
+    taskBadge();
+  });
+  if (x.id) {
+    $('#x_tg').addEventListener('click', () => { closeModal(); toggleTask(x.id); });
+    $('#x_del').addEventListener('click', async () => { if (!confirm('Obrisati zadatak?')) return; await q(sb.from('e_tasks').delete().eq('id', x.id)); S.tasks = S.tasks.filter((y) => y.id !== x.id); closeModal(); sfx('trash'); render(); taskBadge(); });
+  }
+}
+
+/* ================= OBAVEŠTENJA (zvonce + telefon) ================= */
+const VAPID_PUBLIC = 'BO9fqbcK6L9yA4bKN-m3gp2RxmbZ6Gt7UOsIjGDzOZDScOuWOtwSWT_nM8GeM__UZr6vE2bBSH2ou37jkf5_MTg';
+S.notifs = [];
+const forMe = (nf) => (nf.username === who() || nf.username === '*') && nf.actor !== who();
+const unread = () => S.notifs.filter((nf) => !(nf.read_by || []).includes(who()));
+async function loadNotifs() { try { const rows = await q(sb.from('e_notifs').select('*').order('created_at', { ascending: false }).limit(150)); S.notifs = rows.filter(forMe); } catch (e) { S.notifs = []; } bellBadge(); }
+function bellBadge() { const b = $('#bellN'); if (!b) return; const k = unread().length; b.textContent = k > 9 ? '9+' : k; b.classList.toggle('hidden', !k); }
+function openGo(go) {
+  if (!go) return; const [k, id] = String(go).split(':');
+  if (k === 'task') { go_('zadaci'); setTimeout(() => openTask(id), 60); }
+  else if (k === 'contact' && id) openContact(id);
+  else go_(k);
+}
+const go_ = (v) => go(v);
+function bellMenu() {
+  const m = $('#bellMenu'); const open = m.classList.toggle('open');
+  if (!open) return;
+  m.innerHTML = `<div class="bm-h"><b>Obaveštenja</b><button class="btn sm ghost" id="bmRead">Označi sve pročitano</button></div>
+    <div class="bm-list">${S.notifs.slice(0, 40).map((nf) => `<button class="bm-i ${(nf.read_by || []).includes(who()) ? '' : 'new'} k-${nf.kind}" data-nf="${nf.id}"><span class="bm-ic">${{ task: '☑', urgent: '🚨', done: '✓', lead: '🐎', deadline: '⏰' }[nf.kind] || '✦'}</span><span class="grow"><b>${esc(nf.title)}</b><small>${esc(nf.body || '')}</small><em>${nf.actor && !['sistem'].includes(nf.actor) ? esc(personName(nf.actor)) + ' · ' : ''}${ago(nf.created_at)}</em></span></button>`).join('') || '<div class="empty">Još nema obaveštenja.</div>'}</div>
+    <div class="bm-f"><button class="btn sm ghost" data-soundbtn onclick="setSound(!soundOn())">${soundOn() ? '🔔 Zvuci uključeni' : '🔕 Zvuci isključeni'}</button><button class="btn sm ghost" id="bmPush">${pushState() === 'on' ? '📱 Telefon: uključeno' : '📱 Uključi na telefonu'}</button></div>`;
+  sfx('soft');
+  $$('[data-nf]', m).forEach((b) => b.addEventListener('click', () => { const nf = S.notifs.find((x) => x.id === b.dataset.nf); m.classList.remove('open'); markRead([nf]); openGo(nf.go); }));
+  $('#bmRead').addEventListener('click', () => { markRead(unread()); m.classList.remove('open'); sfx('check'); });
+  $('#bmPush').addEventListener('click', () => { m.classList.remove('open'); pushEnable(); });
+}
+async function markRead(list) {
+  list = list.filter((nf) => nf && !(nf.read_by || []).includes(who())); if (!list.length) return;
+  list.forEach((nf) => { nf.read_by = [...(nf.read_by || []), who()]; }); bellBadge();
+  await Promise.all(list.map((nf) => sb.from('e_notifs').update({ read_by: nf.read_by }).eq('id', nf.id)));
+}
+document.addEventListener('click', (e) => { const m = $('#bellMenu'); if (m && m.classList.contains('open') && !e.target.closest('#bellMenu, #bell')) m.classList.remove('open'); });
+
+/* web push: obaveštenje stiže i kad je CRM zatvoren */
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+function pushState() { if (!pushSupported()) return isIOS() && !isStandalone() ? 'ios' : 'no'; if (Notification.permission === 'denied') return 'denied'; return Notification.permission === 'granted' && LS.get('eq_push', '') === '1' ? 'on' : 'off'; }
+function b64uToU8(s) { const p = '='.repeat((4 - (s.length % 4)) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...b].map((c) => c.charCodeAt(0))); }
+async function pushSave(sub) { const j = sub.toJSON(); await sb.from('e_push_subs').upsert({ username: who(), endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, ua: navigator.userAgent.slice(0, 200) }, { onConflict: 'endpoint' }); }
+async function pushEnable() {
+  const st = pushState();
+  if (st === 'ios') return modal('Obaveštenja na iPhone-u', `<p style="margin-top:0">Na iPhone-u obaveštenja rade kad je CRM dodat na početni ekran:</p><ol style="padding-left:18px;line-height:1.8"><li>U Safariju dodirni <b>Podeli</b> (kvadrat sa strelicom)</li><li>Izaberi <b>Dodaj na početni ekran</b></li><li>Otvori EQUIVRA CRM sa početnog ekrana i ponovo klikni ovo dugme</li></ol><div class="row"><button class="btn" data-close>Razumem</button></div>`);
+  if (st === 'no') return toast('Ovaj pretraživač ne podržava obaveštenja');
+  if (st === 'denied') return toast('Obaveštenja su blokirana u podešavanjima pretraživača za ovaj sajt');
+  try {
+    const perm = await Notification.requestPermission(); if (perm !== 'granted') return toast('Obaveštenja nisu dozvoljena');
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToU8(VAPID_PUBLIC) }));
+    await pushSave(sub); LS.set('eq_push', '1'); sfx('done'); toast('Obaveštenja uključena na ovom uređaju');
+    fn({ testPush: true }).catch(() => {});
+    if (S.view === 'podesavanja') render();
+  } catch (e) { console.warn(e); sfx('error'); toast('Nije uspelo: ' + (e.message || e)); }
+}
+async function pushRefresh() { try { if (pushState() !== 'on') return; const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) await pushSave(sub); } catch (e) {} }
+async function pushDisable() { try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) { await sb.from('e_push_subs').delete().eq('endpoint', sub.endpoint); await sub.unsubscribe(); } } catch (e) {} LS.set('eq_push', '0'); toast('Obaveštenja isključena na ovom uređaju'); render(); }
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (e) => { if (e.data && e.data.eqGo) openGo(e.data.eqGo); });
 
 /* ---------- PWA ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

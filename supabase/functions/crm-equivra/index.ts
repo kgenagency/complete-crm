@@ -2,17 +2,41 @@
 // Kao crm-shopify: jednom se poveže (admin nalog sajta), posle cron na 5 min sam povlači:
 // registracije, prijave konja, poruke/prigovore, newsletter, ponude. Lozinka se NE čuva, samo refresh token sesije.
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import webpush from 'npm:web-push@3.6.7';
 
 const SB_URL = Deno.env.get('SUPABASE_URL')!;
 const db = createClient(SB_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
 const HOOK = Deno.env.get('PUSH_HOOK_SECRET') || '';
+try { webpush.setVapidDetails(Deno.env.get('VAPID_SUBJECT') || 'mailto:kgenagency@gmail.com', Deno.env.get('VAPID_PUBLIC_KEY')!, Deno.env.get('VAPID_PRIVATE_KEY')!); } catch (_) { /* bez ključeva nema obaveštenja na telefonu */ }
+// obaveštenje na telefon / računar: username '*' = ceo tim osim onoga ko je to uradio
+async function pushOut(n: any) {
+  let qy = db.from('e_push_subs').select('*');
+  qy = n.username === '*' ? qy : qy.eq('username', n.username);
+  const { data: subs } = await qy;
+  const list = (subs || []).filter((s: any) => n.kind === 'test' || n.username !== '*' || s.username !== n.actor);
+  const alarm = n.kind === 'urgent' || n.kind === 'deadline';
+  let sent = 0;
+  await Promise.all(list.map(async (s: any) => {
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        JSON.stringify({ title: n.title, body: n.body || '', kind: n.kind, go: n.go || '', tag: 'eq-' + (n.go || n.id || Date.now()), ts: Date.now() }),
+        { TTL: 60 * 60 * 24, urgency: alarm ? 'high' : 'normal' });
+      sent++; await db.from('e_push_subs').update({ last_ok_at: new Date().toISOString(), fails: 0 }).eq('id', s.id);
+    } catch (e: any) {
+      const code = e?.statusCode;
+      if (code === 404 || code === 410) await db.from('e_push_subs').delete().eq('id', s.id);
+      else await db.from('e_push_subs').update({ fails: (s.fails || 0) + 1 }).eq('id', s.id);
+    }
+  }));
+  return { sent, subs: list.length };
+}
 const SITE = 'https://c--9c85cdd5-37fc-4e9f-9f72-5acceb7c4e67-prod.lovable.cloud';
 const SITE_KEY = 'sb_publishable_r5dMciBhLGqN042uWpJkTQ_wK2wzxvI';
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 async function priv(k: string) { const { data } = await db.from('e_private').select('v').eq('k', k).maybeSingle(); return data?.v || ''; }
-async function privSet(k: string, v: string) { await db.from('e_private').upsert({ k, v, updated_at: new Date().toISOString() }, { onConflict: 'k' }); }
+async function privSet(k: string, v: string) { const { error } = await db.from('e_private').upsert({ k, v, updated_at: new Date().toISOString() }, { onConflict: 'k' }); if (error) throw new Error('server ne može da zapamti vezu: ' + error.message); }
 async function setting(k: string, v: string) { await db.from('e_settings').upsert({ key: k, value: v, updated_at: new Date().toISOString() }, { onConflict: 'key' }); }
 
 async function authSite(body: Record<string, string>, grant: 'password' | 'refresh_token') {
@@ -77,6 +101,7 @@ Deno.serve(async (req) => {
   let body: any = {}; try { body = await req.json(); } catch (_) { body = {}; }
   // 1) cron iz baze
   if (HOOK && req.headers.get('x-crm-hook') === HOOK) {
+    if (body.push) return json({ ok: true, res: await pushOut(body.push) });
     if (!(await priv('site_refresh'))) return json({ ok: true, skip: 'nije povezano' });
     try { return json({ ok: true, res: await sync(false) }); } catch (e) { return json({ ok: false, error: String((e as Error)?.message || e) }, 500); }
   }
@@ -94,6 +119,7 @@ Deno.serve(async (req) => {
       await setting('site_status', 'povezano');
       return json({ ok: true, res: await sync(true) });
     }
+    if (body.testPush) return json({ ok: true, res: await pushOut({ username: who, actor: who, kind: 'test', title: 'EQUIVRA CRM', body: 'Obaveštenja rade na ovom uređaju ✓', go: 'zadaci' }) });
     if (body.disconnect) { await db.from('e_private').delete().in('k', ['site_refresh', 'site_sync_at']); await setting('site_status', 'nije povezano'); return json({ ok: true }); }
     if (body.sync) return json({ ok: true, res: await sync(!!body.full) });
     return json({ ok: true, connected: !!(await priv('site_refresh')) });

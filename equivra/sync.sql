@@ -15,4 +15,7 @@ select cron.schedule('crm-equivra-sync', '*/5 * * * *', $cron$
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-crm-hook', (select v from public.h_private where k = 'push_hook')), timeout_milliseconds := 55000)
   where exists (select 1 from public.e_private where k = 'site_refresh')
 $cron$);
+grant all on table public.e_private to service_role;
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
 select 'ok';
