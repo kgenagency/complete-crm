@@ -745,11 +745,11 @@ function bindCommon(root = document) {
 
 
 /* ================= ZADACI (ko šta treba da radi) ================= */
-const TEAM = { katarinabrzovan: { name: 'Kaca', f: true }, kaca: { name: 'Kaca', f: true }, konstantin: { name: 'Konstantin', f: false } };
+const TEAM = { katarinabrzovan: { name: 'Kaca', f: true }, kaca: { name: 'Kaca', f: true }, konstantin: { name: 'Konstantin', f: false }, djole: { name: 'Đole', f: false } };
 const PRIO = { hitno: 'Hitno', visok: 'Visok', normal: 'Normalan' };
 const personName = (k) => (TEAM[k]?.name || (k ? String(k).charAt(0).toUpperCase() + String(k).slice(1) : 'Niko'));
 const isF = (k) => !!TEAM[k]?.f;
-const avCls = (k) => (k === 'konstantin' ? 'av-k' : TEAM[k] ? 'av-c' : 'av-o');
+const avCls = (k) => (k === 'konstantin' ? 'av-k' : k === 'djole' ? 'av-d' : TEAM[k] ? 'av-c' : 'av-o');
 const teamKeys = () => { const ks = Object.keys(TEAM).filter((k) => k !== 'kaca'); if (S.user && !ks.includes(who())) ks.unshift(who()); return ks; };
 const taskWhen = (x) => (x.due_at ? new Date(x.due_at) : x.due ? new Date(x.due + 'T23:59:00') : null);
 function dueTxt(x) {
